@@ -1,0 +1,429 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>东浩智创 · 装备智能运营中枢</title>
+  <style>
+    :root {
+      --bg: #07131b;
+      --surface: #0c202a;
+      --surface-2: #102a35;
+      --surface-3: #132f3b;
+      --line: #244652;
+      --line-soft: #1b3944;
+      --text: #e8f1f2;
+      --muted: #8ea7ae;
+      --muted-2: #66818a;
+      --cyan: #53d3e2;
+      --green: #36c98f;
+      --amber: #ffb454;
+      --red: #ff5c5c;
+      --offline: #8b98a0;
+      --blue: #2596ed;
+      --shadow: 0 12px 28px rgba(0, 0, 0, .24);
+    }
+    * { box-sizing: border-box; }
+    html, body { height: 100%; }
+    body {
+      margin: 0;
+      color: var(--text);
+      background: var(--bg);
+      font-family: Inter, "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+      font-size: 14px;
+      overflow: hidden;
+    }
+    button, select, input { font: inherit; color: inherit; }
+    button { cursor: pointer; }
+    .app-shell { height: 100vh; min-width: 1100px; display: flex; flex-direction: column; }
+    .topbar {
+      height: 76px; flex: 0 0 76px; display: grid; grid-template-columns: 270px 1fr 270px;
+      align-items: center; padding: 0 24px; border-bottom: 1px solid var(--line-soft);
+      background: #071720;
+    }
+    .brand { display: flex; align-items: center; gap: 13px; min-width: 0; }
+    .brand img { width: 210px; height: auto; display: block; }
+    .title-wrap { text-align: center; }
+    .page-title { margin: 0; font-size: clamp(22px, 1.55vw, 38px); line-height: 1.1; letter-spacing: 0; font-weight: 700; }
+    .page-subtitle { margin-top: 6px; color: var(--muted-2); font-size: 12px; }
+    .topbar-meta { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; color: var(--muted); }
+    .clock { font-variant-numeric: tabular-nums; color: var(--text); }
+    .refresh { color: var(--cyan); font-size: 12px; display: inline-flex; gap: 7px; align-items: center; }
+    .refresh-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 0 4px rgba(83,211,226,.12); }
+
+    .content { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(224px, 18%) minmax(0, 1fr); gap: 14px; padding: 14px 18px 16px; }
+    .sidebar { min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+    .panel { border: 1px solid var(--line-soft); background: var(--surface); border-radius: 7px; box-shadow: var(--shadow); }
+    .side-panel { padding: 16px; }
+    .side-panel h2 { margin: 0 0 12px; font-size: 16px; font-weight: 600; }
+    .section-rule { width: 36px; height: 3px; background: var(--amber); margin: -5px 0 14px; }
+    .donut-row { display: flex; align-items: center; gap: 18px; }
+    .donut { width: 118px; height: 118px; flex: 0 0 118px; border-radius: 50%; background: conic-gradient(var(--green) 0 43.5%, var(--amber) 43.5% 69.6%, var(--red) 69.6% 78.3%, var(--offline) 78.3% 100%); display: grid; place-items: center; position: relative; }
+    .donut::after { content: ""; width: 76px; height: 76px; border-radius: 50%; background: var(--surface); position: absolute; }
+    .donut-center { position: relative; z-index: 1; text-align: center; line-height: 1.2; }
+    .donut-center b { display: block; font-size: 23px; }
+    .donut-center span { color: var(--muted); font-size: 11px; }
+    .legend { display: flex; flex-direction: column; gap: 8px; flex: 1; }
+    .legend-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 12px; }
+    .legend-name { display: inline-flex; align-items: center; gap: 7px; color: var(--muted); }
+    .legend-dot { width: 9px; height: 9px; border-radius: 50%; }
+    .legend-value { font-variant-numeric: tabular-nums; }
+    .abnormal-list { display: flex; flex-direction: column; gap: 0; }
+    .abnormal-row { display: grid; grid-template-columns: 1fr 1fr auto; gap: 8px; align-items: center; padding: 9px 0; border-bottom: 1px solid var(--line-soft); font-size: 12px; }
+    .abnormal-row:last-child { border-bottom: 0; }
+    .abnormal-row .type { color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .abnormal-row .status { color: var(--red); }
+    .abnormal-more { color: var(--cyan); font-size: 12px; margin-top: 8px; }
+    .alert-donut { background: conic-gradient(var(--red) 0 20%, var(--amber) 20% 60%, #d9a900 60% 100%); }
+    .data-health { flex: 1; min-height: 175px; display: flex; flex-direction: column; }
+    .health-summary { display: flex; align-items: baseline; gap: 10px; padding: 4px 0 15px; border-bottom: 1px solid var(--line-soft); }
+    .health-summary strong { color: var(--cyan); font-size: 30px; font-variant-numeric: tabular-nums; }
+    .health-summary span { color: var(--muted); font-size: 12px; }
+    .health-list { display: grid; grid-template-columns: 1fr 1fr; gap: 11px 16px; padding: 15px 0; }
+    .health-list div { display: flex; justify-content: space-between; gap: 8px; font-size: 12px; }
+    .health-list span { color: var(--muted); } .health-list b { font-weight: 600; font-variant-numeric: tabular-nums; } .health-list .good { color: var(--green); } .health-list .warn { color: var(--amber); } .health-list .bad { color: var(--red); }
+    .health-foot { display: flex; justify-content: space-between; margin-top: auto; padding-top: 11px; border-top: 1px solid var(--line-soft); color: var(--muted); font-size: 11px; } .health-foot b { color: var(--text); font-weight: 500; }
+
+    .workspace { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
+    .filterbar { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px 12px; border: 1px solid var(--line-soft); background: #0a1c25; border-radius: 7px; }
+    .filter-field { display: flex; align-items: center; gap: 8px; }
+    .filter-field label { color: var(--muted); white-space: nowrap; }
+    .select-wrap { position: relative; }
+    select, input[type="date"], input[type="datetime-local"] { appearance: none; border: 1px solid var(--line); border-radius: 5px; background: #102a35; height: 34px; padding: 0 30px 0 11px; outline: none; min-width: 132px; }
+    select:focus, input:focus { border-color: var(--cyan); box-shadow: 0 0 0 2px rgba(83,211,226,.12); }
+    .select-wrap::after { content: "⌄"; position: absolute; right: 10px; top: 6px; color: var(--muted); pointer-events: none; }
+    .filter-actions { display: flex; gap: 8px; margin-left: 4px; }
+    .btn { height: 34px; padding: 0 18px; border-radius: 5px; border: 1px solid var(--line); background: #102a35; color: var(--text); }
+    .btn:hover { border-color: var(--cyan); }
+    .btn-primary { background: #0e70bf; border-color: #228ed9; }
+    .result-count { margin-left: auto; color: var(--muted); white-space: nowrap; }
+    .result-count b { color: var(--cyan); font-size: 16px; }
+    .kpis { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); border: 1px solid var(--line-soft); background: var(--surface); border-radius: 7px; min-height: 94px; }
+    .kpi { min-width: 0; padding: 15px 14px 12px; display: flex; flex-direction: column; justify-content: space-between; border-right: 1px solid var(--line-soft); }
+    .kpi:last-child { border-right: 0; }
+    .kpi-label { color: var(--muted); font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .kpi-value { font-size: clamp(21px, 1.6vw, 34px); line-height: 1; font-weight: 700; font-variant-numeric: tabular-nums; }
+    .kpi-value.cyan { color: var(--cyan); } .kpi-value.green { color: var(--green); } .kpi-value.amber { color: var(--amber); } .kpi-value.red { color: var(--red); } .kpi-value.offline { color: var(--offline); }
+    .kpi-note { font-size: 11px; color: var(--muted-2); }
+
+    .device-area { min-height: 0; flex: 1; display: flex; flex-direction: column; gap: 9px; position: relative; }
+    .device-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(0, 1fr)); gap: 11px; }
+    .device-card { min-height: 0; padding: 12px 13px 10px; border: 1px solid var(--line); border-radius: 7px; background: #0c202a; display: flex; flex-direction: column; gap: 8px; transition: border-color .18s ease, transform .18s ease, background .18s ease; cursor: pointer; }
+    .device-card:hover { transform: translateY(-2px); border-color: var(--cyan); background: #102a35; }
+    .device-card.running { border-color: rgba(54,201,143,.7); } .device-card.standby { border-color: rgba(255,180,84,.75); } .device-card.fault { border-color: rgba(255,92,92,.9); } .device-card.offline { border-color: rgba(139,152,160,.72); }
+    .card-head { min-width: 0; display: flex; align-items: center; gap: 8px; }
+    .index { width: 25px; height: 25px; flex: 0 0 25px; display: grid; place-items: center; border-radius: 5px; background: #17333e; color: var(--text); font-weight: 700; font-size: 12px; }
+    .device-card.running .index { background: #0c6d50; } .device-card.standby .index { background: #79501a; } .device-card.fault .index { background: #8c2431; } .device-card.offline .index { background: #40515a; }
+    .device-name { min-width: 0; flex: 1; font-size: 15px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .status-badge { flex: 0 0 auto; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: 700; }
+    .status-badge.running { color: #061a12; background: var(--green); } .status-badge.standby { color: #241705; background: var(--amber); } .status-badge.fault { color: #260609; background: var(--red); } .status-badge.offline { color: #0b1519; background: #a8b1b5; }
+    .device-id { color: var(--muted-2); font-size: 11px; margin-left: 33px; margin-top: -5px; }
+    .divider { height: 1px; background: var(--line-soft); }
+    .card-gridline { display: grid; grid-template-columns: 1fr auto; gap: 7px 12px; font-size: 12px; }
+    .metric-label { color: var(--muted); } .metric-value { color: var(--text); text-align: right; }
+    .metric-value.good { color: var(--green); } .metric-value.bad { color: var(--red); } .metric-value.dim { color: var(--offline); }
+    .card-foot { display: flex; justify-content: space-between; align-items: center; margin-top: auto; color: var(--muted-2); font-size: 11px; }
+    .detail-link { color: var(--cyan); }
+    .pagination { position: absolute; right: 13px; bottom: 13px; z-index: 3; display: flex; justify-content: center; align-items: center; gap: 6px; opacity: .28; transition: opacity .18s ease; }
+    .pagination:hover, .pagination:focus-within { opacity: 1; }
+    .page-btn { width: 31px; height: 27px; border: 1px solid var(--line); border-radius: 5px; background: rgba(11,32,43,.86); color: var(--muted); }
+    .page-btn.active { background: #0e70bf; border-color: #228ed9; color: white; }
+    .page-btn:disabled { opacity: .45; cursor: default; }
+    .empty { grid-column: 1 / -1; display: grid; place-items: center; color: var(--muted); border: 1px dashed var(--line); border-radius: 7px; }
+
+    .modal-overlay { position: fixed; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center; background: rgba(1, 8, 12, .14); padding: 3.8vh 4vw; }
+    .modal-overlay.open { display: flex; }
+    .detail-modal { width: 88vw; height: 90vh; min-height: 650px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #265463; border-radius: 10px; background: #091c26; box-shadow: 0 26px 70px rgba(0, 0, 0, .48); }
+    .modal-head { flex: 0 0 auto; padding: 20px 26px 16px; border-bottom: 1px solid var(--line-soft); }
+    .modal-title-row { display: flex; align-items: center; gap: 12px; }
+    .modal-title { margin: 0; font-size: clamp(22px, 1.5vw, 34px); }
+    .modal-id { color: var(--muted); font-size: 14px; }
+    .modal-updated { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+    .icon-btn { width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 5px; background: #0d2732; color: var(--muted); font-size: 23px; line-height: 1; }
+    .icon-btn:hover { color: var(--text); border-color: var(--cyan); }
+    .chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 17px; }
+    .chip { min-height: 38px; display: flex; align-items: center; gap: 9px; padding: 0 13px; border: 1px solid var(--line-soft); border-radius: 6px; background: #102a35; color: var(--muted); }
+    .chip b { color: var(--text); font-weight: 500; } .chip .good { color: var(--green); } .chip .bad { color: var(--red); } .chip .warn { color: var(--amber); }
+    .tabs { display: flex; gap: 5px; margin-top: 18px; }
+    .tab { border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); padding: 10px 24px 9px; }
+    .tab:hover { color: var(--text); } .tab.active { color: var(--text); border-bottom-color: var(--blue); background: rgba(37,150,237,.14); }
+    .detail-filter { flex: 0 0 auto; display: flex; align-items: center; gap: 9px; padding: 10px 14px; border: 1px solid var(--line-soft); border-radius: 6px; background: #0c232e; }
+    .detail-filter label { color: var(--muted); white-space: nowrap; }
+    .quick-range { display: flex; gap: 5px; }
+    .range-btn { height: 32px; padding: 0 12px; border: 1px solid var(--line); border-radius: 4px; background: #102a35; color: var(--muted); }
+    .range-btn.active { color: white; border-color: #248bd2; background: #0e70bf; }
+    .detail-filter input { min-width: 170px; height: 32px; font-size: 12px; }
+    .range-arrow { color: var(--muted-2); }
+    .detail-filter .btn { height: 32px; padding: 0 16px; margin-left: 2px; }
+    .range-hint { margin-left: auto; color: var(--muted-2); font-size: 11px; white-space: nowrap; }
+    .modal-body { min-height: 0; flex: 1; padding: 14px 20px 20px; display: flex; flex-direction: column; overflow: hidden; }
+    .tab-panel { width: 100%; min-height: 0; flex: 1; display: none; }
+    .tab-panel.active { display: flex; }
+    .detail-columns { min-height: 0; flex: 1; display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(330px, .9fr); gap: 14px; }
+    .detail-main, .detail-side { min-height: 0; display: flex; flex-direction: column; gap: 14px; }
+    .detail-panel { border: 1px solid var(--line-soft); border-radius: 7px; background: #0c232e; padding: 16px; min-height: 0; }
+    .detail-panel h3 { margin: 0 0 12px; font-size: 16px; font-weight: 600; }
+    .trend-panel { flex: 1; display: flex; flex-direction: column; overflow: auto; scrollbar-color: #315c69 #0a202a; scrollbar-width: thin; }
+    .state-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; color: var(--muted); font-size: 12px; }
+    .state-legend { display: flex; gap: 14px; }
+    .state-legend span { display: inline-flex; align-items: center; gap: 5px; }
+    .state-legend i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
+    .state-band { height: 16px; display: flex; overflow: hidden; border-radius: 3px; background: #152c35; }
+    .state-band span { height: 100%; } .band-standby { width: 24%; background: var(--amber); } .band-running { width: 48%; background: var(--green); } .band-fault { width: 12%; background: var(--red); } .band-offline { width: 16%; background: var(--offline); }
+    .axis { display: flex; justify-content: space-between; color: var(--muted-2); font-size: 10px; margin: 7px 0 12px; }
+    .chart-wrap { flex: 0 0 auto; min-height: 620px; border-top: 1px solid var(--line-soft); padding-top: 10px; }
+    .chart-wrap svg { width: 100%; height: 100%; display: block; }
+    .chart-stack { display: flex; flex-direction: column; gap: 8px; }
+    .mini-chart { min-height: 188px; padding: 11px 13px 8px; border: 1px solid var(--line-soft); border-radius: 5px; background: #0a202a; transition: opacity .18s ease; }
+    .mini-chart.series-hidden { opacity: .16; }
+    .mini-chart-head { display: flex; align-items: center; gap: 10px; color: var(--text); font-size: 12px; }
+    .mini-chart-head .unit { color: var(--muted); font-size: 11px; }
+    .mini-chart-head strong { margin-left: auto; font-size: 13px; font-variant-numeric: tabular-nums; }
+    .mini-chart.speed .mini-chart-head strong { color: #45a7ff; } .mini-chart.override .mini-chart-head strong { color: var(--green); } .mini-chart.feed .mini-chart-head strong { color: var(--amber); }
+    .mini-chart svg { width: 100%; height: 145px; display: block; margin-top: 7px; }
+    .mini-chart text { fill: var(--muted-2); font-size: 10px; }
+    .mini-chart .series-line { fill: none; stroke-width: 2.5; stroke-linecap: round; stroke-linejoin: round; }
+    .mini-chart.speed .series-line { stroke: #45a7ff; } .mini-chart.override .series-line { stroke: var(--green); } .mini-chart.feed .series-line { stroke: var(--amber); }
+    .mini-chart .gridline { stroke: #244652; stroke-width: 1; }
+    .state-trend-chart { min-height: 178px; padding: 11px 13px 7px; border: 1px solid var(--line-soft); border-radius: 5px; background: #0a202a; }
+    .state-trend-head { display: flex; align-items: baseline; justify-content: space-between; color: var(--text); font-size: 12px; }
+    .state-trend-head span { color: var(--muted-2); font-size: 11px; }
+    .state-trend-chart svg { width: 100%; height: 132px; display: block; margin-top: 6px; }
+    .state-trend-chart text { fill: var(--muted-2); font-size: 10px; }
+    .state-trend-chart .lane { fill: #16313a; }
+    .state-trend-chart .state-standby { fill: var(--amber); } .state-trend-chart .state-running { fill: var(--green); } .state-trend-chart .state-fault { fill: var(--red); } .state-trend-chart .state-offline { fill: var(--offline); }
+    .state-trend-chart .state-transition { fill: none; stroke: #e8f1f2; stroke-width: 2; stroke-linecap: square; stroke-linejoin: miter; opacity: .9; }
+    .trend-tools { display: flex; align-items: center; gap: 12px; margin: 3px 0 10px; padding: 8px 10px; border: 1px solid var(--line-soft); border-radius: 5px; background: #102a35; }
+    .trend-tools-label { color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .metric-legend { display: flex; flex-wrap: wrap; gap: 6px; }
+    .metric-toggle { border: 1px solid var(--line); border-radius: 4px; background: #0c232e; color: var(--muted); padding: 5px 9px; font-size: 11px; }
+    .metric-toggle.active { color: var(--text); border-color: currentColor; }
+    .metric-toggle.speed.active { color: #45a7ff; } .metric-toggle.override.active { color: var(--green); } .metric-toggle.feed.active { color: var(--amber); }
+    .axis-note { margin-left: auto; color: var(--muted-2); font-size: 11px; white-space: nowrap; }
+    .series-hidden { opacity: .08; }
+    .metric-cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 9px; margin-top: 12px; }
+    .metric-card { padding: 11px 13px; border: 1px solid var(--line-soft); border-radius: 6px; background: #102a35; }
+    .metric-card span { display: block; color: var(--muted); font-size: 12px; } .metric-card strong { display: inline-block; margin-top: 7px; font-size: 23px; font-variant-numeric: tabular-nums; } .metric-card em { color: var(--muted); font-size: 12px; font-style: normal; margin-left: 4px; }
+    .metric-card.blue strong { color: #45a7ff; } .metric-card.green strong { color: var(--green); } .metric-card.amber strong { color: var(--amber); } .metric-card.cyan strong { color: var(--cyan); } .metric-card.red strong { color: var(--red); }
+    .trend-current-label { color: var(--muted); font-size: 12px; margin-top: 10px; }
+    .realtime-summary { margin-top: 14px; padding: 13px 14px; border: 1px solid var(--line-soft); border-radius: 6px; background: #0c232e; }
+    .realtime-summary-head { display: flex; justify-content: space-between; align-items: baseline; margin-bottom: 11px; }
+    .realtime-summary-head b { font-size: 13px; font-weight: 600; } .realtime-summary-head span { color: var(--muted-2); font-size: 11px; }
+    .realtime-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .realtime-item { padding: 10px 11px; border: 1px solid var(--line-soft); border-radius: 5px; background: #102a35; }
+    .realtime-item span { display: block; color: var(--muted); font-size: 11px; } .realtime-item strong { display: block; margin-top: 6px; color: var(--text); font-size: 16px; font-variant-numeric: tabular-nums; } .realtime-item .good { color: var(--green); } .realtime-item .warn { color: var(--amber); } .realtime-item .bad { color: var(--red); } .realtime-item .cyan { color: var(--cyan); }
+    .production-layout { width: 100%; height: 100%; min-height: 0; flex: 1; display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 14px; }
+    .production-summary, .production-table-panel { min-height: 0; display: flex; flex-direction: column; }
+    .production-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+    .production-heading span { color: var(--muted-2); font-size: 11px; }
+    .production-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 9px; margin-top: 10px; }
+    .production-stat { padding: 13px 14px; border: 1px solid var(--line-soft); border-radius: 6px; background: #102a35; }
+    .production-stat span { display: block; color: var(--muted); font-size: 12px; }
+    .production-stat strong { display: inline-block; margin-top: 8px; font-size: 25px; font-variant-numeric: tabular-nums; }
+    .production-stat em { color: var(--muted); font-size: 11px; font-style: normal; margin-left: 4px; }
+    .production-stat .good { color: var(--green); } .production-stat .cyan { color: var(--cyan); } .production-stat .amber { color: var(--amber); }
+    .production-bars { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--line-soft); }
+    .production-bars-head { display: flex; justify-content: space-between; color: var(--muted); font-size: 12px; margin-bottom: 12px; }
+    .production-bar-row { display: grid; grid-template-columns: 45px 1fr 32px; gap: 9px; align-items: center; margin: 11px 0; color: var(--muted); font-size: 12px; }
+    .production-bar-row i { height: 9px; border-radius: 5px; background: #203d47; overflow: hidden; }
+    .production-bar-row i b { display: block; height: 100%; border-radius: 5px; background: var(--cyan); }
+    .production-bar-row strong { color: var(--text); text-align: right; font-variant-numeric: tabular-nums; }
+    .production-table-panel { overflow: auto; }
+    .production-table { margin-top: 12px; }
+    .production-note { margin-top: auto; padding-top: 12px; color: var(--muted-2); font-size: 11px; }
+    .util-row { display: flex; align-items: center; gap: 16px; margin-top: 13px; padding-top: 13px; border-top: 1px solid var(--line-soft); }
+    .util-label { color: var(--muted); } .util-value { color: var(--cyan); font-size: 24px; font-weight: 700; margin-left: auto; }
+    .util-bar { width: 150px; height: 8px; background: #27383e; border-radius: 4px; overflow: hidden; } .util-bar span { display: block; width: 76.4%; height: 100%; background: var(--blue); }
+    .event-panel { flex: 1.15; overflow: auto; } .program-panel { flex: .85; overflow: auto; }
+    .timeline { position: relative; display: flex; flex-direction: column; gap: 13px; padding-left: 22px; }
+    .timeline::before { content: ""; position: absolute; left: 5px; top: 6px; bottom: 7px; width: 1px; background: #37606d; }
+    .event { position: relative; } .event::before { content: ""; position: absolute; left: -21px; top: 4px; width: 10px; height: 10px; border-radius: 50%; background: var(--red); box-shadow: 0 0 0 4px rgba(255,92,92,.13); }
+    .event.ok::before { background: var(--green); box-shadow: 0 0 0 4px rgba(54,201,143,.12); } .event.warn::before { background: var(--amber); box-shadow: 0 0 0 4px rgba(255,180,84,.12); }
+    .event-time { color: var(--text); font-variant-numeric: tabular-nums; } .event-title { color: var(--muted); font-size: 12px; margin-top: 3px; line-height: 1.45; }
+    .program-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+    .program-table th, .program-table td { padding: 10px 8px; text-align: left; border-bottom: 1px solid var(--line-soft); white-space: nowrap; }
+    .program-table th { color: var(--muted); font-weight: 500; } .program-table td { color: var(--text); } .program-table .bad { color: var(--amber); } .program-table .good { color: var(--green); }
+    .placeholder-panel { height: 100%; display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .placeholder-block { padding: 18px; border: 1px solid var(--line-soft); border-radius: 7px; background: #0c232e; }
+    .placeholder-block h3 { margin: 0 0 15px; } .data-list { display: grid; grid-template-columns: 1fr 1fr; gap: 13px; } .data-list div { padding-bottom: 10px; border-bottom: 1px solid var(--line-soft); } .data-list span { display: block; color: var(--muted); font-size: 12px; } .data-list b { display: block; margin-top: 5px; font-size: 18px; }
+    .toast { position: fixed; right: 24px; bottom: 22px; z-index: 40; padding: 11px 15px; border: 1px solid var(--line); border-radius: 5px; background: #102a35; color: var(--text); box-shadow: var(--shadow); opacity: 0; transform: translateY(8px); pointer-events: none; transition: .2s ease; }
+    .toast.show { opacity: 1; transform: translateY(0); }
+    @media (min-width: 2200px) {
+      body { font-size: 16px; }
+      .filterbar { min-height: 64px; padding: 10px 16px; }
+      select, input[type="date"], input[type="datetime-local"] { height: 40px; min-width: 168px; font-size: 14px; }
+      .btn { height: 40px; padding: 0 22px; }
+      .kpis { min-height: 112px; }
+      .kpi { padding: 18px 18px 14px; }
+      .kpi-label { font-size: 14px; }
+      .kpi-note { font-size: 12px; }
+      .device-card { padding: 15px 16px 13px; gap: 10px; }
+      .device-name { font-size: 18px; }
+      .device-id { font-size: 13px; margin-left: 36px; }
+      .card-gridline { font-size: 14px; }
+      .card-foot { font-size: 12px; }
+      .detail-filter input[type="datetime-local"] { min-width: 220px; }
+      .range-btn { height: 40px; padding: 0 15px; }
+      .detail-filter .btn { height: 40px; }
+    }
+    @media (max-width: 1450px) {
+      body { font-size: 13px; }
+      .topbar { grid-template-columns: 220px 1fr 220px; padding: 0 16px; height: 64px; flex-basis: 64px; }
+      .brand img { width: 170px; }
+      .content { grid-template-columns: 230px minmax(0, 1fr); padding: 10px; gap: 10px; }
+      .kpis { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .kpi:nth-child(4) { border-right: 0; } .kpi:nth-child(-n+4) { border-bottom: 1px solid var(--line-soft); }
+      .device-card { padding: 9px 10px; } .device-name { font-size: 13px; }
+      .metric-cards { grid-template-columns: repeat(3, 1fr); }
+      .chart-wrap { min-height: 520px; }
+      .mini-chart { min-height: 155px; }
+      .mini-chart svg { height: 112px; }
+      .state-trend-chart { min-height: 150px; }
+      .state-trend-chart svg { height: 104px; }
+      .realtime-grid { grid-template-columns: repeat(2, 1fr); }
+      .production-layout { grid-template-columns: 1fr; overflow: auto; }
+      .production-summary { min-height: 360px; }
+      .detail-modal { min-height: 580px; }
+    }
+    @media (max-width: 1180px) {
+      .sidebar { display: none; } .content { display: block; } .workspace { height: 100%; }
+      .topbar { grid-template-columns: 190px 1fr 180px; } .title-wrap .page-subtitle { display: none; }
+      .filterbar { overflow-x: auto; } .detail-filter { overflow-x: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <div class="brand"><img src="../assets/donghao-logo.png" alt="东浩智创"></div>
+      <div class="title-wrap"><h1 class="page-title">东浩智创 · 装备智能运营中枢</h1><div class="page-subtitle">设备运行态势 · 数据洞察演示</div></div>
+      <div class="topbar-meta"><span class="clock" id="clock">2025-05-20 10:24:35　星期二</span><span class="refresh"><i class="refresh-dot"></i>数据每 60 秒自动刷新　↻</span></div>
+    </header>
+
+    <main class="content">
+      <aside class="sidebar">
+        <section class="panel side-panel">
+          <h2>设备状态分布</h2><div class="section-rule"></div>
+          <div class="donut-row"><div class="donut"><div class="donut-center"><span>设备总数</span><b id="sideTotal">46</b></div></div><div class="legend" id="statusLegend"></div></div>
+        </section>
+        <section class="panel side-panel">
+          <h2>异常设备</h2><div class="section-rule"></div><div class="abnormal-list" id="abnormalList"></div><div class="abnormal-more">查看更多　›</div>
+        </section>
+        <section class="panel side-panel">
+          <h2>告警级别分布</h2><div class="section-rule"></div>
+          <div class="donut-row"><div class="donut alert-donut"><div class="donut-center"><span>未解除报警</span><b>5</b></div></div><div class="legend"><div class="legend-item"><span class="legend-name"><i class="legend-dot" style="background:var(--red)"></i>严重</span><span>1 (20%)</span></div><div class="legend-item"><span class="legend-name"><i class="legend-dot" style="background:var(--amber)"></i>重要</span><span>2 (40%)</span></div><div class="legend-item"><span class="legend-name"><i class="legend-dot" style="background:#d9a900"></i>一般</span><span>2 (40%)</span></div></div></div>
+        </section>
+        <section class="panel side-panel data-health">
+          <h2>数据接入质量</h2><div class="section-rule"></div>
+          <div class="health-summary"><strong>98.6%</strong><span>当前数据可用率</span></div>
+          <div class="health-list"><div><span>已接入设备</span><b>46 / 46</b></div><div><span>正常采集</span><b class="good">36 台</b></div><div><span>数据延迟</span><b class="warn">2 台</b></div><div><span>程序已修改</span><b class="bad">2 台</b></div></div>
+          <div class="health-foot"><span>最近采集</span><b>10:24:35</b></div>
+        </section>
+      </aside>
+
+      <section class="workspace">
+        <div class="filterbar">
+          <div class="filter-field"><label for="workshop">车间</label><div class="select-wrap"><select id="workshop"><option value="all">全部车间</option></select></div></div>
+          <div class="filter-field"><label for="line">产线</label><div class="select-wrap"><select id="line"><option value="all">全部产线</option></select></div></div>
+          <div class="filter-field"><label for="date">日期</label><input id="date" type="date" value="2025-05-20"></div>
+          <div class="filter-actions"><button class="btn btn-primary" id="queryBtn">查询</button><button class="btn" id="resetBtn">重置</button></div>
+          <div class="result-count">已筛选 <b id="resultCount">46</b> 台设备</div>
+        </div>
+
+        <div class="kpis">
+          <div class="kpi"><span class="kpi-label">设备总数</span><strong class="kpi-value cyan" id="kpiTotal">46</strong><span class="kpi-note">当前范围</span></div>
+          <div class="kpi"><span class="kpi-label">待机</span><strong class="kpi-value amber" id="kpiStandby">12</strong><span class="kpi-note">设备</span></div>
+          <div class="kpi"><span class="kpi-label">运行</span><strong class="kpi-value green" id="kpiRunning">20</strong><span class="kpi-note">设备</span></div>
+          <div class="kpi"><span class="kpi-label">故障</span><strong class="kpi-value red" id="kpiFault">4</strong><span class="kpi-note">设备</span></div>
+          <div class="kpi"><span class="kpi-label">离线</span><strong class="kpi-value offline" id="kpiOffline">10</strong><span class="kpi-note">无状态数据</span></div>
+          <div class="kpi"><span class="kpi-label">未解除报警</span><strong class="kpi-value red">5</strong><span class="kpi-note">条</span></div>
+          <div class="kpi"><span class="kpi-label">程序参数不一致</span><strong class="kpi-value amber">2</strong><span class="kpi-note">运行中设备</span></div>
+          <div class="kpi"><span class="kpi-label">平均设备稼动率</span><strong class="kpi-value cyan">76.4%</strong><span class="kpi-note">当日平均</span></div>
+        </div>
+
+        <div class="device-area"><div class="device-grid" id="deviceGrid"></div><div class="pagination" id="pagination"></div></div>
+      </section>
+    </main>
+  </div>
+
+  <div class="modal-overlay" id="modalOverlay" aria-hidden="true">
+    <section class="detail-modal" role="dialog" aria-modal="true" aria-labelledby="detailTitle">
+      <div class="modal-head">
+        <div class="modal-title-row"><h2 class="modal-title" id="detailTitle">龙门铣床 03</h2><span class="modal-id" id="detailId">EQP-1003</span><span class="status-badge fault" id="detailStatus">故障</span><span class="modal-updated" id="detailUpdated">最后更新：2025-05-20 10:23:58</span><button class="icon-btn" id="closeModal" title="关闭详情" aria-label="关闭详情">×</button></div>
+        <div class="chips"><div class="chip">◌ <b>润滑系统</b> <span id="detailLubricationState" class="bad">异常</span></div><div class="chip">⌁ <b>冷却系统</b> <span id="detailCoolingState" class="good">正常</span></div><div class="chip">● <b>未解除报警</b> <span id="detailAlarmCount" class="bad">2</span></div><div class="chip">⌘ <b id="detailMismatch" class="warn">运行中参数不一致</b></div></div>
+        <div class="tabs"><button class="tab" data-tab="realtime">实时数据</button><button class="tab active" data-tab="trend">当天趋势</button><button class="tab" data-tab="events">报警事件</button><button class="tab" data-tab="program">程序记录</button></div>
+      </div>
+      <div class="modal-body">
+        <div class="detail-filter"><label>时间范围</label><div class="quick-range"><button class="range-btn active" data-range="today">今天</button><button class="range-btn" data-range="7d">近7天</button><button class="range-btn" data-range="30d">近30天</button></div><input id="startDate" type="datetime-local" value="2025-05-20T00:00"><span class="range-arrow">至</span><input id="endDate" type="datetime-local" value="2025-05-20T10:24"><button class="btn btn-primary" id="detailQuery">查询</button><span class="range-hint">日期范围同时作用于趋势、报警和程序记录</span></div>
+        <div class="tab-panel active" id="panel-trend"><div class="detail-columns"><div class="detail-main"><section class="detail-panel trend-panel"><h3>当天趋势</h3><div class="state-head"><span>状态趋势（查询范围）</span><span class="state-legend"><span><i style="background:var(--amber)"></i>待机</span><span><i style="background:var(--green)"></i>运行</span><span><i style="background:var(--red)"></i>故障</span><span><i style="background:var(--offline)"></i>离线</span></span></div><div class="state-band"><span class="band-standby"></span><span class="band-running"></span><span class="band-fault"></span><span class="band-offline"></span></div><div class="axis"><span>00:00</span><span>02:00</span><span>04:00</span><span>06:00</span><span>08:00</span><span>10:24</span></div><div class="chart-wrap"><svg viewBox="0 0 900 285" preserveAspectRatio="none" role="img" aria-label="设备趋势图"><g stroke="#244652" stroke-width="1"><line x1="46" y1="38" x2="885" y2="38"/><line x1="46" y1="98" x2="885" y2="98"/><line x1="46" y1="158" x2="885" y2="158"/><line x1="46" y1="218" x2="885" y2="218"/></g><g fill="#66818a" font-size="11"><text x="5" y="43">15,000</text><text x="12" y="103">10,000</text><text x="20" y="163">5,000</text><text x="32" y="223">0</text><text x="52" y="278">00:00</text><text x="215" y="278">02:00</text><text x="385" y="278">04:00</text><text x="553" y="278">06:00</text><text x="720" y="278">08:00</text><text x="842" y="278">10:24</text></g><polyline fill="none" stroke="#45a7ff" stroke-width="3" points="48,190 87,173 125,178 163,145 204,151 244,126 279,141 322,108 358,130 399,101 440,117 482,83 521,97 557,75 594,112 636,95 678,108 719,79 759,91 802,54 844,68 881,39"/><polyline fill="none" stroke="#36c98f" stroke-width="3" points="48,217 86,208 126,215 165,196 207,201 244,184 280,191 319,170 358,179 400,162 441,171 482,151 521,160 557,143 594,163 637,153 679,162 721,144 759,151 801,127 843,138 881,117"/><polyline fill="none" stroke="#ffb454" stroke-width="3" points="48,245 90,239 128,242 167,228 205,233 246,220 280,229 320,207 360,219 400,201 442,213 482,193 521,204 559,185 598,207 638,194 680,202 722,183 760,195 800,172 844,182 881,161"/><rect x="806" y="30" width="54" height="201" fill="rgba(255,92,92,.12)" stroke="#ff5c5c" stroke-dasharray="4 4"/><text x="813" y="247" fill="#ff5c5c" font-size="11">故障区间</text></svg></div><div class="metric-cards"><div class="metric-card blue"><span>主轴转速</span><strong>8,450</strong><em>rpm</em></div><div class="metric-card green"><span>倍率</span><strong>120</strong><em>%</em></div><div class="metric-card amber"><span>进给率</span><strong>1,250</strong><em>mm/min</em></div></div><div class="util-row"><span class="util-label">设备稼动率</span><div class="util-bar"><span></span></div><strong class="util-value">76.4%</strong></div></section></div><div class="detail-side"><section class="detail-panel event-panel"><h3>报警事件（2）</h3><div class="timeline"><div class="event"><div class="event-time">10:23:58　润滑系统 异常</div><div class="event-title">油压低于阈值（实际值：0.35MPa，阈值：0.50MPa）</div></div><div class="event"><div class="event-time">10:21:44　润滑系统 异常</div><div class="event-title">润滑泵温度超限（实际值：78℃，阈值：60℃）</div></div><div class="event ok"><div class="event-time">09:12:31　冷却系统 正常</div><div class="event-title">冷却液流量恢复至正常范围</div></div><div class="event warn"><div class="event-time">08:47:15　运行中参数不一致</div><div class="event-title">进给倍率不匹配（CNC设定：100%，实际：95%）</div></div></div></section><section class="detail-panel program-panel"><h3>程序记录（当天最新比对）</h3><table class="program-table"><thead><tr><th>程序版本</th><th>下发时间</th><th>比对时间</th><th>结果</th></tr></thead><tbody><tr><td>V2.1.0</td><td>08:05:12</td><td>08:06:03</td><td class="bad">参数不一致</td></tr><tr><td>V2.0.9</td><td>05-19 16:42</td><td>05-19 16:43</td><td class="good">一致</td></tr><tr><td>V2.0.8</td><td>05-19 10:15</td><td>05-19 10:16</td><td class="good">一致</td></tr></tbody></table></section></div></div></div>
+        <div class="tab-panel" id="panel-realtime"><div class="placeholder-panel"><section class="placeholder-block"><h3>实时数据</h3><div class="data-list"><div><span>主轴转速</span><b style="color:#45a7ff">8,450 rpm</b></div><div><span>倍率</span><b style="color:var(--green)">120 %</b></div><div><span>进给率</span><b style="color:var(--amber)">1,250 mm/min</b></div><div><span>冷却液温度</span><b>32 ℃</b></div><div><span>润滑油压</span><b style="color:var(--red)">0.35 MPa</b></div><div><span>当前程序</span><b>O1024</b></div></div></section><section class="placeholder-block"><h3>状态明细</h3><div class="data-list"><div><span>当前状态</span><b style="color:var(--red)">故障</b></div><div><span>状态开始</span><b>10:23:58</b></div><div><span>今日运行时间</span><b>04:35:18</b></div><div><span>今日故障时间</span><b style="color:var(--red)">00:58:23</b></div><div><span>润滑系统</span><b style="color:var(--red)">异常</b></div><div><span>冷却系统</span><b style="color:var(--green)">正常</b></div></div></section></div></div>
+        <div class="tab-panel" id="panel-events"><div class="detail-columns"><section class="detail-panel event-panel"><h3>报警事件（按查询范围）</h3><div class="timeline"><div class="event"><div class="event-time">2025-05-20 10:23:58</div><div class="event-title">润滑系统异常 · 未解除</div></div><div class="event"><div class="event-time">2025-05-20 10:21:44</div><div class="event-title">润滑泵温度超限 · 未解除</div></div><div class="event ok"><div class="event-time">2025-05-20 09:12:31</div><div class="event-title">冷却系统恢复正常 · 已恢复</div></div><div class="event warn"><div class="event-time">2025-05-20 08:47:15</div><div class="event-title">运行中参数不一致 · 已确认</div></div><div class="event ok"><div class="event-time">2025-05-20 08:04:12</div><div class="event-title">主轴负载恢复正常 · 已恢复</div></div></div></section><section class="detail-panel"><h3>事件统计</h3><div class="data-list"><div><span>未解除报警</span><b style="color:var(--red)">2</b></div><div><span>已确认</span><b style="color:var(--green)">1</b></div><div><span>已恢复</span><b>2</b></div><div><span>查询范围</span><b style="font-size:14px">当天</b></div></div></section></div></div>
+        <div class="tab-panel" id="panel-program"><div class="detail-columns"><section class="detail-panel program-panel"><h3>程序下发与比对记录</h3><table class="program-table"><thead><tr><th>程序版本</th><th>下发时间</th><th>比对时间</th><th>结果</th></tr></thead><tbody><tr><td>V2.1.0</td><td>2025-05-20 08:05:12</td><td>2025-05-20 08:06:03</td><td class="bad">参数不一致</td></tr><tr><td>V2.0.9</td><td>2025-05-19 16:42:55</td><td>2025-05-19 16:43:31</td><td class="good">一致</td></tr><tr><td>V2.0.8</td><td>2025-05-19 10:15:22</td><td>2025-05-19 10:16:05</td><td class="good">一致</td></tr></tbody></table></section><section class="detail-panel"><h3>当前程序</h3><div class="data-list"><div><span>运行程序</span><b>O1024</b></div><div><span>下发状态</span><b style="color:var(--green)">已下发</b></div><div><span>参数比对</span><b style="color:var(--amber)">不一致</b></div><div><span>最后比对</span><b>10:23:58</b></div></div></section></div></div>
+      </div>
+    </section>
+  </div>
+  <div class="toast" id="toast"></div>
+
+  <script>
+    const statusMeta = {
+      running: { label: "运行", color: "var(--green)" }, standby: { label: "待机", color: "var(--amber)" }, fault: { label: "故障", color: "var(--red)" }, offline: { label: "离线", color: "var(--offline)" }
+    };
+    const types = ["CNC加工中心", "车削中心", "龙门铣床", "磨床"];
+    const statuses = ["running","standby","fault","offline","running","running","running","fault","offline","running","standby","running","running","fault","offline","standby","running","running","standby","offline","running","fault","running","offline","standby","running","running","offline","standby","running","fault","running","offline","standby","running","running","offline","standby","running","running","offline","standby","running","running","fault","offline","standby"];
+    const devices = Array.from({ length: 46 }, (_, i) => {
+      const no = i + 1, status = statuses[i];
+      const type = types[i % types.length];
+      const workshop = ["一车间", "二车间", "三车间"][i % 3];
+      const line = ["A线", "B线", "C线"][i % 3];
+      const alarm = status === "fault" ? (i % 3) + 1 : (i === 7 || i === 13 ? 1 : 0);
+      const mismatch = [2, 13].includes(i);
+      return { no, id: `EQP-${String(1000 + no)}`, name: `${type} ${String((i % 16) + 1).padStart(2, "0")}`, status, workshop, line, alarm, mismatch, lubrication: status === "fault" ? "异常" : status === "offline" ? "离线" : "正常", cooling: status === "fault" && i % 2 === 1 ? "异常" : status === "offline" ? "离线" : "正常", updated: `10:${String(24 - (i % 17)).padStart(2, "0")}:${String(10 + (i % 49)).padStart(2, "0")}` };
+    });
+    devices[2].name = "龙门铣床 03"; devices[2].status = "fault"; devices[2].alarm = 2; devices[2].mismatch = true; devices[2].lubrication = "异常"; devices[2].cooling = "正常";
+    let filtered = [...devices]; let page = 1; const pageSize = 16; let activeDevice = devices[2];
+
+    const $ = (sel, root = document) => root.querySelector(sel);
+    const $$ = (sel, root = document) => Array.from(root.querySelectorAll(sel));
+    function updateClock() { const now = new Date(); const pad = n => String(n).padStart(2, "0"); const date = `2025-05-20 ${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`; $("#clock").textContent = `${date}　星期二`; }
+    function statusCounts(list) { return list.reduce((acc, d) => { acc[d.status]++; return acc; }, { running: 0, standby: 0, fault: 0, offline: 0 }); }
+    function renderLegend(list) { const c = statusCounts(list); const total = list.length || 0; $("#sideTotal").textContent = total; $("#statusLegend").innerHTML = Object.entries(statusMeta).map(([key, meta]) => `<div class="legend-item"><span class="legend-name"><i class="legend-dot" style="background:${meta.color}"></i>${meta.label}</span><span>${c[key]} (${total ? (c[key] / total * 100).toFixed(1) : "0.0"}%)</span></div>`).join(""); }
+    function renderKpis(list) { const c = statusCounts(list); $("#kpiTotal").textContent = list.length; $("#kpiStandby").textContent = c.standby; $("#kpiRunning").textContent = c.running; $("#kpiFault").textContent = c.fault; $("#kpiOffline").textContent = c.offline; }
+    function renderAbnormal(list) { const rows = list.filter(d => d.status === "fault" || d.status === "offline" || d.mismatch).slice(0, 6); $("#abnormalList").innerHTML = rows.length ? rows.map(d => `<div class="abnormal-row"><span>${d.name}</span><span class="type">${d.mismatch ? "程序参数不一致" : d.status === "offline" ? "设备离线" : "润滑系统异常"}</span><b class="status">${statusMeta[d.status].label}</b></div>`).join("") : `<div class="abnormal-row"><span>暂无异常设备</span></div>`; }
+    function renderCards() { const grid = $("#deviceGrid"); const start = (page - 1) * pageSize; const list = filtered.slice(start, start + pageSize); grid.innerHTML = list.length ? list.map(d => `<article class="device-card ${d.status}" data-id="${d.id}" tabindex="0" aria-label="打开 ${d.name} 详情"><div class="card-head"><span class="index">${String(d.no).padStart(2, "0")}</span><span class="device-name">${d.name}</span><span class="status-badge ${d.status}">${statusMeta[d.status].label}</span></div><div class="device-id">${d.id}</div><div class="divider"></div><div class="card-gridline"><span class="metric-label">◌ 润滑系统</span><span class="metric-value ${d.lubrication === "正常" ? "good" : d.lubrication === "异常" ? "bad" : "dim"}">${d.lubrication}</span><span class="metric-label">⌁ 冷却系统</span><span class="metric-value ${d.cooling === "正常" ? "good" : d.cooling === "异常" ? "bad" : "dim"}">${d.cooling}</span><span class="metric-label">报警数</span><span class="metric-value ${d.alarm ? "bad" : "good"}">${d.alarm}</span></div><div class="card-foot"><span>最后更新 ${d.updated}</span><span class="detail-link">详情 ›</span></div></article>`).join("") : `<div class="empty">当前筛选条件下暂无设备</div>`; $$(".device-card", grid).forEach(card => { card.addEventListener("click", () => openModal(devices.find(d => d.id === card.dataset.id))); card.addEventListener("keydown", e => { if (e.key === "Enter") openModal(devices.find(d => d.id === card.dataset.id)); }); }); renderPagination(); }
+    function renderPagination() { const total = Math.max(1, Math.ceil(filtered.length / pageSize)); if (page > total) page = total; $("#pagination").innerHTML = Array.from({ length: total }, (_, i) => `<button class="page-btn ${page === i + 1 ? "active" : ""}" data-page="${i + 1}">${i + 1}</button>`).join(""); $$(".page-btn").forEach(b => b.addEventListener("click", () => { page = Number(b.dataset.page); renderCards(); })); }
+    function populateFilters() { const workshop = $("#workshop"), line = $("#line"); [...new Set(devices.map(d => d.workshop))].forEach(v => workshop.insertAdjacentHTML("beforeend", `<option value="${v}">${v}</option>`)); [...new Set(devices.map(d => d.line))].forEach(v => line.insertAdjacentHTML("beforeend", `<option value="${v}">${v}</option>`)); }
+    function applyFilters() { const workshop = $("#workshop").value, line = $("#line").value, date = $("#date").value; filtered = devices.filter(d => (workshop === "all" || d.workshop === workshop) && (line === "all" || d.line === line)); page = 1; $("#resultCount").textContent = filtered.length; renderLegend(filtered); renderKpis(filtered); renderAbnormal(filtered); renderCards(); showToast(`已更新 ${date || "当天"} 的设备数据`); }
+    function resetFilters() { $("#workshop").value = "all"; $("#line").value = "all"; $("#date").value = "2025-05-20"; applyFilters(); }
+    function openModal(device) { if (!device) return; activeDevice = device; $("#detailTitle").textContent = device.name; $("#detailId").textContent = device.id; const status = $("#detailStatus"); status.textContent = statusMeta[device.status].label; status.className = `status-badge ${device.status}`; $("#detailUpdated").textContent = `最后更新：2025-05-20 ${device.updated}`; const lubrication = $("#detailLubricationState"); lubrication.textContent = device.lubrication; lubrication.className = device.lubrication === "正常" ? "good" : device.lubrication === "异常" ? "bad" : "warn"; const cooling = $("#detailCoolingState"); cooling.textContent = device.cooling; cooling.className = device.cooling === "正常" ? "good" : device.cooling === "异常" ? "bad" : "warn"; $("#detailAlarmCount").textContent = device.alarm; const mismatch = $("#detailMismatch"); mismatch.textContent = device.mismatch ? "运行中参数不一致" : "程序参数一致"; mismatch.className = device.mismatch ? "warn" : "good"; $("#modalOverlay").classList.add("open"); $("#modalOverlay").setAttribute("aria-hidden", "false"); document.body.style.overflow = "hidden"; }
+    function closeModal() { $("#modalOverlay").classList.remove("open"); $("#modalOverlay").setAttribute("aria-hidden", "true"); document.body.style.overflow = "hidden"; }
+    function switchTab(name) { $$(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === name)); $$(".tab-panel").forEach(p => p.classList.toggle("active", p.id === `panel-${name}`)); }
+    function setRange(range) { $$(".range-btn").forEach(btn => btn.classList.toggle("active", btn.dataset.range === range)); const end = "2025-05-20T10:24"; $("#endDate").value = end; if (range === "today") $("#startDate").value = "2025-05-20T00:00"; if (range === "7d") $("#startDate").value = "2025-05-14T00:00"; if (range === "30d") $("#startDate").value = "2025-04-21T00:00"; }
+    let toastTimer; function showToast(message) { const toast = $("#toast"); toast.textContent = message; toast.classList.add("show"); clearTimeout(toastTimer); toastTimer = setTimeout(() => toast.classList.remove("show"), 1800); }
+    function enhanceTrendPanel() {
+      const heading = $("#panel-trend .trend-panel h3");
+      heading.insertAdjacentHTML("afterend", `<div class="trend-tools"><span class="trend-tools-label">监测指标</span><div class="metric-legend"><button class="metric-toggle speed active" data-series="series-speed">主轴转速 · rpm</button><button class="metric-toggle override active" data-series="series-override">倍率 · %</button><button class="metric-toggle feed active" data-series="series-feed">进给率 · mm/min</button></div><span class="axis-note">曲线按各自单位展示</span></div>`);
+      const svg = $("#panel-trend svg");
+      svg.querySelectorAll("polyline").forEach(line => { line.style.display = "none"; });
+      svg.insertAdjacentHTML("beforeend", `<path id="series-speed" fill="none" stroke="#45a7ff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M48 190 C70 170 102 185 125 176 S165 142 190 151 S228 119 254 130 S300 101 322 111 S350 132 380 102 S430 88 455 114 S500 70 530 87 S570 118 600 95 S645 98 672 108 S715 79 742 91 S790 46 816 60 S854 71 881 39"/><path id="series-override" fill="none" stroke="#36c98f" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M48 217 C70 204 102 219 126 211 S165 190 190 198 S228 177 254 185 S300 162 322 171 S350 184 380 165 S430 151 455 169 S500 138 530 151 S570 176 600 154 S645 153 672 162 S715 141 742 149 S790 118 816 132 S854 140 881 117"/><path id="series-feed" fill="none" stroke="#ffb454" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" d="M48 245 C70 234 102 246 128 238 S167 220 190 229 S228 211 254 219 S300 198 322 207 S350 220 380 201 S430 188 455 205 S500 174 530 188 S570 210 600 191 S645 191 672 201 S715 179 742 192 S790 163 816 177 S854 182 881 161"/>`);
+      $("#panel-trend .metric-cards").insertAdjacentHTML("beforebegin", `<div class="trend-current-label">当前值（最近采样）</div>`);
+      $("#panel-trend .metric-cards").insertAdjacentHTML("beforeend", `<div class="metric-card cyan"><span>冷却液温度</span><strong>32</strong><em>℃</em></div><div class="metric-card red"><span>润滑油压</span><strong>0.35</strong><em>MPa</em></div>`);
+      const chartWrap = $("#panel-trend .chart-wrap");
+      chartWrap.innerHTML = `<div class="chart-stack"><div class="mini-chart speed" id="series-speed"><div class="mini-chart-head"><span>主轴转速</span><span class="unit">rpm</span><strong>8,450 rpm</strong></div><svg viewBox="0 0 900 130" preserveAspectRatio="none" aria-label="主轴转速趋势"><g class="gridline"><line x1="50" y1="18" x2="890" y2="18"/><line x1="50" y1="47" x2="890" y2="47"/><line x1="50" y1="76" x2="890" y2="76"/><line x1="50" y1="105" x2="890" y2="105"/></g><g><text x="3" y="22">15,000</text><text x="10" y="51">10,000</text><text x="18" y="80">5,000</text><text x="32" y="109">0</text><text x="50" y="126">00:00</text><text x="250" y="126">02:30</text><text x="450" y="126">05:00</text><text x="650" y="126">07:30</text><text x="842" y="126">10:24</text></g><polyline class="series-line" points="50,75 62,48 74,66 86,41 98,72 110,52 122,81 134,57 146,68 158,34 170,61 182,45 194,76 206,58 218,88 230,55 242,71 254,38 266,64 278,50 290,82 302,59 314,73 326,42 338,67 350,36 362,62 374,77 386,45 398,70 410,54 422,86 434,50 446,71 458,39 470,65 482,52 494,80 506,46 518,69 530,37 542,60 554,78 566,48 578,72 590,43 602,66 614,34 626,61 638,79 650,51 662,73 674,39 686,62 698,84 710,47 722,70 734,42 746,61 758,32 770,58 782,75 794,45 806,69 818,39 830,62 842,28 854,52 866,73 878,37 890,56"/></svg></div><div class="mini-chart override" id="series-override"><div class="mini-chart-head"><span>倍率</span><span class="unit">%</span><strong>120 %</strong></div><svg viewBox="0 0 900 130" preserveAspectRatio="none" aria-label="倍率趋势"><g class="gridline"><line x1="50" y1="18" x2="890" y2="18"/><line x1="50" y1="47" x2="890" y2="47"/><line x1="50" y1="76" x2="890" y2="76"/><line x1="50" y1="105" x2="890" y2="105"/></g><g><text x="18" y="22">150</text><text x="25" y="51">100</text><text x="25" y="80">50</text><text x="32" y="109">0</text><text x="50" y="126">00:00</text><text x="250" y="126">02:30</text><text x="450" y="126">05:00</text><text x="650" y="126">07:30</text><text x="842" y="126">10:24</text></g><polyline class="series-line" points="50,75 62,56 74,82 86,42 98,65 110,51 122,88 134,60 146,73 158,35 170,70 182,48 194,84 206,53 218,76 230,45 242,66 254,37 266,72 278,49 290,81 302,57 314,70 326,41 338,64 350,31 362,67 374,85 386,46 398,74 410,52 422,90 434,58 446,70 458,39 470,63 482,51 494,78 506,45 518,69 530,35 542,61 554,79 566,48 578,73 590,42 602,66 614,32 626,59 638,82 650,50 662,71 674,38 686,63 698,87 710,46 722,70 734,41 746,60 758,34 770,57 782,76 794,45 806,68 818,39 830,61 842,30 854,55 866,77 878,42 890,58"/></svg></div><div class="mini-chart feed" id="series-feed"><div class="mini-chart-head"><span>进给率</span><span class="unit">mm/min</span><strong>1,250 mm/min</strong></div><svg viewBox="0 0 900 130" preserveAspectRatio="none" aria-label="进给率趋势"><g class="gridline"><line x1="50" y1="18" x2="890" y2="18"/><line x1="50" y1="47" x2="890" y2="47"/><line x1="50" y1="76" x2="890" y2="76"/><line x1="50" y1="105" x2="890" y2="105"/></g><g><text x="3" y="22">2,000</text><text x="10" y="51">1,500</text><text x="10" y="80">800</text><text x="32" y="109">0</text><text x="50" y="126">00:00</text><text x="250" y="126">02:30</text><text x="450" y="126">05:00</text><text x="650" y="126">07:30</text><text x="842" y="126">10:24</text></g><polyline class="series-line" points="50,91 62,66 74,83 86,57 98,94 110,71 122,87 134,49 146,79 158,62 170,99 182,68 194,83 206,44 218,76 230,57 242,93 254,64 266,80 278,50 290,89 302,59 314,75 326,46 338,86 350,54 362,97 374,68 386,81 398,42 410,73 422,61 434,96 446,58 458,82 470,48 482,88 494,65 506,92 518,52 530,78 542,45 554,85 566,60 578,96 590,55 602,79 614,48 626,91 638,62 650,84 662,46 674,88 686,59 698,94 710,51 722,78 734,43 746,86 758,58 770,90 782,49 794,80 806,55 818,92 830,47 842,85 854,61 866,95 878,53 890,77"/></svg></div></div>`;
+      $("#panel-trend .metric-cards").insertAdjacentHTML("afterend", `<div class="realtime-summary"><div class="realtime-summary-head"><b>当前采样摘要</b><span>最近更新时间：10:23:58</span></div><div class="realtime-grid"><div class="realtime-item"><span>当前状态</span><strong class="bad">故障</strong></div><div class="realtime-item"><span>当前程序</span><strong>O1024</strong></div><div class="realtime-item"><span>运行时长</span><strong>04:35:18</strong></div><div class="realtime-item"><span>主轴负载</span><strong class="cyan">68%</strong></div><div class="realtime-item"><span>冷却液温度</span><strong class="good">32 ℃</strong></div><div class="realtime-item"><span>润滑油压</span><strong class="warn">0.35 MPa</strong></div><div class="realtime-item"><span>进给倍率</span><strong class="warn">95%</strong></div><div class="realtime-item"><span>数据状态</span><strong class="good">正常接收</strong></div></div></div>`);
+      chartWrap.querySelector(".chart-stack").insertAdjacentHTML("afterbegin", `<div class="state-trend-chart"><div class="state-trend-head"><b>设备状态趋势</b><span>状态轨迹 · 查询范围</span></div><svg viewBox="0 0 900 150" preserveAspectRatio="none" aria-label="设备状态趋势监测图"><g class="gridline"><line x1="62" y1="21" x2="890" y2="21"/><line x1="62" y1="52" x2="890" y2="52"/><line x1="62" y1="83" x2="890" y2="83"/><line x1="62" y1="114" x2="890" y2="114"/></g><g><text x="5" y="25">待机</text><text x="5" y="56">运行</text><text x="5" y="87">故障</text><text x="5" y="118">离线</text><text x="62" y="143">00:00</text><text x="260" y="143">02:30</text><text x="460" y="143">05:00</text><text x="660" y="143">07:30</text><text x="842" y="143">10:24</text></g><rect class="lane" x="62" y="12" width="828" height="18" rx="3"/><rect class="lane" x="62" y="43" width="828" height="18" rx="3"/><rect class="lane" x="62" y="74" width="828" height="18" rx="3"/><rect class="lane" x="62" y="105" width="828" height="18" rx="3"/><rect class="state-standby" x="62" y="12" width="126" height="18" rx="3"/><rect class="state-running" x="188" y="43" width="305" height="18" rx="3"/><rect class="state-standby" x="493" y="12" width="88" height="18" rx="3"/><rect class="state-running" x="581" y="43" width="146" height="18" rx="3"/><rect class="state-fault" x="727" y="74" width="64" height="18" rx="3"/><rect class="state-offline" x="791" y="105" width="44" height="18" rx="3"/><rect class="state-running" x="835" y="43" width="55" height="18" rx="3"/><polyline class="state-transition" points="62,21 188,21 188,52 493,52 493,21 581,21 581,52 727,52 727,83 791,83 791,114 835,114 835,52 890,52"/><line x1="727" y1="8" x2="727" y2="126" stroke="#ff5c5c" stroke-dasharray="4 4"/><text x="733" y="10" fill="#ff5c5c">故障开始</text></svg></div>`);
+      $$(".metric-toggle").forEach(button => button.addEventListener("click", () => { const series = $("#" + button.dataset.series); const hidden = series.classList.toggle("series-hidden"); button.classList.toggle("active", !hidden); }));
+    }
+    function enhanceProductionPanel() {
+      const realtimeTab = $(".tab[data-tab='realtime']"); if (realtimeTab) realtimeTab.remove();
+      const realtimePanel = $("#panel-realtime"); if (realtimePanel) realtimePanel.remove();
+      const trendTab = $(".tab[data-tab='trend']");
+      trendTab.insertAdjacentHTML("afterend", `<button class="tab" data-tab="production">生产数据</button>`);
+      $(".range-hint").textContent = "日期范围同时作用于趋势、生产、报警和程序记录";
+      $("#panel-events").insertAdjacentHTML("beforebegin", `<div class="tab-panel" id="panel-production"><div class="production-layout"><section class="detail-panel production-summary"><div class="production-heading"><h3>生产结果概览</h3><span>数据来源：设备生产结果数据</span></div><div class="production-stats"><div class="production-stat"><span>当日总产量</span><strong>128</strong><em>件</em></div><div class="production-stat"><span>合格数量</span><strong class="good">124</strong><em>件</em></div><div class="production-stat"><span>合格率</span><strong class="cyan">96.9</strong><em>%</em></div><div class="production-stat"><span>平均加工节拍</span><strong>04:32</strong><em>/件</em></div><div class="production-stat"><span>当前加工中</span><strong class="amber">1</strong><em>件</em></div></div><div class="production-bars"><div class="production-bars-head"><b>时段产出</b><span>件</span></div><div class="production-bar-row"><span>08:00</span><i><b style="width:62%"></b></i><strong>32</strong></div><div class="production-bar-row"><span>09:00</span><i><b style="width:78%"></b></i><strong>41</strong></div><div class="production-bar-row"><span>10:00</span><i><b style="width:70%"></b></i><strong>36</strong></div><div class="production-bar-row"><span>10:24</span><i><b style="width:38%"></b></i><strong>19</strong></div></div></section><section class="detail-panel production-table-panel"><div class="production-heading"><h3>生产结果明细</h3><span>当前查询范围内的上报记录</span></div><table class="program-table production-table"><thead><tr><th>时间</th><th>程序</th><th>产出</th><th>合格</th><th>合格率</th><th>节拍</th><th>数据状态</th></tr></thead><tbody><tr><td>10:24</td><td>O1024</td><td>19</td><td>18</td><td class="good">94.7%</td><td>04:38</td><td class="good">已接收</td></tr><tr><td>10:00</td><td>O1024</td><td>36</td><td>35</td><td class="good">97.2%</td><td>04:28</td><td class="good">已接收</td></tr><tr><td>09:00</td><td>O1018</td><td>41</td><td>40</td><td class="good">97.6%</td><td>04:31</td><td class="good">已接收</td></tr><tr><td>08:00</td><td>O1018</td><td>32</td><td>31</td><td class="good">96.9%</td><td>04:35</td><td class="good">已接收</td></tr><tr><td>07:30</td><td>O1018</td><td>—</td><td>—</td><td>—</td><td>—</td><td class="bad">未上报</td></tr></tbody></table><div class="production-note">生产结果字段以设备上报数据为准；无数据时显示“未上报”，不以 0 代替。</div></section></div></div>`);
+    }
+    enhanceTrendPanel(); enhanceProductionPanel(); populateFilters(); renderLegend(filtered); renderKpis(filtered); renderAbnormal(filtered); renderCards(); updateClock(); setInterval(updateClock, 1000);
+    $("#queryBtn").addEventListener("click", applyFilters); $("#resetBtn").addEventListener("click", resetFilters); $("#closeModal").addEventListener("click", closeModal); $("#modalOverlay").addEventListener("click", e => { if (e.target === $("#modalOverlay")) closeModal(); }); document.addEventListener("keydown", e => { if (e.key === "Escape") closeModal(); });
+    $$(".tab").forEach(tab => tab.addEventListener("click", () => switchTab(tab.dataset.tab))); $$(".range-btn").forEach(btn => btn.addEventListener("click", () => setRange(btn.dataset.range))); $("#detailQuery").addEventListener("click", () => showToast(`详情数据已按 ${$("#startDate").value.replace("T", " ")} 至 ${$("#endDate").value.replace("T", " ")} 查询`));
+  </script>
+</body>
+</html>

@@ -29,7 +29,7 @@
       margin: 0;
       color: var(--text);
       background: var(--bg);
-      font-family: Inter, "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
+      font-family: "Geist", "Microsoft YaHei", "PingFang SC", Arial, sans-serif;
       font-size: 14px;
       overflow: hidden;
     }
@@ -85,7 +85,7 @@
     .health-foot { display: flex; justify-content: space-between; margin-top: auto; padding-top: 11px; border-top: 1px solid var(--line-soft); color: var(--muted); font-size: 11px; } .health-foot b { color: var(--text); font-weight: 500; }
 
     .workspace { min-width: 0; min-height: 0; display: flex; flex-direction: column; gap: 12px; }
-    .filterbar { display: flex; align-items: center; gap: 10px; min-height: 52px; padding: 8px 12px; border: 1px solid var(--line-soft); background: #0a1c25; border-radius: 7px; }
+    .filterbar { display: flex; align-items: center; gap: 12px; min-height: 52px; padding: 8px 14px; border: 1px solid #21424d; background: #0a1c25; border-radius: 7px; }
     .filter-field { display: flex; align-items: center; gap: 8px; }
     .filter-field label { color: var(--muted); white-space: nowrap; }
     .select-wrap { position: relative; }
@@ -96,6 +96,8 @@
     .btn { height: 34px; padding: 0 18px; border-radius: 5px; border: 1px solid var(--line); background: #102a35; color: var(--text); }
     .btn:hover { border-color: var(--cyan); }
     .btn-primary { background: #0e70bf; border-color: #228ed9; }
+    .live-hint { display: inline-flex; align-items: center; gap: 7px; color: var(--muted-2); font-size: 11px; white-space: nowrap; }
+    .live-hint .refresh-dot { width: 6px; height: 6px; box-shadow: 0 0 0 3px rgba(83,211,226,.1); }
     .result-count { margin-left: auto; color: var(--muted); white-space: nowrap; }
     .result-count b { color: var(--cyan); font-size: 16px; }
     .kpis { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); border: 1px solid var(--line-soft); background: var(--surface); border-radius: 7px; min-height: 94px; }
@@ -108,8 +110,8 @@
 
     .device-area { min-height: 0; flex: 1; display: flex; flex-direction: column; gap: 9px; position: relative; }
     .device-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); grid-template-rows: repeat(4, minmax(0, 1fr)); gap: 11px; }
-    .device-card { min-height: 0; padding: 12px 13px 10px; border: 1px solid var(--line); border-radius: 7px; background: #0c202a; display: flex; flex-direction: column; gap: 8px; transition: border-color .18s ease, transform .18s ease, background .18s ease; cursor: pointer; }
-    .device-card:hover { transform: translateY(-2px); border-color: var(--cyan); background: #102a35; }
+    .device-card { min-height: 0; padding: 12px 13px 15px; border: 1px solid var(--line); border-radius: 7px; background: #0c202a; display: flex; flex-direction: column; gap: 8px; transition: border-color .18s ease, transform .18s ease, background .18s ease, box-shadow .18s ease; cursor: pointer; }
+    .device-card:hover { transform: translateY(-2px); border-color: var(--cyan); background: #102a35; box-shadow: 0 10px 22px rgba(0,0,0,.2); }
     .device-card.running { border-color: rgba(54,201,143,.7); } .device-card.standby { border-color: rgba(255,180,84,.75); } .device-card.fault { border-color: rgba(255,92,92,.9); } .device-card.offline { border-color: rgba(139,152,160,.72); }
     .card-head { min-width: 0; display: flex; align-items: center; gap: 8px; }
     .index { width: 25px; height: 25px; flex: 0 0 25px; display: grid; place-items: center; border-radius: 5px; background: #17333e; color: var(--text); font-weight: 700; font-size: 12px; }
@@ -122,7 +124,7 @@
     .card-gridline { display: grid; grid-template-columns: 1fr auto; gap: 7px 12px; font-size: 12px; }
     .metric-label { color: var(--muted); } .metric-value { color: var(--text); text-align: right; }
     .metric-value.good { color: var(--green); } .metric-value.bad { color: var(--red); } .metric-value.dim { color: var(--offline); }
-    .card-foot { display: flex; justify-content: space-between; align-items: center; margin-top: auto; color: var(--muted-2); font-size: 11px; }
+    .card-foot { display: flex; justify-content: space-between; align-items: center; margin-top: auto; padding-top: 7px; color: var(--muted-2); font-size: 11px; line-height: 1.35; }
     .detail-link { color: var(--cyan); }
     .pagination { position: absolute; right: 13px; bottom: 13px; z-index: 3; display: flex; justify-content: center; align-items: center; gap: 6px; opacity: .28; transition: opacity .18s ease; }
     .pagination:hover, .pagination:focus-within { opacity: 1; }
@@ -134,18 +136,18 @@
     .modal-overlay { position: fixed; inset: 0; z-index: 20; display: none; align-items: center; justify-content: center; background: rgba(1, 8, 12, .14); padding: 3.8vh 4vw; }
     .modal-overlay.open { display: flex; }
     .detail-modal { width: 88vw; height: 90vh; min-height: 650px; display: flex; flex-direction: column; overflow: hidden; border: 1px solid #265463; border-radius: 10px; background: #091c26; box-shadow: 0 26px 70px rgba(0, 0, 0, .48); }
-    .modal-head { flex: 0 0 auto; padding: 20px 26px 16px; border-bottom: 1px solid var(--line-soft); }
-    .modal-title-row { display: flex; align-items: center; gap: 12px; }
-    .modal-title { margin: 0; font-size: clamp(22px, 1.5vw, 34px); }
+    .modal-head { flex: 0 0 auto; padding: 22px 28px 16px; border-bottom: 1px solid #234652; background: #0a202a; }
+    .modal-title-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; row-gap: 8px; }
+    .modal-title { margin: 0; font-size: clamp(22px, 1.5vw, 34px); line-height: 1.15; letter-spacing: .01em; }
     .modal-id { color: var(--muted); font-size: 14px; }
-    .modal-updated { margin-left: auto; color: var(--muted); font-size: 12px; font-variant-numeric: tabular-nums; }
+    .modal-updated { margin-left: auto; padding-left: 12px; color: var(--muted); font-size: 12px; line-height: 1.4; font-variant-numeric: tabular-nums; }
     .icon-btn { width: 34px; height: 34px; border: 1px solid var(--line); border-radius: 5px; background: #0d2732; color: var(--muted); font-size: 23px; line-height: 1; }
     .icon-btn:hover { color: var(--text); border-color: var(--cyan); }
     .chips { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 17px; }
-    .chip { min-height: 38px; display: flex; align-items: center; gap: 9px; padding: 0 13px; border: 1px solid var(--line-soft); border-radius: 6px; background: #102a35; color: var(--muted); }
+    .chip { min-height: 40px; display: flex; align-items: center; gap: 9px; padding: 0 13px; border: 1px solid #214653; border-radius: 6px; background: #102a35; color: var(--muted); font-size: 12px; }
     .chip b { color: var(--text); font-weight: 500; } .chip .good { color: var(--green); } .chip .bad { color: var(--red); } .chip .warn { color: var(--amber); }
     .tabs { display: flex; gap: 5px; margin-top: 18px; }
-    .tab { border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); padding: 10px 24px 9px; }
+    .tab { border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--muted); padding: 11px 24px 10px; font-size: 13px; }
     .tab:hover { color: var(--text); } .tab.active { color: var(--text); border-bottom-color: var(--blue); background: rgba(37,150,237,.14); }
     .detail-filter { flex: 0 0 auto; display: flex; align-items: center; gap: 9px; padding: 10px 14px; border: 1px solid var(--line-soft); border-radius: 6px; background: #0c232e; }
     .detail-filter label { color: var(--muted); white-space: nowrap; }
@@ -162,9 +164,9 @@
     .detail-columns { min-height: 0; flex: 1; display: grid; grid-template-columns: minmax(0, 1.5fr) minmax(330px, .9fr); gap: 14px; }
     .detail-main, .detail-side { min-height: 0; display: flex; flex-direction: column; gap: 14px; }
     .detail-panel { border: 1px solid var(--line-soft); border-radius: 7px; background: #0c232e; padding: 16px; min-height: 0; }
-    .detail-panel h3 { margin: 0 0 12px; font-size: 16px; font-weight: 600; }
+    .detail-panel h3 { margin: 0 0 14px; font-size: 17px; line-height: 1.3; letter-spacing: .01em; font-weight: 600; }
     .trend-panel { flex: 1; display: flex; flex-direction: column; overflow: auto; scrollbar-color: #315c69 #0a202a; scrollbar-width: thin; }
-    .state-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; color: var(--muted); font-size: 12px; }
+    .state-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; color: var(--muted); font-size: 12px; line-height: 1.4; }
     .state-legend { display: flex; gap: 14px; }
     .state-legend span { display: inline-flex; align-items: center; gap: 5px; }
     .state-legend i { width: 8px; height: 8px; border-radius: 2px; display: inline-block; }
@@ -176,7 +178,7 @@
     .chart-stack { display: flex; flex-direction: column; gap: 8px; }
     .mini-chart { min-height: 188px; padding: 11px 13px 8px; border: 1px solid var(--line-soft); border-radius: 5px; background: #0a202a; transition: opacity .18s ease; }
     .mini-chart.series-hidden { opacity: .16; }
-    .mini-chart-head { display: flex; align-items: center; gap: 10px; color: var(--text); font-size: 12px; }
+    .mini-chart-head { display: flex; align-items: center; gap: 10px; color: var(--text); font-size: 13px; line-height: 1.35; }
     .mini-chart-head .unit { color: var(--muted); font-size: 11px; }
     .mini-chart-head strong { margin-left: auto; font-size: 13px; font-variant-numeric: tabular-nums; }
     .mini-chart.speed .mini-chart-head strong { color: #45a7ff; } .mini-chart.override .mini-chart-head strong { color: var(--green); } .mini-chart.feed .mini-chart-head strong { color: var(--amber); }
@@ -325,8 +327,8 @@
         <div class="filterbar">
           <div class="filter-field"><label for="workshop">车间</label><div class="select-wrap"><select id="workshop"><option value="all">全部车间</option></select></div></div>
           <div class="filter-field"><label for="line">产线</label><div class="select-wrap"><select id="line"><option value="all">全部产线</option></select></div></div>
-          <div class="filter-field"><label for="date">日期</label><input id="date" type="date" value="2025-05-20"></div>
-          <div class="filter-actions"><button class="btn btn-primary" id="queryBtn">查询</button><button class="btn" id="resetBtn">重置</button></div>
+          <div class="filter-actions"><button class="btn btn-primary" id="queryBtn">刷新清单</button><button class="btn" id="resetBtn">重置</button></div>
+          <div class="live-hint"><i class="refresh-dot"></i>实时数据 · 自动刷新</div>
           <div class="result-count">已筛选 <b id="resultCount">46</b> 台设备</div>
         </div>
 
@@ -392,8 +394,8 @@
     function renderCards() { const grid = $("#deviceGrid"); const start = (page - 1) * pageSize; const list = filtered.slice(start, start + pageSize); grid.innerHTML = list.length ? list.map(d => `<article class="device-card ${d.status}" data-id="${d.id}" tabindex="0" aria-label="打开 ${d.name} 详情"><div class="card-head"><span class="index">${String(d.no).padStart(2, "0")}</span><span class="device-name">${d.name}</span><span class="status-badge ${d.status}">${statusMeta[d.status].label}</span></div><div class="device-id">${d.id}</div><div class="divider"></div><div class="card-gridline"><span class="metric-label">◌ 润滑系统</span><span class="metric-value ${d.lubrication === "正常" ? "good" : d.lubrication === "异常" ? "bad" : "dim"}">${d.lubrication}</span><span class="metric-label">⌁ 冷却系统</span><span class="metric-value ${d.cooling === "正常" ? "good" : d.cooling === "异常" ? "bad" : "dim"}">${d.cooling}</span><span class="metric-label">报警数</span><span class="metric-value ${d.alarm ? "bad" : "good"}">${d.alarm}</span></div><div class="card-foot"><span>最后更新 ${d.updated}</span><span class="detail-link">详情 ›</span></div></article>`).join("") : `<div class="empty">当前筛选条件下暂无设备</div>`; $$(".device-card", grid).forEach(card => { card.addEventListener("click", () => openModal(devices.find(d => d.id === card.dataset.id))); card.addEventListener("keydown", e => { if (e.key === "Enter") openModal(devices.find(d => d.id === card.dataset.id)); }); }); renderPagination(); }
     function renderPagination() { const total = Math.max(1, Math.ceil(filtered.length / pageSize)); if (page > total) page = total; $("#pagination").innerHTML = Array.from({ length: total }, (_, i) => `<button class="page-btn ${page === i + 1 ? "active" : ""}" data-page="${i + 1}">${i + 1}</button>`).join(""); $$(".page-btn").forEach(b => b.addEventListener("click", () => { page = Number(b.dataset.page); renderCards(); })); }
     function populateFilters() { const workshop = $("#workshop"), line = $("#line"); [...new Set(devices.map(d => d.workshop))].forEach(v => workshop.insertAdjacentHTML("beforeend", `<option value="${v}">${v}</option>`)); [...new Set(devices.map(d => d.line))].forEach(v => line.insertAdjacentHTML("beforeend", `<option value="${v}">${v}</option>`)); }
-    function applyFilters() { const workshop = $("#workshop").value, line = $("#line").value, date = $("#date").value; filtered = devices.filter(d => (workshop === "all" || d.workshop === workshop) && (line === "all" || d.line === line)); page = 1; $("#resultCount").textContent = filtered.length; renderLegend(filtered); renderKpis(filtered); renderAbnormal(filtered); renderCards(); showToast(`已更新 ${date || "当天"} 的设备数据`); }
-    function resetFilters() { $("#workshop").value = "all"; $("#line").value = "all"; $("#date").value = "2025-05-20"; applyFilters(); }
+    function applyFilters() { const workshop = $("#workshop").value, line = $("#line").value; filtered = devices.filter(d => (workshop === "all" || d.workshop === workshop) && (line === "all" || d.line === line)); page = 1; $("#resultCount").textContent = filtered.length; renderLegend(filtered); renderKpis(filtered); renderAbnormal(filtered); renderCards(); showToast("实时设备清单已刷新"); }
+    function resetFilters() { $("#workshop").value = "all"; $("#line").value = "all"; applyFilters(); }
     function openModal(device) { if (!device) return; activeDevice = device; $("#detailTitle").textContent = device.name; $("#detailId").textContent = device.id; const status = $("#detailStatus"); status.textContent = statusMeta[device.status].label; status.className = `status-badge ${device.status}`; $("#detailUpdated").textContent = `最后更新：2025-05-20 ${device.updated}`; const lubrication = $("#detailLubricationState"); lubrication.textContent = device.lubrication; lubrication.className = device.lubrication === "正常" ? "good" : device.lubrication === "异常" ? "bad" : "warn"; const cooling = $("#detailCoolingState"); cooling.textContent = device.cooling; cooling.className = device.cooling === "正常" ? "good" : device.cooling === "异常" ? "bad" : "warn"; $("#detailAlarmCount").textContent = device.alarm; const mismatch = $("#detailMismatch"); mismatch.textContent = device.mismatch ? "运行中参数不一致" : "程序参数一致"; mismatch.className = device.mismatch ? "warn" : "good"; $("#modalOverlay").classList.add("open"); $("#modalOverlay").setAttribute("aria-hidden", "false"); document.body.style.overflow = "hidden"; }
     function closeModal() { $("#modalOverlay").classList.remove("open"); $("#modalOverlay").setAttribute("aria-hidden", "true"); document.body.style.overflow = "hidden"; }
     function switchTab(name) { $$(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === name)); $$(".tab-panel").forEach(p => p.classList.toggle("active", p.id === `panel-${name}`)); }

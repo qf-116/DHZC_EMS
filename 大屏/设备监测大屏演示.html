@@ -75,7 +75,7 @@
     .abnormal-row .status { color: var(--red); }
     .abnormal-more { color: var(--cyan); font-size: 12px; margin-top: 8px; }
     .alert-donut { background: conic-gradient(var(--red) 0 20%, var(--amber) 20% 60%, #d9a900 60% 100%); }
-    .data-health { flex: 1; min-height: 175px; display: flex; flex-direction: column; }
+    .data-health { flex: 0 0 auto; min-height: 190px; margin-bottom: 10px; display: flex; flex-direction: column; }
     .health-summary { display: flex; align-items: baseline; gap: 10px; padding: 4px 0 15px; border-bottom: 1px solid var(--line-soft); }
     .health-summary strong { color: var(--cyan); font-size: 30px; font-variant-numeric: tabular-nums; }
     .health-summary span { color: var(--muted); font-size: 12px; }
@@ -314,8 +314,8 @@
         </section>
         <section class="panel side-panel data-health">
           <h2>数据采集概况</h2><div class="section-rule"></div>
-          <div class="health-summary"><strong>98.6%</strong><span>当前数据可用率</span></div>
-          <div class="health-list"><div><span>已接入设备</span><b>46 / 46</b></div><div><span>正常采集</span><b class="good">36 台</b></div><div><span>数据延迟</span><b class="warn">2 台</b></div><div><span>程序已修改</span><b class="bad">2 台</b></div></div>
+          <div class="health-summary"><strong>78.3%</strong><span>正常采集设备占比</span></div>
+          <div class="health-list"><div><span>已接入设备</span><b>46 / 46</b></div><div><span>正常采集</span><b class="good">36 台</b></div><div><span>数据延迟</span><b class="warn">2 台</b></div><div><span>采集频率</span><b>60 秒</b></div></div>
           <div class="health-foot"><span>最近采集</span><b>10:24:35</b></div>
         </section>
       </aside>

@@ -58,6 +58,14 @@ const InfoTip = ({ text }) => (
   </Tooltip>
 );
 
+// 通知策略临时调整的表单块：标签在上、控件在下，避免行内排列在窄格里换行错位
+const PolicyField = ({ label, children }) => (
+  <div>
+    <div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>{label}</div>
+    {children}
+  </div>
+);
+
 // 规则类型 → 受控状态值；切换类型时下方触发/恢复条件配置区随之联动
 const RULE_TYPE_KEY = { 阈值: 'threshold', 状态: 'state', 质量: 'quality', 组合: 'combo' };
 const RULE_TYPE_LABEL = { threshold: '阈值规则', state: '状态规则', quality: '质量规则', combo: '组合规则' };
@@ -573,9 +581,8 @@ export default function RuleConfigPage() {
                   ? <>已按策略「<b>{curTpl.code} {curTpl.name}</b>」带出并做了临时调整：调整仅对本规则生效，策略本体不受影响。</>
                   : <>已按策略「<b>{curTpl.code} {curTpl.name}</b>」带出默认通知配置，可针对本规则临时调整（如缩短重复间隔、追加接收人），调整仅本规则生效。</>}
               />
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px 16px' }}>
-                <Space wrap size={4}>
-                  <span>通知渠道</span>
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px 16px' }}>
+                <PolicyField label="通知渠道（站内为兜底必发）">
                   <Checkbox.Group
                     value={policyDraft.channels}
                     onChange={(vals) => setPolicyDraft({ ...policyDraft, channels: vals.includes('站内') ? vals : [...vals, '站内'] })}
@@ -585,9 +592,8 @@ export default function RuleConfigPage() {
                       { label: '企业微信', value: '企业微信' },
                     ]}
                   />
-                </Space>
-                <Space wrap size={4}>
-                  <span>接收人</span>
+                </PolicyField>
+                <PolicyField label="接收人">
                   <Select
                     mode="multiple"
                     allowClear
@@ -595,47 +601,45 @@ export default function RuleConfigPage() {
                     onChange={(vals) => setPolicyDraft({ ...policyDraft, receivers: vals })}
                     options={peopleOptions}
                     maxTagCount="responsive"
-                    style={{ minWidth: 240 }}
+                    style={{ width: '100%' }}
                     placeholder="选择接收人"
                   />
-                </Space>
-                <Space wrap size={4}>
-                  <span>首次通知</span>
+                </PolicyField>
+                <PolicyField label="首次通知（触发后多久发第一条）">
                   <Select
                     value={policyDraft.first}
                     onChange={(v) => setPolicyDraft({ ...policyDraft, first: v })}
-                    style={{ width: 130 }}
+                    style={{ width: '100%' }}
                     options={['立即', '1 分钟', '5 分钟'].map(v => ({ value: v, label: v }))}
                   />
-                  <span>重复间隔</span>
+                </PolicyField>
+                <PolicyField label="重复通知间隔（未确认时每隔多久提醒）">
                   <Select
                     value={policyDraft.interval}
                     onChange={(v) => setPolicyDraft({ ...policyDraft, interval: v })}
-                    style={{ width: 130 }}
+                    style={{ width: '100%' }}
                     options={['5 分钟', '10 分钟', '30 分钟', '不重复'].map(v => ({ value: v, label: v }))}
                   />
-                </Space>
-                <Space wrap size={4}>
-                  <span>升级节点</span>
+                </PolicyField>
+                <PolicyField label="升级节点（超时未确认逐级上报）">
                   <Select
                     value={policyDraft.escalation}
                     onChange={(v) => setPolicyDraft({ ...policyDraft, escalation: v })}
-                    style={{ width: 170 }}
+                    style={{ width: '100%' }}
                     options={['10 分钟 / 30 分钟', '30 分钟', '无'].map(v => ({ value: v, label: v }))}
                   />
-                  <span>最大重试</span>
-                  <InputNumber value={policyDraft.retries} min={1} max={10} onChange={(v) => setPolicyDraft({ ...policyDraft, retries: v ?? 1 })} />
-                  <span>次</span>
-                </Space>
-                <Space wrap size={4}>
-                  <span>静默时段</span>
+                </PolicyField>
+                <PolicyField label="最大重试（发送失败重试次数）">
+                  <InputNumber value={policyDraft.retries} min={1} max={10} onChange={(v) => setPolicyDraft({ ...policyDraft, retries: v ?? 1 })} style={{ width: '100%' }} addonAfter="次" />
+                </PolicyField>
+                <PolicyField label="静默时段（时段内只记录不通知）">
                   <Input
                     value={policyDraft.silent}
                     onChange={(e) => setPolicyDraft({ ...policyDraft, silent: e.target.value })}
-                    style={{ width: 200 }}
+                    style={{ width: '100%' }}
                     placeholder="如 00:00-07:00，留空为不静默"
                   />
-                </Space>
+                </PolicyField>
               </div>
               <div style={hint}>站内通知为兜底必发渠道；外部渠道（短信 / 企业微信）不可作为唯一通知方式。静默时段内满足触发条件只记录不通知。</div>
             </Space>

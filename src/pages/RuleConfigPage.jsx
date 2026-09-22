@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Table, Tag, Button, Space, Select, App, Input, InputNumber, Switch, Alert, Modal, Statistic, TimePicker, Tooltip } from 'antd';
+import { Card, Table, Tag, Button, Space, Select, App, Input, InputNumber, Switch, Alert, Modal, Statistic, TimePicker, Tooltip, Cascader, Checkbox } from 'antd';
 import { Plus, TestTube2, Zap, Info } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader.jsx';
@@ -23,15 +23,26 @@ const enrich = (r) => ({
   ...(sourceMeta[r.code] || { dataSource: 'aggregated', chain: [r.deviceScope || '--', '--', r.metricCode || '--'], latency: '事件级（业务）' }),
 });
 
-// 三级联动演示数据源：设备 → 来源设备 → 已勾选指标
-const deviceOptions = netBindings.filter(b => b.configStatus === '已启用').map(b => ({ value: b.code, label: `${b.code} ${b.deviceName}` }));
-const sourceOptions = (devCode) => {
-  const b = netBindings.find(x => x.code === devCode);
-  return (b?.items || []).filter(i => i.enabled).map(i => ({
-    value: i.iotDeviceCode,
-    label: `${i.iotDeviceCode}${i.sensorType && i.sensorType !== '--' ? ` ${i.sensorType}` : ''}`,
-  }));
-};
+// 级联数据源：系统设备 → 子设备（来源 IoT 设备，主设备 / 传感器）→ 已勾选指标
+// forState = true 时（状态规则）叶子指标仅保留状态类 S.*；空枝（无可用指标）自动裁剪
+const buildCascadeOptions = (forState) => netBindings
+  .filter(b => b.configStatus === '已启用')
+  .map(b => ({
+    value: b.code,
+    label: `${b.code} ${b.deviceName}`,
+    children: (b.items || [])
+      .filter(i => i.enabled)
+      .map(i => ({
+        value: i.iotDeviceCode,
+        label: `${i.iotDeviceCode}${i.role === 'main' ? '（主设备）' : `（子设备 · ${i.sensorType || '传感器'}）`}`,
+        children: (i.metrics || [])
+          .filter(x => x.selected)
+          .filter(x => !forState || x.metricCode.startsWith('S.'))
+          .map(x => ({ value: x.metricCode, label: `${x.metricCode} ${x.name}` })),
+      }))
+      .filter(c => c.children.length > 0),
+  }))
+  .filter(d => d.children.length > 0);
 const metricOptions = (devCode, iotCode) => {
   const b = netBindings.find(x => x.code === devCode);
   const item = b?.items.find(i => i.iotDeviceCode === iotCode);
@@ -86,6 +97,33 @@ export default function RuleConfigPage() {
   // 规则模板导入：导入后模板参数优先于指标特征模板（更换指标不覆盖已导入参数）
   const [importedTpl, setImportedTpl] = React.useState(null);
 
+  // 通知策略 = 模板：选择策略后带出其内容，可临时调整（仅本规则生效，不回写策略本体）
+  const peopleOptions = ['李明', '王强', '赵艳', '陈晨', '张伟', '王建国', '吴敏'].map(v => ({ value: v, label: v }));
+  const policyTplOf = (code) => notificationRows.find(n => n.code === code) || notificationRows[1];
+  const draftFromTpl = (n) => ({
+    channels: n.channels.split(' / '),
+    receivers: n.receivers.split('、'),
+    first: n.first,
+    interval: n.interval,
+    escalation: n.escalation,
+    silent: n.silent === '无' ? '' : n.silent,
+    retries: n.retries,
+  });
+  const [policyCode, setPolicyCode] = React.useState('NP-IMPORTANT');
+  const [policyDraft, setPolicyDraft] = React.useState(() => draftFromTpl(policyTplOf('NP-IMPORTANT')));
+  const changePolicy = (code) => {
+    setPolicyCode(code);
+    setPolicyDraft(draftFromTpl(policyTplOf(code)));
+    message.info('已按所选策略模板重新带出通知配置，可临时调整（仅本规则生效）');
+  };
+  const resetPolicy = () => {
+    setPolicyDraft(draftFromTpl(policyTplOf(policyCode)));
+    message.success('已恢复为策略模板默认内容');
+  };
+  // 是否已偏离策略模板（发布版本快照将记录调整后的内容）
+  const curTpl = policyTplOf(policyCode);
+  const policyModified = JSON.stringify(policyDraft) !== JSON.stringify(draftFromTpl(curTpl));
+
   // 从模板导入：模板 = 除设备绑定外的全部规则要素预设（触发模式 / 阈值参数 / 回差等）
   const applyRuleTemplate = (code) => {
     const t = ruleTemplates.find(x => x.code === code);
@@ -122,8 +160,17 @@ export default function RuleConfigPage() {
   };
 
   const rows = Object.values(state.entities.alarmRulesById).map(enrich);
-  const openCreate = () => { setEditing(null); setRuleType('threshold'); setImportedTpl(null); setOpen(true); };
-  const openEdit = (r) => { setEditing(r); setRuleType(RULE_TYPE_KEY[r.type] || 'threshold'); setOpen(true); };
+  const openCreate = () => {
+    setEditing(null); setRuleType('threshold'); setImportedTpl(null); setOpen(true);
+    const pc = 'NP-IMPORTANT';
+    setPolicyCode(pc); setPolicyDraft(draftFromTpl(policyTplOf(pc)));
+  };
+  const openEdit = (r) => {
+    setEditing(r); setRuleType(RULE_TYPE_KEY[r.type] || 'threshold'); setOpen(true);
+    // 编辑时以规则绑定的策略为模板带出；如后续做策略覆盖持久化，此处应读取规则上的覆盖值
+    const pc = r.policyCode || 'NP-IMPORTANT';
+    setPolicyCode(pc); setPolicyDraft(draftFromTpl(policyTplOf(pc)));
+  };
   const openTest = (r) => { setTestRule(r); setTestOpen(true); };
   const saveRule = ({ publish = false } = {}) => {
     const rule = {
@@ -136,7 +183,8 @@ export default function RuleConfigPage() {
       condition: editing?.condition || `阈值 ${trigThreshold} 持续 ${trigDuration}s`,
       recovery: editing?.recovery || '自动恢复',
       severity: editing?.severity || '重要',
-      policyCode: editing?.policyCode || 'NP-IMPORTANT',
+      policyCode,
+      policyOverride: policyModified,
     };
     const saveRes = actions.saveRuleDraft(rule);
     if (!saveRes.ok) { message.error(saveRes.message); return; }
@@ -202,7 +250,7 @@ export default function RuleConfigPage() {
             { title: '规则编号', dataIndex: 'code', width: 100 },
             { title: '规则名称', dataIndex: 'name', width: 150 },
             { title: '类型', dataIndex: 'type', width: 70, render: v => <Tag color="blue">{v}</Tag> },
-            { title: '指标选择链路（设备 → 来源设备 → 指标）', dataIndex: 'chain', width: 280, render: v => v.join(' → ') },
+            { title: '指标选择链路（设备 → 子设备 → 指标）', dataIndex: 'chain', width: 280, render: v => v.join(' → ') },
             { title: '判定数据源', dataIndex: 'dataSource', width: 110, render: (v, r) => (
               <div>
                 {v === 'realtime' ? <Tag color="red">实时（订阅流）</Tag> : <Tag color="purple">统计（聚合）</Tag>}
@@ -281,13 +329,22 @@ export default function RuleConfigPage() {
             </Card>
           ) : (
           <Card size="small" title={<>
-            {`指标选择（仅限绑定关系中已勾选指标${ruleType === 'state' ? ' · 状态规则仅可选状态类 S.* 指标' : ''}${ruleType === 'combo' ? ' · 此处为主条件指标，子条件在①中单独配置' : ''}`}
-            <InfoTip text="未勾选的指标无数据，不进入可选范围；不同类型指标适用不同判定模式与参数（温度类→越上限、压力/转速类→区间外、振动类→短持续越上限、状态类→枚举判定），选择指标后自动带出推荐配置，可调整。" />
+            {`指标选择（设备 → 子设备 → 指标 级联选择，仅限绑定关系中已勾选指标${ruleType === 'state' ? ' · 状态规则仅可选状态类 S.* 指标' : ''}${ruleType === 'combo' ? ' · 此处为主条件指标，子条件在①中单独配置' : ''}）`}
+            <InfoTip text="级联控件一次选完三级链路：① 系统设备（台账资产编码）→ ② 子设备（来源 IoT 设备：主设备 / 传感器）→ ③ 已勾选指标。未启用的绑定与未勾选的指标无数据，不进入可选范围；不同类型指标适用不同判定模式与参数，选择指标后自动带出推荐配置，可调整。" />
           </>}>
             <Space direction="vertical" style={{ width: '100%' }}>
-              <Select style={{ width: '100%' }} value={selDevice} onChange={v => { setSelDevice(v); const s = sourceOptions(v)[0]; setSelSource(s?.value); setSelMetric(''); }} options={deviceOptions} placeholder="① 系统设备" />
-              <Select style={{ width: '100%' }} value={selSource} onChange={v => { setSelSource(v); setSelMetric(''); }} options={sourceOptions(selDevice)} placeholder="② 来源 IoT 设备（主/传感器）" />
-              <Select style={{ width: '100%' }} value={selMetric || undefined} onChange={v => { setSelMetric(v); if (!importedTpl) applyTemplate(v); }} options={ruleType === 'state' ? metricOptions(selDevice, selSource).filter(o => o.value.startsWith('S.')) : metricOptions(selDevice, selSource)} placeholder="③ 已勾选指标" />
+              <Cascader
+                style={{ width: '100%' }}
+                value={selMetric ? [selDevice, selSource, selMetric] : [selDevice, selSource].filter(Boolean)}
+                options={buildCascadeOptions(ruleType === 'state')}
+                onChange={(path) => {
+                  const [dev, src, met] = path;
+                  setSelDevice(dev); setSelSource(src); setSelMetric(met || '');
+                  if (met && !importedTpl) applyTemplate(met);
+                }}
+                placeholder="① 系统设备 → ② 子设备（主设备 / 传感器）→ ③ 已勾选指标"
+                showSearch
+              />
               {importedTpl ? (
                 <Alert
                   type="success" showIcon
@@ -494,19 +551,93 @@ export default function RuleConfigPage() {
 
           <Card
             size="small"
-            title={<>⑥ 通知策略<InfoTip text="报警触发后按所选通知策略下发：策略定义了适用等级、通知渠道（站内必选）、通知组 / 接收人、首次通知与重复间隔、升级节点和静默时段；策略本身在「通知策略配置」中维护，此处仅绑定。" /></>}
+            title={<>⑥ 通知策略（模板 + 临时调整）<InfoTip text="策略在这里作为模板使用：选择策略后自动带出其内容（渠道 / 接收人 / 通知节奏 / 升级 / 静默 / 重试），可针对本规则临时调整——如夜间报警缩短重复间隔、给该规则追加值班人员；调整仅本规则生效，不回写「通知策略配置」中的策略本体。发布版本快照会记录调整后的最终通知口径。" /></>}
           >
             <Space direction="vertical" size={8} style={{ width: '100%' }}>
               <Space wrap>
-                <span>绑定策略</span>
+                <span>策略模板</span>
                 <Select
-                  defaultValue="NP-IMPORTANT"
+                  value={policyCode}
+                  onChange={changePolicy}
                   style={{ width: 320 }}
-                  options={notificationRows.map(n => ({ value: n.code, label: `${n.code} ${n.name}（${n.level}）` }))}
+                  options={notificationRows.filter(n => n.status === '启用').map(n => ({ value: n.code, label: `${n.code} ${n.name}（${n.level}）` }))}
                 />
+                {policyModified && <Tag color="orange" style={{ marginInlineEnd: 0 }}>已临时调整</Tag>}
+                {policyModified && <a onClick={resetPolicy}>恢复模板默认</a>}
                 <a onClick={() => message.info('跳转到「通知策略配置」查看 / 新增策略')}>查看 / 新增策略</a>
               </Space>
-              <div style={hint}>站内通知为兜底必发渠道；外部渠道（短信 / 企业微信）不可作为唯一通知方式。</div>
+              <Alert
+                type={policyModified ? 'warning' : 'info'}
+                showIcon
+                message={policyModified
+                  ? <>已按策略「<b>{curTpl.code} {curTpl.name}</b>」带出并做了临时调整：调整仅对本规则生效，策略本体不受影响。</>
+                  : <>已按策略「<b>{curTpl.code} {curTpl.name}</b>」带出默认通知配置，可针对本规则临时调整（如缩短重复间隔、追加接收人），调整仅本规则生效。</>}
+              />
+              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '8px 16px' }}>
+                <Space wrap size={4}>
+                  <span>通知渠道</span>
+                  <Checkbox.Group
+                    value={policyDraft.channels}
+                    onChange={(vals) => setPolicyDraft({ ...policyDraft, channels: vals.includes('站内') ? vals : [...vals, '站内'] })}
+                    options={[
+                      { label: '站内（必发）', value: '站内', disabled: true },
+                      { label: '短信', value: '短信' },
+                      { label: '企业微信', value: '企业微信' },
+                    ]}
+                  />
+                </Space>
+                <Space wrap size={4}>
+                  <span>接收人</span>
+                  <Select
+                    mode="multiple"
+                    allowClear
+                    value={policyDraft.receivers}
+                    onChange={(vals) => setPolicyDraft({ ...policyDraft, receivers: vals })}
+                    options={peopleOptions}
+                    maxTagCount="responsive"
+                    style={{ minWidth: 240 }}
+                    placeholder="选择接收人"
+                  />
+                </Space>
+                <Space wrap size={4}>
+                  <span>首次通知</span>
+                  <Select
+                    value={policyDraft.first}
+                    onChange={(v) => setPolicyDraft({ ...policyDraft, first: v })}
+                    style={{ width: 130 }}
+                    options={['立即', '1 分钟', '5 分钟'].map(v => ({ value: v, label: v }))}
+                  />
+                  <span>重复间隔</span>
+                  <Select
+                    value={policyDraft.interval}
+                    onChange={(v) => setPolicyDraft({ ...policyDraft, interval: v })}
+                    style={{ width: 130 }}
+                    options={['5 分钟', '10 分钟', '30 分钟', '不重复'].map(v => ({ value: v, label: v }))}
+                  />
+                </Space>
+                <Space wrap size={4}>
+                  <span>升级节点</span>
+                  <Select
+                    value={policyDraft.escalation}
+                    onChange={(v) => setPolicyDraft({ ...policyDraft, escalation: v })}
+                    style={{ width: 170 }}
+                    options={['10 分钟 / 30 分钟', '30 分钟', '无'].map(v => ({ value: v, label: v }))}
+                  />
+                  <span>最大重试</span>
+                  <InputNumber value={policyDraft.retries} min={1} max={10} onChange={(v) => setPolicyDraft({ ...policyDraft, retries: v ?? 1 })} />
+                  <span>次</span>
+                </Space>
+                <Space wrap size={4}>
+                  <span>静默时段</span>
+                  <Input
+                    value={policyDraft.silent}
+                    onChange={(e) => setPolicyDraft({ ...policyDraft, silent: e.target.value })}
+                    style={{ width: 200 }}
+                    placeholder="如 00:00-07:00，留空为不静默"
+                  />
+                </Space>
+              </div>
+              <div style={hint}>站内通知为兜底必发渠道；外部渠道（短信 / 企业微信）不可作为唯一通知方式。静默时段内满足触发条件只记录不通知。</div>
             </Space>
           </Card>
 

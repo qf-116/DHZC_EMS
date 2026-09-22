@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Layout, Menu, Badge, Button, Dropdown, Space } from 'antd';
+import { Layout, Menu, Badge, Button, Drawer, Dropdown, Space } from 'antd';
 import {
   Activity, AlarmClock, BookOpen, ClipboardList, DatabaseZap, FileBarChart,
   Gauge, LineChart, Settings2, Truck, Bell, CalendarClock,
@@ -58,6 +58,8 @@ import PatrolExecutePage from './pages/PatrolExecutePage.jsx';
 import PatrolReportPage from './pages/PatrolReportPage.jsx';
 // 范围外提示组件 ScopeNoticePage 保留在 components/ 下备用（原 /permissions、/audit 已由基础配置模块承接）
 import { DemoStoreProvider } from './state/DemoStore.jsx';
+// 需求细则（开发说明面板）：每页点击「需求细则」查看本页详细规则，内容维护在 src/specs/pageSpecs.jsx
+import { specForPath } from './specs/pageSpecs.jsx';
 import RepairPendingPage from './pages/RepairPendingPage.jsx';
 import RepairReportsPage from './pages/RepairReportsPage.jsx';
 import RepairOrdersPage from './pages/RepairOrdersPage.jsx';
@@ -210,6 +212,7 @@ export default function App() {
   });
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [specOpen, setSpecOpen] = useState(false);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -225,6 +228,8 @@ export default function App() {
     const found = menus.find(m => m.children && m.children.some(c => (c.children || []).some(g => g.key === selectedKey) || c.key === selectedKey));
     return found ? [found.key] : [];
   }, [selectedKey]);
+  // 需求细则：按当前路由取本页规则说明（/monitor-overview 复用工作台细则）
+  const spec = specForPath(location.pathname === '/monitor-overview' ? '/' : location.pathname);
 
   // 监测大屏：直接打开独立的大屏页面（public/ 下，构建后位于 dist/index.html 同级）
   const openScreen = () => window.open('设备监测大屏演示.html', '_blank');
@@ -301,6 +306,11 @@ export default function App() {
           </Header>
           <Content className="app-content">
             <main className="page-main">
+              <div className="spec-entry-row">
+                <Button icon={<BookOpen size={14} />} onClick={() => setSpecOpen(true)}>
+                  需求细则
+                </Button>
+              </div>
                 <Routes>
                   <Route path="/" element={<WorkbenchPage />} />
                   {/* 设备资产 */}
@@ -425,6 +435,20 @@ export default function App() {
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
             </main>
+            <Drawer
+              title={<div className="spec-title"><BookOpen size={16} /> 需求细则</div>}
+              placement="right"
+              width={480}
+              open={specOpen}
+              onClose={() => setSpecOpen(false)}
+              styles={{ body: { paddingTop: 0 } }}
+            >
+              <Badge status="processing" text={`当前页面：${spec.title}`} />
+              <div className="spec-body" style={{ marginTop: 12 }}>{spec.content}</div>
+              <div className="spec-note">
+                本面板面向开发说明，不进入生产 UI。
+              </div>
+            </Drawer>
           </Content>
         </Layout>
       </Layout>

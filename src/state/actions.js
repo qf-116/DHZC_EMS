@@ -278,7 +278,13 @@ export function createDemoActions(state, dispatch) {
       }
       if (alarm.status === '已关闭') return fail('已关闭报警不能转维修；如需维修请人工报修');
       act('alarm/createRepairFromAlarm', { alarmId, ...extra }, `repair-from-alarm:${alarmId}`);
-      return { ok: true, message: '已生成唯一主工单并回写至报警；请到「维修任务」派工', refs: { alarmId } };
+      return {
+        ok: true,
+        message: extra?.dispatch?.assignee
+          ? `已生成唯一主工单并直接派工至 ${extra.dispatch.assignee}；可在「维修任务」中开工执行`
+          : '已生成唯一主工单并回写至报警；请到「维修任务」派工',
+        refs: { alarmId },
+      };
     },
     closeAlarm(alarmId, { evidence, closeReason }) {
       const alarm = E.alarmEventsById[alarmId];

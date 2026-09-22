@@ -344,7 +344,7 @@ const specs = {
         <ol>
           <li>确认：仅限「已触发」，说明必填；确认后开始计算处理时限。</li>
           <li>处置：必填措施 + 预计完成时间；已恢复待关闭状态无需重复处置。</li>
-          <li>转维修：createRepairFromAlarm 幂等（幂等键 repair-from-alarm:alarmId）——同一报警已存在活动工单时返回原工单号不重复建单；已关闭报警不能转维修；生成的待派工工单号回写报警 relatedRepairOrderId。</li>
+          <li>转维修：createRepairFromAlarm 幂等（幂等键 repair-from-alarm:alarmId）——同一报警已存在活动工单时返回原工单号不重复建单；已关闭报警不能转维修；生成的待派工工单号回写报警 relatedRepairOrderId。<b>2026-09-22 调整：转维修改为弹窗</b>，除故障类型外提供可选项「转维修时直接派工」——勾选后选择维修人（班组选填）一步生成「已派工」工单，跳过待派工队列；不勾选则生成「待派工」工单进入待维修看板由调度统一派工。派工候选与待维修看板同一份维修人员 / 班组口径。</li>
           <li>关闭：仅限「已恢复待关闭」；恢复证据 + 关闭原因必填（人工确认关闭类原因必填留痕）；关闭前校验 closeBlockers——关联维修工单须已完成验收、关联停机事实须已结束，未满足列出阻塞原因拒绝关闭。</li>
           <li>每一状态变更都校验当前状态；非法流转（如直接关闭已触发事件）返回明确失败消息，不做静默覆盖。</li>
         </ol>
@@ -366,7 +366,7 @@ const specs = {
         <h4>数据来源与刷新</h4>
         <ol>
           <li>待派工列表来自 <code>selectAllRepairOrders()</code> 过滤 status = 待派工；报修来源明细来自 <code>selectAllRepairReports()</code>。</li>
-          <li>待派工工单有两个来源：报警转维修（createRepairFromAlarm，source = alarm）与人工报修（createRepairReport，source = report）；派工动作 <code>assignRepair(repairOrderId, assignee)</code>。</li>
+          <li>待派工工单有两个来源：报警转维修（createRepairFromAlarm，source = alarm）与人工报修（createRepairReport，source = report）；派工动作 <code>assignRepair(repairOrderId, assignee)</code>。报警转维修时若选择了「立即派工」，工单直接为已派工，不再进入本队列。</li>
           <li>{DATA_SOURCE_NOTE}</li>
         </ol>
         <h4>字段定义与计算公式</h4>

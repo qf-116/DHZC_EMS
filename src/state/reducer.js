@@ -483,10 +483,18 @@ export function reducer(state, action) {
         measures: '', verification: '', laborHours: null, parts: [], timeline: [{ type: '创建', time: at, actor: actor.userName, detail: `由报警 ${alarm.id} 转维修生成` }],
         acceptance: null, reworkCount: 0,
       };
-      let next = setE(state, 'repairOrdersById', id, order);
+      // 转维修时可选「立即派工」：直接带出已派工工单，跳过待派工队列（方案 A，2026-09-22）
+      const d = payload.dispatch;
+      const directDispatch = d && (d.assignee || '').trim();
+      const finalOrder = directDispatch
+        ? { ...order, status: '已派工', assignee: d.assignee.trim(), assigneeGroup: d.assigneeGroup || null, assignedAt: at, timeline: [...order.timeline, { type: '派工', time: at, actor: actor.userName, detail: `转维修时直接派工至 ${d.assigneeGroup || ''} ${d.assignee.trim()}` }] }
+        : order;
+      let next = setE(state, 'repairOrdersById', id, finalOrder);
       next = setE(next, 'alarmEventsById', alarm.id, { ...alarm, relatedRepairOrderId: id, timeline: [...alarm.timeline, { type: '转维修', time: timeOnly(at), actor: actor.userName, detail: `生成维修工单 ${id}` }] });
-      next = addHistory(next, at, 'repair', id, `由报警 ${alarm.id} 创建维修工单`, { deviceId: alarm.deviceId, alarmId: alarm.id });
-      return finish(next, action, true, `已生成主工单 ${id}（待派工），并回写至报警 ${alarm.id}`, { repairOrderId: id, alarmId: alarm.id }, false, at);
+      next = addHistory(next, at, 'repair', id, directDispatch ? `由报警 ${alarm.id} 创建维修工单并直接派工至 ${d.assignee.trim()}` : `由报警 ${alarm.id} 创建维修工单`, { deviceId: alarm.deviceId, alarmId: alarm.id });
+      return finish(next, action, true, directDispatch
+        ? `已生成主工单 ${id} 并直接派工至 ${d.assignee.trim()}，可在「维修任务」中开工执行`
+        : `已生成主工单 ${id}（待派工），并回写至报警 ${alarm.id}`, { repairOrderId: id, alarmId: alarm.id }, false, at);
     }
     case 'alarm/close': {
       const alarm = E.alarmEventsById[payload.alarmId];

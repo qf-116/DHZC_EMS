@@ -240,16 +240,27 @@ export function finalizeRuleConfigs(triggerConfig, recoveryConfig) {
 }
 
 // ---------- 分组信息（列表分组列 / 批量编辑同组校验） ----------
-// 返回 { groupKey, label } 或 null（无 canonical 目标的旧规则不参与分组）
+// 有 canonical 目标：按目标设备型号精确分组；无目标但有指标编码的旧种子规则：
+// 按指标元数据归入「全型号」组（型号维度记 *，不与精确分组混组）。
+// 返回 { groupKey, label } 或 null（业务事件类等无法定位指标的规则不参与分组）。
 export function ruleGroupInfo(rule, targets) {
-  if (!rule?.target?.deviceId || !rule.target.metricCode) return null;
-  const t = (targets || []).find((x) => x.deviceId === rule.target.deviceId
-    && x.metricCode === rule.target.metricCode
-    && (!rule.target.sourceId || x.sourceId === rule.target.sourceId));
+  if (!rule) return null;
+  let t = null;
+  let byTarget = false;
+  if (rule.target?.deviceId && rule.target.metricCode) {
+    t = (targets || []).find((x) => x.deviceId === rule.target.deviceId
+      && x.metricCode === rule.target.metricCode
+      && (!rule.target.sourceId || x.sourceId === rule.target.sourceId));
+    byTarget = !!t;
+  } else if (rule.metricCode) {
+    t = (targets || []).find((x) => x.metricCode === rule.metricCode);
+  }
   if (!t) return null;
-  const key = batchGroupKey(t);
-  const r = t.metric.range;
-  const label = `${t.metric.name} ${t.metric.unit || ''} ${r ? `${r.min}~${r.max}` : ''} · ${t.deviceModel}`.replace(/\s+/g, ' ').trim();
+  const m = t.metric;
+  const modelDim = byTarget ? (t.deviceModel || '--') : '*';
+  const key = [t.metricCode, m.dataType || 'other', m.unit || '', m.range ? `${m.range.min}:${m.range.max}` : 'no-range', modelDim].join('|');
+  const r = m.range;
+  const label = `${m.name} ${m.unit || ''} ${r ? `${r.min}~${r.max}` : ''} · ${byTarget ? (t.deviceModel || '--') : '全型号'}`.replace(/\s+/g, ' ').trim();
   return { groupKey: key, label };
 }
 

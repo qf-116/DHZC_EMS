@@ -723,7 +723,7 @@ test('rollback：当前版本无需回滚被拦截', () => {
 });
 
 // ---------- P2：分组列 + 同分组批量编辑 ----------
-test('ruleGroupInfo：同设备同指标规则归入同组；无目标旧规则不分组', () => {
+test('ruleGroupInfo：同设备同指标规则归入同组；无目标种子规则归入「全型号」组', () => {
   const targets = resolveRuleTargets(baseState);
   const mk = (deviceId, metricCode) => ({
     code: 'R-G', type: '阈值', status: '已发布',
@@ -734,7 +734,17 @@ test('ruleGroupInfo：同设备同指标规则归入同组；无目标旧规则�
   const g3 = ruleGroupInfo(mk('DEV-006', 'M.air_pressure'), targets);
   assert.ok(g1 && g2 && g3);
   assert.notEqual(g1.groupKey, g3.groupKey, '不同指标不同组');
-  assert.equal(ruleGroupInfo({ code: 'R-COMPARE-001', type: '程序' }, targets), null, '旧业务规则无分组');
+  // 旧种子规则（无 target，有 metricCode）→ 归入「全型号」组，可参与分组展示与勾选
+  const legacy = normalizeLegacyRule({
+    code: 'R-TEMP-001', type: '阈值', status: '已发布', metricCode: 'M.spindle_temp',
+    condition: '> 80℃ 持续 60s',
+  });
+  const gLegacy = ruleGroupInfo(legacy, targets);
+  assert.ok(gLegacy, '种子阈值规则有分组');
+  assert.ok(gLegacy.label.includes('全型号'), gLegacy.label);
+  assert.notEqual(gLegacy.groupKey, g1.groupKey, '全型号组不与精确型号组混组');
+  const biz = ruleGroupInfo({ code: 'R-COMPARE-001', type: '程序', metricCode: '程序比对' }, targets);
+  assert.equal(biz, null, '业务事件类规则指标无法定位 → 无分组');
 });
 test('applyBatchEditPatch：同组 upper/lower 各自应用阈值，回差/稳定/等级/通知统一更新', () => {
   const upper = normalizeLegacyRule({

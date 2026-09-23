@@ -371,7 +371,8 @@ export default function RuleConfigPage() {
   const selectionHint = selectedRules.length === 0 ? ''
     : selectedRules.some((r) => !r.groupKey) ? '已选含不可分组规则（旧结构），不能批量编辑'
       : selectedGroupKeys.length > 1 ? `已选 ${selectedRules.length} 条，跨 ${selectedGroupKeys.length} 个分组，不能批量编辑`
-        : `已选 ${selectedRules.length} 条，同分组「${selectedRules[0].groupLabel}」，可批量编辑`;
+        : selectedRules.length < 2 ? `已选 ${selectedRules.length} 条：同分组批量编辑至少需勾选 2 条`
+          : `已选 ${selectedRules.length} 条，同分组「${selectedRules[0].groupLabel}」，可批量编辑`;
   const submitBatchEdit = () => {
     const patch = {};
     Object.entries(beForm).forEach(([k, v]) => { if (v !== null && v !== undefined && v !== '') patch[k] = v; });

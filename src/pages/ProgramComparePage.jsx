@@ -7,7 +7,7 @@
 // ============================================================
 
 import React, { useMemo, useState } from 'react';
-import { Card, Space, Table, Tag, Typography } from 'antd';
+import { Button, Card, Select, Space, Table, Tag, Typography, Input } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, FileSearch } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
@@ -22,6 +22,11 @@ export default function ProgramComparePage() {
   const navigate = useNavigate();
 
   const rows = useMemo(() => selectProgramCompare(state), [state]);
+  // 查询条件（前端过滤）：设备 / 比对结果
+  const [qDevice, setQDevice] = useState(null);
+  const [qResult, setQResult] = useState(null);
+  const deviceOptions = useMemo(() => [...new Map(rows.map((r) => [r.deviceId, { value: r.deviceId, label: `${r.deviceName}（${r.deviceId}）` }])).values()], [rows]);
+  const filteredRows = useMemo(() => rows.filter((r) => (!qDevice || r.deviceId === qDevice) && (!qResult || r.result === qResult)), [rows, qDevice, qResult]);
   // UI 局部状态：展开行（详情 = 行展开查看基线 vs 实际参数）
   const [expandedKeys, setExpandedKeys] = useState([]);
 
@@ -66,10 +71,18 @@ export default function ProgramComparePage() {
         subtitle="程序下发后自动比对基线参数与设备实际参数（超容差标红）· 比对由接入服务执行，本页只读"
       />
       <Card size="small">
+        <Space wrap style={{ marginBottom: 12 }}>
+          <Select style={{ width: 220 }} placeholder="设备" allowClear showSearch optionFilterProp="label"
+            value={qDevice} onChange={setQDevice} options={deviceOptions} />
+          <Select style={{ width: 140 }} placeholder="比对结果" allowClear value={qResult} onChange={setQResult}
+            options={['一致', '参数不一致', '比对失败', '不适用'].map((v) => ({ value: v, label: v }))} />
+          <Button onClick={() => { setQDevice(null); setQResult(null); }}>重置</Button>
+          <span style={{ fontSize: 12, color: '#8a97a3' }}>共 {filteredRows.length} 条</span>
+        </Space>
         <Table
           rowKey="recordId" size="small"
           scroll={{ x: 1350 }}
-          dataSource={rows}
+          dataSource={filteredRows}
           pagination={false}
           expandable={{
             expandedRowKeys: expandedKeys,

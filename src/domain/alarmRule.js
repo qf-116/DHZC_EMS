@@ -190,27 +190,7 @@ export function ruleToForm(rule) {
 export function formToRule(form, extra = {}) {
   const triggerConfig = structuredClone(form.triggerConfig);
   const recoveryConfig = structuredClone(form.recoveryConfig);
-  // 恢复阈值在保存时按当前触发值/回差固化（deadband 模式推导 explicit 值，便于执行层直接判定）
-  if (recoveryConfig.condition && recoveryConfig.condition.thresholdMode === 'deadband' && triggerConfig.type === 'threshold'
-    && ['upper', 'lower'].includes(triggerConfig.mode)) {
-    const t = Number(triggerConfig.threshold);
-    const d = Number(recoveryConfig.condition.deadband);
-    if (!Number.isNaN(t) && !Number.isNaN(d)) {
-      const raw = triggerConfig.mode === 'lower' ? t + d : t - d;
-      recoveryConfig.condition.recoveryValue = Math.round(raw * 1e10) / 1e10; // 消除浮点噪声（0.15+0.02）
-    }
-  }
-  // 区间恢复：按独立回差固化恢复带
-  if (triggerConfig.type === 'threshold' && ['rangeOut', 'rangeIn'].includes(triggerConfig.mode) && recoveryConfig.condition) {
-    const c = recoveryConfig.condition;
-    c.type = 'range';
-    const lo = Number(triggerConfig.low); const hi = Number(triggerConfig.high);
-    const dl = Number(c.lowDeadband ?? 0); const dh = Number(c.highDeadband ?? 0);
-    if (!Number.isNaN(lo) && !Number.isNaN(hi)) {
-      c.recoveryLow = Math.round((lo + dl) * 1e10) / 1e10;
-      c.recoveryHigh = Math.round((hi - dh) * 1e10) / 1e10;
-    }
-  }
+  finalizeRuleConfigs(triggerConfig, recoveryConfig);
   return {
     ...extra,
     code: form.code || extra.code || null,
@@ -233,6 +213,92 @@ export function formToRule(form, extra = {}) {
     condition: conditionTextOf(triggerConfig),
     recovery: recoveryTextOf(recoveryConfig, triggerConfig),
   };
+}
+
+// 触发/恢复结构固化：deadband 推导恢复值、区间按独立回差固化恢复带（保存与批量编辑共用）
+export function finalizeRuleConfigs(triggerConfig, recoveryConfig) {
+  if (!triggerConfig || !recoveryConfig) return;
+  if (recoveryConfig.condition && recoveryConfig.condition.thresholdMode === 'deadband' && triggerConfig.type === 'threshold'
+    && ['upper', 'lower'].includes(triggerConfig.mode)) {
+    const t = Number(triggerConfig.threshold);
+    const d = Number(recoveryConfig.condition.deadband);
+    if (!Number.isNaN(t) && !Number.isNaN(d)) {
+      const raw = triggerConfig.mode === 'lower' ? t + d : t - d;
+      recoveryConfig.condition.recoveryValue = Math.round(raw * 1e10) / 1e10; // 消除浮点噪声（0.15+0.02）
+    }
+  }
+  if (triggerConfig.type === 'threshold' && ['rangeOut', 'rangeIn'].includes(triggerConfig.mode) && recoveryConfig.condition) {
+    const c = recoveryConfig.condition;
+    c.type = 'range';
+    const lo = Number(triggerConfig.low); const hi = Number(triggerConfig.high);
+    const dl = Number(c.lowDeadband ?? 0); const dh = Number(c.highDeadband ?? 0);
+    if (!Number.isNaN(lo) && !Number.isNaN(hi)) {
+      c.recoveryLow = Math.round((lo + dl) * 1e10) / 1e10;
+      c.recoveryHigh = Math.round((hi - dh) * 1e10) / 1e10;
+    }
+  }
+}
+
+// ---------- 分组信息（列表分组列 / 批量编辑同组校验） ----------
+// 返回 { groupKey, label } 或 null（无 canonical 目标的旧规则不参与分组）
+export function ruleGroupInfo(rule, targets) {
+  if (!rule?.target?.deviceId || !rule.target.metricCode) return null;
+  const t = (targets || []).find((x) => x.deviceId === rule.target.deviceId
+    && x.metricCode === rule.target.metricCode
+    && (!rule.target.sourceId || x.sourceId === rule.target.sourceId));
+  if (!t) return null;
+  const key = batchGroupKey(t);
+  const r = t.metric.range;
+  const label = `${t.metric.name} ${t.metric.unit || ''} ${r ? `${r.min}~${r.max}` : ''} · ${t.deviceModel}`.replace(/\s+/g, ' ').trim();
+  return { groupKey: key, label };
+}
+
+// ---------- 批量编辑 patch 应用（P2：同分组勾选批量编辑） ----------
+// patch 字段留空（null/undefined）= 不修改；各规则保持自身触发模式：
+// upper/lower 应用 threshold，rangeOut/rangeIn 应用 low/high；回差按各自恢复模式应用。
+// 返回 { draft } 或 { error }；只处理结构化数值阈值规则，已停用/旧业务规则跳过。
+export function applyBatchEditPatch(rule, patch) {
+  if (!rule || !rule.code) return { error: '规则不存在' };
+  if (rule.legacyOnly) return { error: '旧业务规则不支持结构化批量编辑' };
+  if (!rule.triggerConfig || rule.triggerConfig.type !== 'threshold') return { error: '仅数值阈值规则支持批量编辑' };
+  if (rule.status === '已停用') return { error: '已停用规则不参与批量编辑' };
+  const base = rule.draftConfig ? structuredClone(rule.draftConfig) : { ...rule };
+  delete base.draftConfig;
+  const triggerConfig = structuredClone(base.triggerConfig);
+  const recoveryConfig = structuredClone(base.recoveryConfig || {});
+  const p = patch || {};
+  const has = (v) => v !== null && v !== undefined && v !== '';
+  if (triggerConfig.mode === 'upper' || triggerConfig.mode === 'lower') {
+    if (has(p.threshold)) triggerConfig.threshold = Number(p.threshold);
+    if (has(p.deadband) && recoveryConfig.condition) recoveryConfig.condition.deadband = Number(p.deadband);
+    if (has(p.recoveryValue) && recoveryConfig.condition) {
+      recoveryConfig.condition.thresholdMode = 'explicit';
+      recoveryConfig.condition.recoveryValue = Number(p.recoveryValue);
+    }
+  } else if (triggerConfig.mode === 'rangeOut' || triggerConfig.mode === 'rangeIn') {
+    if (has(p.low)) triggerConfig.low = Number(p.low);
+    if (has(p.high)) triggerConfig.high = Number(p.high);
+    if (has(p.deadband) && recoveryConfig.condition) {
+      recoveryConfig.condition.lowDeadband = Number(p.deadband);
+      recoveryConfig.condition.highDeadband = Number(p.deadband);
+    }
+  }
+  if (has(p.durationSec)) triggerConfig.durationSec = Number(p.durationSec);
+  if (has(p.stabilizeSec) && recoveryConfig.stabilize) recoveryConfig.stabilize.durationSec = Number(p.stabilizeSec);
+  let notificationConfig = base.notificationConfig ? structuredClone(base.notificationConfig) : null;
+  if (p.notificationConfig) notificationConfig = structuredClone(p.notificationConfig);
+  finalizeRuleConfigs(triggerConfig, recoveryConfig);
+  const draft = {
+    ...base,
+    severity: has(p.severity) ? p.severity : base.severity,
+    triggerConfig,
+    recoveryConfig,
+    notificationConfig,
+    policyCode: notificationConfig?.policyCode || base.policyCode || null,
+    condition: conditionTextOf(triggerConfig),
+    recovery: recoveryTextOf(recoveryConfig, triggerConfig),
+  };
+  return { draft };
 }
 
 // ---------- 展示文本由结构生成 ----------

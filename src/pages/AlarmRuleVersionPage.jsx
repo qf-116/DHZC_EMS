@@ -5,7 +5,7 @@
 // ============================================================
 
 import React, { useMemo, useState } from 'react';
-import { App, Button, Card, Empty, Modal, Space, Table, Tag, Tooltip } from 'antd';
+import { App, Button, Card, Empty, Input, Modal, Select, Space, Table, Tag, Tooltip } from 'antd';
 import { Download, GitCompare, Undo2 } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -32,6 +32,12 @@ export default function AlarmRuleVersionPage() {
     .sort((a, b) => (a.code === b.code
       ? (a.version < b.version ? 1 : -1)
       : (a.code > b.code ? 1 : -1))), [state]);
+  // 查询条件（前端过滤）：规则编号/名称关键字 + 状态
+  const [qKw, setQKw] = useState('');
+  const [qStatus, setQStatus] = useState(null);
+  const kw = qKw.trim();
+  const filteredRows = useMemo(() => rows.filter((r) => (!kw || [r.code, r.name].some((v) => String(v || '').includes(kw)))
+    && (!qStatus || r.status === qStatus)), [rows, kw, qStatus]);
 
   // 同一规则的版本按新→旧排序；取前两个版本做只读比对
   const compareVersions = compareCode
@@ -99,13 +105,18 @@ export default function AlarmRuleVersionPage() {
       />
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
+          <Input style={{ width: 240 }} allowClear placeholder="搜索：规则编号 / 名称" value={qKw} onChange={(e) => setQKw(e.target.value)} />
+          <Select style={{ width: 120 }} placeholder="状态" allowClear value={qStatus} onChange={setQStatus}
+            options={['已发布', '已归档'].map((v) => ({ value: v, label: v }))} />
+          <Button onClick={() => { setQKw(''); setQStatus(null); }}>重置</Button>
           <Button icon={<Download size={14} />} onClick={() => message.success('规则版本快照导出任务已创建')}>导出</Button>
+          <span style={{ fontSize: 12, color: '#8a97a3' }}>共 {filteredRows.length} 条</span>
         </Space>
         <Table
           rowKey={r => `${r.code}|${r.version}`}
           size="small"
           scroll={{ x: 1670 }}
-          dataSource={rows}
+          dataSource={filteredRows}
           columns={columns}
           locale={{ emptyText: <EmptyState description="暂无规则版本快照" reason="暂无数据" /> }}
           pagination={{ pageSize: 10, showTotal: t => `共 ${t} 条` }}

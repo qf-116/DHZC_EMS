@@ -11,7 +11,7 @@ import {
 import {
   validateRuleDraft, nextPublishVersion, conditionTextOf, recoveryTextOf,
   sampleTriggered, sampleRecovered, comboTriggered, comboRecovered,
-  qualityTriggerHit, NUMERIC_TRIGGER_MODES,
+  qualityTriggerHit, NUMERIC_TRIGGER_MODES, applyBatchEditPatch,
 } from '../domain/alarmRule.js';
 import { canRepairTransition } from '../domain/repair.js';
 import { validateDowntime } from '../domain/downtime.js';
@@ -805,6 +805,49 @@ export function reducer(state, action) {
       next = setE(next, 'alarmBatchesById', batchId, batch);
       next = addHistory(next, at, 'alarm-rule', batchId, `批量生成报警规则草稿：创建 ${result.created} / 跳过 ${result.skipped} / 阻断 ${result.blocked} / 失败 ${result.failed}`, {});
       return finish(next, action, true, `批次 ${batchId} 完成：生成草稿 ${result.created} 条，跳过 ${result.skipped}，阻断 ${result.blocked}，失败 ${result.failed}`, { batchId, ...result, rows }, false, at);
+    }
+    case 'alarm/rule/batchEdit': {
+      // 同分组批量编辑（P2）：勾选同组规则统一调整参数，逐条生成/更新待发布草稿。
+      // 逐条隔离：旧业务规则、已停用、结构不符的目标跳过并说明；更新后逐条校验，失败保留原因。
+      const { ruleCodes, patch } = payload;
+      if (!Array.isArray(ruleCodes) || ruleCodes.length === 0) return reject(state, action, '未选择要批量编辑的规则');
+      if (!patch || Object.keys(patch).length === 0) return reject(state, action, '没有要修改的字段');
+      let next = state;
+      const result = { updated: 0, failed: 0, skipped: 0 };
+      const rows = [];
+      ruleCodes.forEach((code) => {
+        const rule = next.entities.alarmRulesById[code];
+        if (!rule) {
+          result.skipped += 1;
+          rows.push({ code, result: 'skipped', reason: '规则不存在' });
+          return;
+        }
+        const applied = applyBatchEditPatch(rule, patch);
+        if (applied.error) {
+          result.skipped += 1;
+          rows.push({ code, result: 'skipped', reason: applied.error });
+          return;
+        }
+        const validation = validateRuleDraft(applied.draft, ruleContext(next.entities));
+        if (validation.errors.length) {
+          result.failed += 1;
+          rows.push({ code, result: 'failed', reason: validation.errors.join('；') });
+          return;
+        }
+        if (rule.status === '已发布') {
+          // 已发布规则：草稿独立保存，当前发布内容与版本快照不受影响
+          next = setE(next, 'alarmRulesById', code, { ...rule, draftConfig: applied.draft, updatedBy: actor.userName, updatedAt: at });
+          result.updated += 1;
+          rows.push({ code, result: 'updated', reason: `已生成待发布草稿（当前发布版本 ${rule.publishedVersion || rule.version} 不受影响）` });
+        } else {
+          // 草稿规则：直接更新草稿字段
+          next = setE(next, 'alarmRulesById', code, { ...rule, ...applied.draft, status: '草稿', updatedBy: actor.userName, updatedAt: at });
+          result.updated += 1;
+          rows.push({ code, result: 'updated', reason: '草稿已更新' });
+        }
+      });
+      next = addHistory(next, at, 'alarm-rule', (ruleCodes[0] || '--'), `批量编辑 ${ruleCodes.length} 条规则：更新 ${result.updated} / 失败 ${result.failed} / 跳过 ${result.skipped}`, {});
+      return finish(next, action, true, `批量编辑完成：更新 ${result.updated} 条草稿${result.failed ? `，失败 ${result.failed} 条（见明细）` : ''}${result.skipped ? `，跳过 ${result.skipped} 条` : ''}；草稿需发布后生效`, { ...result, rows }, false, at);
     }
     case 'alarm/rule/batchPublish': {
       // 批量发布（P2）：批次内草稿逐条走发布核心（独立校验、独立版本快照）；

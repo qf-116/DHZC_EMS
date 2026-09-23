@@ -6,7 +6,7 @@
 // ============================================================
 
 import React, { useMemo, useState } from 'react';
-import { App, Button, Card, Modal, Space, Table, Tag, Typography } from 'antd';
+import { App, Button, Card, Input, Modal, Select, Space, Table, Tag, Typography } from 'antd';
 import { Download } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader.jsx';
@@ -20,6 +20,13 @@ export default function ProgramHandleRecordPage() {
   const [detail, setDetail] = useState(null); // UI 局部状态：详情弹窗
 
   const rows = useMemo(() => selectProgramHandles(state), [state]);
+  // 查询条件（前端过滤）：设备 / 关键字（记录号/程序/处理人/结论）
+  const [qDevice, setQDevice] = useState(null);
+  const [qKw, setQKw] = useState('');
+  const deviceOptions = useMemo(() => [...new Map(rows.map((r) => [r.deviceId, { value: r.deviceId, label: `${r.deviceName}（${r.deviceId}）` }])).values()], [rows]);
+  const kw = qKw.trim();
+  const filteredRows = useMemo(() => rows.filter((r) => (!qDevice || r.deviceId === qDevice)
+    && (!kw || [r.recordId, r.program, r.handler, r.conclusion, r.action].some((v) => String(v || '').includes(kw)))), [rows, qDevice, kw]);
 
   const fieldRows = (r) => [
     ['处理记录', r.recordId],
@@ -43,12 +50,18 @@ export default function ProgramHandleRecordPage() {
       />
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
+          <Select style={{ width: 220 }} placeholder="设备" allowClear showSearch optionFilterProp="label"
+            value={qDevice} onChange={setQDevice} options={deviceOptions} />
+          <Input style={{ width: 240 }} allowClear placeholder="搜索：记录号 / 程序 / 处理人 / 结论"
+            value={qKw} onChange={(e) => setQKw(e.target.value)} />
+          <Button onClick={() => { setQDevice(null); setQKw(''); }}>重置</Button>
           <Button icon={<Download size={14} />} onClick={() => message.success('已导出比对处理记录')}>导出</Button>
+          <span style={{ fontSize: 12, color: '#8a97a3' }}>共 {filteredRows.length} 条</span>
         </Space>
         <Table
           rowKey="recordId" size="small"
           scroll={{ x: 1350 }}
-          dataSource={rows}
+          dataSource={filteredRows}
           columns={[
             { title: '处理记录', dataIndex: 'recordId', width: 160, fixed: 'left' },
             { title: '设备', width: 170, render: (_, r) => `${r.deviceName || '--'}（${r.deviceId}）` },

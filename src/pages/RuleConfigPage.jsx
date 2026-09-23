@@ -7,7 +7,7 @@ import { metricAlarmTemplates, ruleTemplates, notificationRows } from '../data/d
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import {
   resolveRuleTargets, createEmptyRuleForm, ruleToForm, formToRule, switchRuleFormType,
-  validateRuleDraft, conditionTextOf, recoveryTextOf, replayTrend,
+  validateRuleDraft, conditionTextOf, recoveryTextOf, replayTrend, ruleGroupInfo,
   LEGACY_BUSINESS_RULE_TYPES, NUMERIC_TRIGGER_MODES,
 } from '../domain/alarmRule.js';
 import RuleBatchModal from '../components/RuleBatchModal.jsx';
@@ -57,6 +57,14 @@ export default function RuleConfigPage() {
   const [saveTplOpen, setSaveTplOpen] = React.useState(false);
   const [saveTplName, setSaveTplName] = React.useState('');
   const [saveTplScope, setSaveTplScope] = React.useState('');
+  // 查询条件 + 勾选批量编辑
+  const [qKw, setQKw] = React.useState('');
+  const [qType, setQType] = React.useState(null);
+  const [qStatus, setQStatus] = React.useState(null);
+  const [qGroup, setQGroup] = React.useState(null);
+  const [selectedRowKeys, setSelectedRowKeys] = React.useState([]);
+  const [beOpen, setBeOpen] = React.useState(false);
+  const [beForm, setBeForm] = React.useState({});
 
   // canonical 目标（启用绑定 + 勾选指标 + 未失效），级联与展示都从这里取
   const targets = React.useMemo(() => resolveRuleTargets(state), [state]);
@@ -327,18 +335,78 @@ export default function RuleConfigPage() {
     },
   });
 
-  // 列表读模型：chain 由 canonical 目标生成；legacy 规则回退 deviceScope + metricCode
-  const rows = Object.values(E.alarmRulesById).map((r) => {
+  // 列表读模型：chain 由 canonical 目标生成；legacy 规则回退 deviceScope + metricCode；
+  // 分组列 = 指标 + 数据类型 + 单位 + 量程 + 设备型号（与批量创建/批量编辑同组口径）
+  const allRows = Object.values(E.alarmRulesById).map((r) => {
     const deviceName = r.target?.deviceId ? E.devicesById[r.target.deviceId]?.name || r.target.deviceId : null;
     const chain = r.target
       ? [`${r.target.deviceId} ${deviceName || ''}`.trim(), r.target.sourceCode || r.target.sourceId || '--', r.target.metricCode]
       : [r.deviceScope || '--', r.metricCode || '--'];
+    const group = ruleGroupInfo(r, targets);
     return {
       ...r,
       chain,
+      groupKey: group?.groupKey || null,
+      groupLabel: group?.label || null,
       versionText: r.status === '已发布' ? `${r.publishedVersion || r.version}${r.draftConfig ? '（有待发布草稿）' : ''}` : r.version || '待发布',
     };
   });
+  // 分组色板：同组同色
+  const groupKeys = [...new Set(allRows.map((r) => r.groupKey).filter(Boolean))].sort();
+  const GROUP_COLORS = ['blue', 'cyan', 'geekblue', 'purple', 'magenta', 'orange'];
+  const groupColorOf = (key) => GROUP_COLORS[Math.max(0, groupKeys.indexOf(key)) % GROUP_COLORS.length];
+  // 查询条件（前端过滤，演示数据量级适用）
+  const kw = qKw.trim();
+  const rows = allRows.filter((r) => {
+    if (kw && ![r.code, r.name, r.metricCode, r.target?.deviceId].some((v) => String(v || '').includes(kw))) return false;
+    if (qType && r.type !== qType) return false;
+    if (qStatus && r.status !== qStatus) return false;
+    if (qGroup && r.groupKey !== qGroup) return false;
+    return true;
+  });
+  // 勾选批量编辑：同分组（≥2 条）才可编辑；无分组（旧结构）不可勾入
+  const selectedRules = selectedRowKeys.map((k) => allRows.find((r) => r.code === k)).filter(Boolean);
+  const selectedGroupKeys = [...new Set(selectedRules.map((r) => r.groupKey))];
+  const selectionReady = selectedRules.length >= 2 && selectedGroupKeys.length === 1 && selectedGroupKeys[0] !== null;
+  const selectionHint = selectedRules.length === 0 ? ''
+    : selectedRules.some((r) => !r.groupKey) ? '已选含不可分组规则（旧结构），不能批量编辑'
+      : selectedGroupKeys.length > 1 ? `已选 ${selectedRules.length} 条，跨 ${selectedGroupKeys.length} 个分组，不能批量编辑`
+        : `已选 ${selectedRules.length} 条，同分组「${selectedRules[0].groupLabel}」，可批量编辑`;
+  const submitBatchEdit = () => {
+    const patch = {};
+    Object.entries(beForm).forEach(([k, v]) => { if (v !== null && v !== undefined && v !== '') patch[k] = v; });
+    if (patch.policyCode) {
+      const n = notificationRows.find((x) => x.code === patch.policyCode) || notificationRows[1];
+      patch.notificationConfig = {
+        policyCode: n.code, overridden: false,
+        channels: n.channels.split(' / '), receivers: n.receivers.split('、'),
+        first: n.first, interval: n.interval, escalation: n.escalation,
+        silent: n.silent === '无' ? '' : n.silent, retries: n.retries,
+      };
+      delete patch.policyCode;
+    }
+    if (Object.keys(patch).length === 0) { message.warning('请至少填写一个要修改的字段'); return; }
+    const res = actions.batchEditRules(selectedRowKeys, patch);
+    if (!res.ok) { message.error(res.message); return; }
+    message.success(res.message);
+    setBeOpen(false);
+    setBeForm({});
+    const rowsRes = res.refs.rows || [];
+    if (rowsRes.some((r) => r.result !== 'updated')) {
+      Modal.info({
+        title: '批量编辑结果（逐条）',
+        width: 560,
+        content: (
+          <div style={{ fontSize: 13, lineHeight: 2 }}>
+            {rowsRes.map((r) => (
+              <div key={r.code}>· {r.code}：{r.result === 'updated' ? '✅' : r.result === 'failed' ? '❌' : '⏭'} {r.reason}</div>
+            ))}
+          </div>
+        ),
+      });
+    }
+    setSelectedRowKeys([]);
+  };
   const chattering = rows.filter((r) => (r.supp7d || 0) > (r.trig7d || 0));
   const batches = Object.values(E.alarmBatchesById || {}).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 
@@ -358,12 +426,44 @@ export default function RuleConfigPage() {
         <Space wrap style={{ marginBottom: 12 }}>
           <Button type="primary" icon={<Plus size={14} />} onClick={openCreate}>新增规则</Button>
           <Button icon={<Layers size={14} />} onClick={() => setBatchOpen(true)}>批量新建（同类指标）</Button>
+          <Tooltip title={selectionReady ? `对同分组 ${selectedRules.length} 条规则统一调整参数（生成待发布草稿）` : (selectionHint || '勾选同一分组的至少 2 条规则后可批量编辑')}>
+            <Button
+              icon={<Copy size={14} />}
+              disabled={!selectionReady}
+              onClick={() => setBeOpen(true)}
+            >
+              批量编辑（同分组）
+            </Button>
+          </Tooltip>
+          {selectionHint && <span style={{ fontSize: 12, color: selectionReady ? '#00b8d4' : '#8a97a3' }}>{selectionHint}</span>}
+        </Space>
+        <Space wrap style={{ marginBottom: 12 }}>
+          <Input
+            style={{ width: 240 }} allowClear
+            placeholder="搜索：规则编号 / 名称 / 指标 / 设备"
+            value={qKw} onChange={(e) => setQKw(e.target.value)}
+          />
+          <Select style={{ width: 110 }} placeholder="类型" allowClear value={qType} onChange={setQType}
+            options={['阈值', '状态', '质量', '组合', '程序', '备件'].map((v) => ({ value: v, label: v }))} />
+          <Select style={{ width: 110 }} placeholder="状态" allowClear value={qStatus} onChange={setQStatus}
+            options={['草稿', '已发布', '已停用'].map((v) => ({ value: v, label: v }))} />
+          <Select style={{ width: 260 }} placeholder="分组（指标 · 量程 · 型号）" allowClear value={qGroup} onChange={setQGroup}
+            options={groupKeys.map((k) => ({ value: k, label: allRows.find((r) => r.groupKey === k)?.groupLabel || k }))}
+            showSearch optionFilterProp="label" maxTagCount="responsive" />
+          <Button onClick={() => { setQKw(''); setQType(null); setQStatus(null); setQGroup(null); }}>重置</Button>
+          <span style={{ fontSize: 12, color: '#8a97a3' }}>共 {rows.length} 条</span>
         </Space>
         <Table
           rowKey="code"
           size="small"
           dataSource={rows}
+          rowSelection={{
+            selectedRowKeys,
+            onChange: setSelectedRowKeys,
+            getCheckboxProps: (r) => ({ disabled: !r.groupKey }),
+          }}
           columns={[
+            { title: '分组', dataIndex: 'groupLabel', width: 210, render: (v, r) => (v ? <Tag color={groupColorOf(r.groupKey)} style={{ marginInlineEnd: 0 }}>{v}</Tag> : <span style={{ color: '#8a97a3' }}>--</span>) },
             { title: '规则编号', dataIndex: 'code', width: 110 },
             { title: '规则名称', dataIndex: 'name', width: 170 },
             { title: '类型', dataIndex: 'type', width: 70, render: (v) => <Tag color={LEGACY_BUSINESS_RULE_TYPES.includes(v) ? 'default' : 'blue'}>{v}</Tag> },
@@ -940,6 +1040,55 @@ export default function RuleConfigPage() {
             )}
           </>
         )}
+      </Modal>
+
+      {/* 同分组批量编辑：统一调整参数 → 逐条生成待发布草稿（各规则保持自身触发模式） */}
+      <Modal
+        title={`批量编辑（同分组 ${selectedRules.length} 条 · ${selectedRules[0]?.groupLabel || ''}）`}
+        width={640}
+        open={beOpen}
+        onOk={submitBatchEdit}
+        onCancel={() => setBeOpen(false)}
+        okText="批量保存为草稿" cancelText="取消"
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size={10}>
+          <Alert type="info" showIcon
+            message={<>将修改：{selectedRules.map((r) => r.code).join('、')}。留空的字段不修改；每条规则保持自身触发模式（越上/下限应用阈值，区间应用上下限），保存后逐条生成<b>待发布草稿</b>，当前发布版本与版本快照不受影响，需发布后生效。</>} />
+          <Space wrap>
+            <div><div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>报警等级</div>
+              <Select allowClear placeholder="不修改" style={{ width: 120 }} value={beForm.severity} onChange={(v) => setBeForm({ ...beForm, severity: v ?? null })}
+                options={['紧急', '重要', '一般', '提示'].map((v) => ({ value: v, label: v }))} />
+            </div>
+            <div><div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>触发阈值（越上/下限规则）</div>
+              <InputNumber placeholder="不修改" value={beForm.threshold} onChange={(v) => setBeForm({ ...beForm, threshold: v })} />
+            </div>
+            <div><div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>区间下限（区间规则）</div>
+              <InputNumber placeholder="不修改" value={beForm.low} onChange={(v) => setBeForm({ ...beForm, low: v })} />
+            </div>
+            <div><div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>区间上限（区间规则）</div>
+              <InputNumber placeholder="不修改" value={beForm.high} onChange={(v) => setBeForm({ ...beForm, high: v })} />
+            </div>
+          </Space>
+          <Space wrap>
+            <div><div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>持续（秒）</div>
+              <InputNumber min={0} placeholder="不修改" value={beForm.durationSec} onChange={(v) => setBeForm({ ...beForm, durationSec: v })} />
+            </div>
+            <div><div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>恢复回差</div>
+              <InputNumber min={0} step={0.01} placeholder="不修改" value={beForm.deadband} onChange={(v) => setBeForm({ ...beForm, deadband: v })} />
+            </div>
+            <div><div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>恢复阈值（直接指定模式）</div>
+              <InputNumber placeholder="不修改" value={beForm.recoveryValue} onChange={(v) => setBeForm({ ...beForm, recoveryValue: v })} />
+            </div>
+            <div><div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>恢复稳定（秒）</div>
+              <InputNumber min={0} placeholder="不修改" value={beForm.stabilizeSec} onChange={(v) => setBeForm({ ...beForm, stabilizeSec: v })} />
+            </div>
+          </Space>
+          <div>
+            <div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>通知策略（整体替换为所选策略模板）</div>
+            <Select allowClear placeholder="不修改" style={{ width: 320 }} value={beForm.policyCode} onChange={(v) => setBeForm({ ...beForm, policyCode: v ?? null })}
+              options={notificationRows.filter((n) => n.status === '启用').map((n) => ({ value: n.code, label: `${n.code} ${n.name}（${n.level}）` }))} />
+          </div>
+        </Space>
       </Modal>
 
       {/* 存为模板（P2 模板持久化）：写入 DemoStore 模板实体，不包含设备目标 */}

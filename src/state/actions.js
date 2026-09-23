@@ -379,6 +379,16 @@ export function createDemoActions(state, dispatch) {
       }, `batch-commit:${clientRequestId}`);
       return res;
     },
+    // 同分组批量编辑（P2）：逐条生成/更新待发布草稿；重复提交同一内容幂等
+    batchEditRules(ruleCodes, patch) {
+      if (!Array.isArray(ruleCodes) || ruleCodes.length === 0) return fail('请先勾选要批量编辑的规则');
+      if (!patch || Object.values(patch).every((v) => v === null || v === undefined || v === '')) return fail('请至少填写一个要修改的字段');
+      const clientRequestId = [
+        [...ruleCodes].sort().join(','),
+        JSON.stringify(patch),
+      ].join('|');
+      return act('alarm/rule/batchEdit', { ruleCodes, patch }, `batch-edit:${clientRequestId}`);
+    },
     // 批量发布（P2）：批次内草稿逐条发布（独立校验与版本快照，部分成功）
     publishBatch(batchId) {
       const batch = (E.alarmBatchesById || {})[batchId];

@@ -422,22 +422,9 @@ export default function RuleConfigPage() {
         />
       )}
 
-      <Card size="small">
-        <Space wrap style={{ marginBottom: 12 }}>
-          <Button type="primary" icon={<Plus size={14} />} onClick={openCreate}>新增规则</Button>
-          <Button icon={<Layers size={14} />} onClick={() => setBatchOpen(true)}>批量新建（同类指标）</Button>
-          <Tooltip title={selectionReady ? `对同分组 ${selectedRules.length} 条规则统一调整参数（生成待发布草稿）` : (selectionHint || '勾选同一分组的至少 2 条规则后可批量编辑')}>
-            <Button
-              icon={<Copy size={14} />}
-              disabled={!selectionReady}
-              onClick={() => setBeOpen(true)}
-            >
-              批量编辑（同分组）
-            </Button>
-          </Tooltip>
-          {selectionHint && <span style={{ fontSize: 12, color: selectionReady ? '#00b8d4' : '#8a97a3' }}>{selectionHint}</span>}
-        </Space>
-        <Space wrap style={{ marginBottom: 12 }}>
+      {/* 筛选卡（规范 §1/§4：查询条件独立在列表卡上方） */}
+      <Card size="small" style={{ marginBottom: 12 }}>
+        <Space wrap>
           <Input
             style={{ width: 240 }} allowClear
             placeholder="搜索：规则编号 / 名称 / 指标 / 设备"
@@ -452,6 +439,23 @@ export default function RuleConfigPage() {
             showSearch optionFilterProp="label" maxTagCount="responsive" />
           <Button onClick={() => { setQKw(''); setQType(null); setQStatus(null); setQGroup(null); }}>重置</Button>
           <span style={{ fontSize: 12, color: '#8a97a3' }}>共 {rows.length} 条</span>
+        </Space>
+      </Card>
+      {/* 列表卡：操作工具栏（左上第一行）→ 表格 */}
+      <Card size="small">
+        <Space wrap style={{ marginBottom: 12 }}>
+          <Button type="primary" icon={<Plus size={14} />} onClick={openCreate}>新增规则</Button>
+          <Button icon={<Layers size={14} />} onClick={() => setBatchOpen(true)}>批量新建（同类指标）</Button>
+          <Tooltip title={selectionReady ? `对同分组 ${selectedRules.length} 条规则统一调整参数（生成待发布草稿）` : (selectionHint || '勾选同一分组的至少 2 条规则后可批量编辑')}>
+            <Button
+              icon={<Copy size={14} />}
+              disabled={!selectionReady}
+              onClick={() => setBeOpen(true)}
+            >
+              批量编辑（同分组）
+            </Button>
+          </Tooltip>
+          {selectionHint && <span style={{ fontSize: 12, color: selectionReady ? '#00b8d4' : '#8a97a3' }}>{selectionHint}</span>}
         </Space>
         <Table
           rowKey="code"

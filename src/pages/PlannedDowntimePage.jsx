@@ -105,12 +105,20 @@ export default function PlannedDowntimePage() {
         title="计划停机时间管理"
         subtitle="计划内停机登记（计划停机 / 换模）· OEE 可用率扣除：可用率 = 运行时间 / (负荷时间 − 计划停机时间) · 保存后已触发 OEE 重算，重算记录见下方日志"
       />
-      <Space wrap style={{ marginBottom: 12 }}>
-        <Input allowClear prefix={<Search size={13} />} placeholder="设备名称 / 停机原因 / 单号" style={{ width: 240 }} value={kw} onChange={e => setKw(e.target.value)} />
-        <Select value={status} onChange={setStatus} style={{ width: 120 }} options={[{ value: 'all', label: '全部状态' }, ...['待执行', '进行中', '已结束', '已取消'].map(s => ({ value: s, label: s }))]} />
-        <Button type="primary" onClick={openNew}>添加</Button>
-      </Space>
-      <Table
+      {/* 筛选卡：查询条件独立在列表卡上方 */}
+      <Card size="small" style={{ marginBottom: 12 }}>
+        <Space wrap>
+          <Input allowClear prefix={<Search size={13} />} placeholder="设备名称 / 停机原因 / 单号" style={{ width: 240 }} value={kw} onChange={e => setKw(e.target.value)} />
+          <Select value={status} onChange={setStatus} style={{ width: 120 }} options={[{ value: 'all', label: '全部状态' }, ...['待执行', '进行中', '已结束', '已取消'].map(s => ({ value: s, label: s }))]} />
+          <Button onClick={() => { setKw(''); setStatus('all'); }}>重置</Button>
+        </Space>
+      </Card>
+      {/* 列表卡：操作工具栏 → 表格 */}
+      <Card size="small">
+        <Space wrap style={{ marginBottom: 12 }}>
+          <Button type="primary" onClick={openNew}>添加</Button>
+        </Space>
+        <Table
         rowKey="downtimeId" size="small" scroll={{ x: 1050 }}
         dataSource={filtered}
         columns={[
@@ -152,6 +160,7 @@ export default function PlannedDowntimePage() {
           },
         ]}
       />
+      </Card>
 
       <Card size="small" title="最近 OEE 重算记录（保存 / 取消计划停机后自动追加）" style={{ marginTop: 12 }}>
         {recomputeLogs.length ? (

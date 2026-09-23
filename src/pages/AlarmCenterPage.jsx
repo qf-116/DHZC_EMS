@@ -232,8 +232,9 @@ export default function AlarmCenterPage() {
         subtitle={`活动 ${counts.active} 条 · 待确认 ${counts.unacked} · 确认/处理中 ${counts.handling} · 恢复待关闭 ${counts.pendingClose} · 状态机：已触发→已确认→处理中→已恢复待关闭→已关闭`}
       />
       <DegradedBanner meta={state.meta} />
-      <Card size="small">
-        <Space wrap style={{ marginBottom: 12 }}>
+      {/* 筛选卡：查询条件独立在列表卡上方 */}
+      <Card size="small" style={{ marginBottom: 12 }}>
+        <Space wrap>
           <Select value={statusFilter} onChange={setStatusFilter} style={{ width: 140 }} options={[
             { value: 'active', label: '活动报警（未关闭）' }, { value: 'all', label: '全部状态' },
             ...['已触发', '已确认', '处理中', '已恢复待关闭', '已关闭'].map(v => ({ value: v, label: v })),
@@ -247,7 +248,15 @@ export default function AlarmCenterPage() {
             ...['紧急', '重要', '一般', '提示'].map(v => ({ value: v, label: v })),
           ]} />
           <Input allowClear placeholder="设备 / 报警 / 编号 / 规则" style={{ width: 220 }} value={keyword} onChange={e => setKeyword(e.target.value)} />
-          <Button onClick={batchAck}>批量确认</Button>
+          <Button onClick={() => { setStatusFilter('active'); setRecoveryFilter('all'); setSeverityFilter('all'); setKeyword(''); }}>重置</Button>
+        </Space>
+      </Card>
+      {/* 列表卡：操作工具栏（需勾选的批量操作默认禁用）→ 表格 */}
+      <Card size="small">
+        <Space wrap style={{ marginBottom: 12 }}>
+          <Tooltip title={selectedKeys.length ? `批量确认已勾选的 ${selectedKeys.length} 条已触发报警` : '请先勾选要批量确认的报警（仅已触发可确认）'}>
+            <Button onClick={batchAck} disabled={!selectedKeys.length}>批量确认</Button>
+          </Tooltip>
         </Space>
         <Table
           rowKey="id"

@@ -103,14 +103,20 @@ export default function AlarmRuleVersionPage() {
         title="报警规则版本"
         subtitle="版本快照只读 · 不可修改 · 活动报警使用触发时版本快照 · 比对为只读展示 · 回滚 = 按历史快照内容发布为新版本（历史留痕）"
       />
-      <Card size="small">
-        <Space wrap style={{ marginBottom: 12 }}>
+      {/* 筛选卡：查询条件独立在列表卡上方 */}
+      <Card size="small" style={{ marginBottom: 12 }}>
+        <Space wrap>
           <Input style={{ width: 240 }} allowClear placeholder="搜索：规则编号 / 名称" value={qKw} onChange={(e) => setQKw(e.target.value)} />
           <Select style={{ width: 120 }} placeholder="状态" allowClear value={qStatus} onChange={setQStatus}
             options={['已发布', '已归档'].map((v) => ({ value: v, label: v }))} />
           <Button onClick={() => { setQKw(''); setQStatus(null); }}>重置</Button>
-          <Button icon={<Download size={14} />} onClick={() => message.success('规则版本快照导出任务已创建')}>导出</Button>
           <span style={{ fontSize: 12, color: '#8a97a3' }}>共 {filteredRows.length} 条</span>
+        </Space>
+      </Card>
+      {/* 列表卡：操作工具栏 → 表格 */}
+      <Card size="small">
+        <Space wrap style={{ marginBottom: 12 }}>
+          <Button icon={<Download size={14} />} onClick={() => message.success('规则版本快照导出任务已创建')}>导出</Button>
         </Space>
         <Table
           rowKey={r => `${r.code}|${r.version}`}

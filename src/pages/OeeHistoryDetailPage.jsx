@@ -99,19 +99,22 @@ export default function OeeHistoryDetailPage() {
         subtitle={`${device.name}（${device.assetCode}）· ${day} · OEE = 可用率 × 性能率 × 合格率 · 计划停机只影响可用率分母`}
         actions={<Button onClick={() => navigate('/oee-history')}>返回历史 OEE</Button>}
       />
-      <Space wrap style={{ marginBottom: 12 }}>
-        <Select
-          value={deviceId} style={{ width: 220 }}
-          onChange={(v) => navigate(`/oee-history/detail/${v}`)}
-          options={devices.map(d => ({ value: d.deviceId, label: `${d.name}（${d.assetCode}）` }))}
-        />
-        <Select value={day} style={{ width: 140 }} onChange={(d) => navigate(`/oee-history/detail/${deviceId}`)} disabled={dayOptions.length <= 1} options={dayOptions.map(d => ({ value: d, label: d }))} />
-        {result.dataStatus === '不可计算' && (
-          <Tooltip title={blockersText(result)}>
-            <Tag color="error">当日不可计算：{blockersText(result)}</Tag>
-          </Tooltip>
-        )}
-      </Space>
+      {/* 筛选卡：设备 / 日期切换（规范 §1/§4） */}
+      <Card size="small" style={{ marginBottom: 12 }}>
+        <Space wrap>
+          <Select
+            value={deviceId} style={{ width: 220 }}
+            onChange={(v) => navigate(`/oee-history/detail/${v}`)}
+            options={devices.map(d => ({ value: d.deviceId, label: `${d.name}（${d.assetCode}）` }))}
+          />
+          <Select value={day} style={{ width: 140 }} onChange={(d) => navigate(`/oee-history/detail/${deviceId}`)} disabled={dayOptions.length <= 1} options={dayOptions.map(d => ({ value: d, label: d }))} />
+          {result.dataStatus === '不可计算' && (
+            <Tooltip title={blockersText(result)}>
+              <Tag color="error">当日不可计算：{blockersText(result)}</Tag>
+            </Tooltip>
+          )}
+        </Space>
+      </Card>
 
       <Card size="small" title="当日输入项" style={{ marginBottom: 12 }}>
         <Table

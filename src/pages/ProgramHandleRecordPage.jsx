@@ -48,15 +48,21 @@ export default function ProgramHandleRecordPage() {
         title="比对处理记录"
         subtitle="程序参数比对的处理留痕 · 记录不可删除、不可修改（只读）"
       />
-      <Card size="small">
-        <Space wrap style={{ marginBottom: 12 }}>
+      {/* 筛选卡：查询条件独立在列表卡上方 */}
+      <Card size="small" style={{ marginBottom: 12 }}>
+        <Space wrap>
           <Select style={{ width: 220 }} placeholder="设备" allowClear showSearch optionFilterProp="label"
             value={qDevice} onChange={setQDevice} options={deviceOptions} />
           <Input style={{ width: 240 }} allowClear placeholder="搜索：记录号 / 程序 / 处理人 / 结论"
             value={qKw} onChange={(e) => setQKw(e.target.value)} />
           <Button onClick={() => { setQDevice(null); setQKw(''); }}>重置</Button>
-          <Button icon={<Download size={14} />} onClick={() => message.success('已导出比对处理记录')}>导出</Button>
           <span style={{ fontSize: 12, color: '#8a97a3' }}>共 {filteredRows.length} 条</span>
+        </Space>
+      </Card>
+      {/* 列表卡：操作工具栏 → 表格 */}
+      <Card size="small">
+        <Space wrap style={{ marginBottom: 12 }}>
+          <Button icon={<Download size={14} />} onClick={() => message.success('已导出比对处理记录')}>导出</Button>
         </Space>
         <Table
           rowKey="recordId" size="small"

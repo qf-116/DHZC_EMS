@@ -70,8 +70,9 @@ export default function ProgramComparePage() {
         title="程序参数比对"
         subtitle="程序下发后自动比对基线参数与设备实际参数（超容差标红）· 比对由接入服务执行，本页只读"
       />
-      <Card size="small">
-        <Space wrap style={{ marginBottom: 12 }}>
+      {/* 筛选卡：查询条件独立在列表卡上方 */}
+      <Card size="small" style={{ marginBottom: 12 }}>
+        <Space wrap>
           <Select style={{ width: 220 }} placeholder="设备" allowClear showSearch optionFilterProp="label"
             value={qDevice} onChange={setQDevice} options={deviceOptions} />
           <Select style={{ width: 140 }} placeholder="比对结果" allowClear value={qResult} onChange={setQResult}
@@ -79,6 +80,9 @@ export default function ProgramComparePage() {
           <Button onClick={() => { setQDevice(null); setQResult(null); }}>重置</Button>
           <span style={{ fontSize: 12, color: '#8a97a3' }}>共 {filteredRows.length} 条</span>
         </Space>
+      </Card>
+      {/* 列表卡（只读页，无操作工具栏） */}
+      <Card size="small">
         <Table
           rowKey="recordId" size="small"
           scroll={{ x: 1350 }}

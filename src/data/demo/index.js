@@ -16,8 +16,9 @@ import { downtimeFacts } from './downtime.js';
 import { materialPool, speedConfigs, oeeTargets, shiftCalendar, oeeInputs, oeeEligibility, oeeRecomputeLog } from './oee.js';
 import { programCompare, programBaselines, programHandles } from './programCompare.js';
 import { lifecycleTasks, assetChangeRecords, idleApplications, scrapApplications } from './lifecycle.js';
+import { ruleTemplateSeeds } from './ruleTemplates.js';
 
-export const STORE_VERSION = 9; // 快照结构版本：报警规则结构化契约（M0）—— triggerConfig/recoveryConfig/publishedVersion + alarmBatchesById
+export const STORE_VERSION = 10; // 快照结构版本：P2 模板持久化（ruleTemplatesById 实体容器）
 
 export const DEMO_META = {
   mode: 'demo',
@@ -83,6 +84,7 @@ export function createDemoState() {
       idleApplicationsById: Object.fromEntries(idleApplications.map(r => [r.idleId, r])),
       scrapApplicationsById: Object.fromEntries(scrapApplications.map(r => [r.scrapId, r])),
       alarmBatchesById: {},      // 批量创建批次（M3-M4：逐目标结果 + clientRequestId 幂等）
+      ruleTemplatesById: Object.fromEntries(ruleTemplateSeeds.map((t) => [t.templateId, t])), // P2 模板持久化
     },
     ui: {
       filtersByRoute: {},

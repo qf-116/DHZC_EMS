@@ -10,7 +10,8 @@ import {
 } from '../domain/alarm.js';
 import {
   validateRuleDraft, nextPublishVersion, conditionTextOf, recoveryTextOf,
-  sampleTriggered, MVP_TRIGGER_MODES,
+  sampleTriggered, sampleRecovered, comboTriggered, comboRecovered,
+  qualityTriggerHit, NUMERIC_TRIGGER_MODES,
 } from '../domain/alarmRule.js';
 import { canRepairTransition } from '../domain/repair.js';
 import { validateDowntime } from '../domain/downtime.js';
@@ -99,6 +100,34 @@ function writeRuleVersionSnapshot(next, rule, version, at, actor) {
     qualitySnapshot: rule.qualityPolicy ? structuredClone(rule.qualityPolicy) : null,
     batchId: rule.batchId || null,
   });
+}
+
+// 发布核心（单条 / 批量 / 回滚共用）：校验 → 落库 → 版本递增 → 不可变快照 → 履历。
+// 返回 [nextState, result]；校验失败不动当前状态（结果 ok=false）。
+function publishRuleCore(state0, draft, at, actor) {
+  const validation = validateRuleDraft(draft, ruleContext(state0.entities));
+  if (validation.errors.length) {
+    return [state0, { ok: false, code: draft.code, message: validation.errors.join('；') }];
+  }
+  const prev = state0.entities.alarmRulesById[draft.code];
+  const prevPublished = prev?.publishedVersion || (prev?.status === '已发布' ? prev?.version : null) || null;
+  const version = nextPublishVersion(prevPublished);
+  const rule = {
+    ...(prev || { trig7d: 0, supp7d: 0, storm: '≤ 3 条/小时' }),
+    ...draft,
+    status: '已发布',
+    version,
+    publishedVersion: version,
+    draftConfig: null,
+    effectiveFrom: prev?.effectiveFrom || at,
+    updatedBy: actor.userName, updatedAt: at,
+    condition: conditionTextOf(draft.triggerConfig),
+    recovery: recoveryTextOf(draft.recoveryConfig, draft.triggerConfig),
+  };
+  let next = setE(state0, 'alarmRulesById', rule.code, rule);
+  next = writeRuleVersionSnapshot(next, rule, version, at, actor);
+  next = addHistory(next, at, 'alarm-rule', rule.code, `发布规则 ${rule.code} ${version}`, {});
+  return [next, { ok: true, code: rule.code, version }];
 }
 
 export function reducer(state, action) {
@@ -468,13 +497,31 @@ export function reducer(state, action) {
         const stillBound = (binding.items || []).some(i => i.enabled && (i.metrics || []).some(m => m.selected && m.metricCode === rule.target.metricCode));
         if (!stillBound) return reject(state, action, `指标 ${rule.target.metricCode} 未在设备 ${deviceId} 当前启用绑定中，不能触发`);
       }
-      // 样本判定（M2 阻断项 5）：MVP 数值阈值规则必须先满足阈值与数据有效性，再实例化事件。
-      // legacy 业务规则（程序/备件/状态等非 upper/lower 结构）保留原触发路径。
+      // 样本判定（M2 阻断项 5 + P2 全类型）：规则必须满足触发条件才实例化事件。
+      // legacyOnly 业务规则（程序/备件）与无法解析的旧结构保留原触发路径。
       const trigger = rule.triggerConfig || null;
-      if (trigger && trigger.type === 'threshold' && MVP_TRIGGER_MODES.includes(trigger.mode)) {
-        if (!sample) return reject(state, action, '缺少样本数据，不能触发报警');
-        if (!sampleTriggered(trigger, sample)) {
-          return reject(state, action, `样本值 ${sample.value ?? '--'}${sample.unit || ''}（质量 ${sample.qualityCode || '--'}）未满足触发条件（${conditionTextOf(trigger)}），不创建报警事件`);
+      if (trigger && !rule.legacyOnly) {
+        if (trigger.type === 'threshold' && NUMERIC_TRIGGER_MODES.includes(trigger.mode)) {
+          if (!sample) return reject(state, action, '缺少样本数据，不能触发报警');
+          if (!sampleTriggered(trigger, sample)) {
+            return reject(state, action, `样本值 ${sample.value ?? '--'}${sample.unit || ''}（质量 ${sample.qualityCode || '--'}）未满足触发条件（${conditionTextOf(trigger)}），不创建报警事件`);
+          }
+        } else if (trigger.type === 'state') {
+          if (!sample) return reject(state, action, '缺少状态样本，不能触发状态规则');
+          if (!sampleTriggered(trigger, sample)) {
+            return reject(state, action, `状态「${sample.value ?? '--'}」不在异常枚举 [${(trigger.abnormalValues || []).join('、')}] 内，不创建报警事件`);
+          }
+        } else if (trigger.type === 'quality') {
+          const health = E.healthByDeviceId[deviceId];
+          if (!qualityTriggerHit(trigger, health)) {
+            return reject(state, action, `设备通信健康（${health?.status || '--'}，延迟 ${health?.latencySec ?? '--'}s，质量率 ${health?.qualityRate || '--'}）未满足质量触发条件（${conditionTextOf(trigger)}），不创建报警事件`);
+          }
+        } else if (trigger.type === 'combo') {
+          const comboResult = comboTriggered(trigger, payload.conditionSamples);
+          if (comboResult === null) return reject(state, action, '组合规则缺少子条件样本，不能触发报警');
+          if (!comboResult) {
+            return reject(state, action, `组合规则子条件未满足（${trigger.operator}），不创建报警事件`);
+          }
         }
       }
       const dedupeKey = `${deviceId}:${ruleCode}:${rule.version}:${binding?.version || 0}`;
@@ -577,11 +624,19 @@ export function reducer(state, action) {
       const alarm = E.alarmEventsById[payload.alarmId];
       if (!alarm || ['已关闭', '已恢复待关闭'].includes(alarm.status)) return state;
       if (!(payload.evidence || '').trim()) return reject(state, action, '恢复必须填写恢复证据');
-      // MVP 恢复判定（M2）：提供样本时必须满足恢复阈值且数据有效（null/BAD/OFFLINE 不恢复）
+      // 恢复判定（M2 + P2）：提供样本时必须满足恢复条件且数据有效（null/BAD/OFFLINE 不恢复）。
+      // 组合规则须提供全部子条件样本（payload.conditionSamples），全部回到非触发态才恢复。
       const rule = E.alarmRulesById[alarm.rule];
-      if (payload.sample && rule?.recoveryConfig?.condition?.type === 'hysteresis') {
-        if (!sampleRecovered(rule.recoveryConfig, payload.sample)) {
-          return reject(state, action, `样本值 ${payload.sample.value ?? '--'}${payload.sample.unit || ''} 未满足恢复条件（${recoveryTextOf(rule.recoveryConfig, rule.triggerConfig)}），报警保持`);
+      if (payload.sample || payload.conditionSamples) {
+        const tConfig = rule?.triggerConfig;
+        let recovered = false;
+        if (tConfig?.type === 'combo') {
+          recovered = comboRecovered(tConfig, payload.conditionSamples || []);
+        } else if (rule?.recoveryConfig) {
+          recovered = sampleRecovered(rule.recoveryConfig, payload.sample);
+        }
+        if (!recovered) {
+          return reject(state, action, `样本值 ${payload.sample?.value ?? '--'}${payload.sample?.unit || ''} 未满足恢复条件（${rule ? recoveryTextOf(rule.recoveryConfig, rule.triggerConfig) : '--'}），报警保持`);
         }
       }
       const updated = {
@@ -634,29 +689,9 @@ export function reducer(state, action) {
       // 原子保存并发布（M2）：校验 → 落库 → 版本递增 → 不可变快照 → 历史，单个 reducer case 内完成
       const payloadRule = payload.rule || {};
       if (!(payloadRule.code || '').trim() || !(payloadRule.name || '').trim()) return reject(state, action, '规则编号与名称必填');
-      const validation = validateRuleDraft(payloadRule, ruleContext(E));
-      if (validation.errors.length) return reject(state, action, `规则校验未通过：${validation.errors.join('；')}`, validation.errors);
-      const prev = E.alarmRulesById[payloadRule.code];
-      const prevPublished = prev?.publishedVersion
-        || (prev?.status === '已发布' ? prev?.version : null)
-        || null;
-      const version = nextPublishVersion(prevPublished);
-      const rule = {
-        ...(prev || { trig7d: 0, supp7d: 0, storm: '≤ 3 条/小时' }),
-        ...payloadRule,
-        status: '已发布',
-        version,
-        publishedVersion: version,
-        draftConfig: null,
-        effectiveFrom: prev?.effectiveFrom || at,
-        updatedBy: actor.userName, updatedAt: at,
-        condition: conditionTextOf(payloadRule.triggerConfig),
-        recovery: recoveryTextOf(payloadRule.recoveryConfig, payloadRule.triggerConfig),
-      };
-      let next = setE(state, 'alarmRulesById', rule.code, rule);
-      next = writeRuleVersionSnapshot(next, rule, version, at, actor);
-      next = addHistory(next, at, 'alarm-rule', rule.code, `发布规则 ${rule.code} ${version}`, {});
-      return finish(next, action, true, `规则 ${rule.code} 已发布为 ${version}`, { ruleCode: rule.code, version }, false, at);
+      const [next, result] = publishRuleCore(state, payloadRule, at, actor);
+      if (!result.ok) return reject(state, action, `规则校验未通过：${result.message}`);
+      return finish(next, action, true, `规则 ${result.code} 已发布为 ${result.version}`, { ruleCode: result.code, version: result.version }, false, at);
     }
     case 'alarm/rule/publish': {
       const rule = E.alarmRulesById[payload.ruleCode];
@@ -743,6 +778,7 @@ export function reducer(state, action) {
           version: '待发布',
           publishedVersion: null,
           batchId,
+          templateId: request.templateId || null,
           trig7d: 0, supp7d: 0,
           createdBy: actor.userName, createdAt: at,
           updatedBy: actor.userName, updatedAt: at,
@@ -769,6 +805,95 @@ export function reducer(state, action) {
       next = setE(next, 'alarmBatchesById', batchId, batch);
       next = addHistory(next, at, 'alarm-rule', batchId, `批量生成报警规则草稿：创建 ${result.created} / 跳过 ${result.skipped} / 阻断 ${result.blocked} / 失败 ${result.failed}`, {});
       return finish(next, action, true, `批次 ${batchId} 完成：生成草稿 ${result.created} 条，跳过 ${result.skipped}，阻断 ${result.blocked}，失败 ${result.failed}`, { batchId, ...result, rows }, false, at);
+    }
+    case 'alarm/rule/batchPublish': {
+      // 批量发布（P2）：批次内草稿逐条走发布核心（独立校验、独立版本快照）；
+      // 校验失败条目保留原因不发布，其余照常发布（部分成功语义）。
+      const batch = E.alarmBatchesById[payload.batchId];
+      if (!batch) return reject(state, action, '批次不存在');
+      if (batch.status === '已发布') return finish(state, action, true, `批次 ${batch.batchId} 已发布，重复请求忽略（幂等）`, { batchId: batch.batchId, published: batch.publishResult?.published ?? 0 }, true, at);
+      const draftRules = Object.values(E.alarmRulesById).filter((r) => r.batchId === batch.batchId && r.status === '草稿');
+      if (draftRules.length === 0) return reject(state, action, '批次内没有可发布的草稿规则');
+      let next = state;
+      let published = 0;
+      const failures = [];
+      draftRules.forEach((r) => {
+        const [n, result] = publishRuleCore(next, r, at, actor);
+        if (result.ok) {
+          next = n;
+          published += 1;
+        } else {
+          failures.push({ ruleCode: r.code, reason: result.message });
+        }
+      });
+      const updatedBatch = {
+        ...batch,
+        status: failures.length ? (published > 0 ? '部分发布' : '发布失败') : '已发布',
+        publishedAt: at,
+        publisher: actor.userName,
+        publishResult: { published, failed: failures.length, failures },
+      };
+      next = setE(next, 'alarmBatchesById', batch.batchId, updatedBatch);
+      next = addHistory(next, at, 'alarm-rule', batch.batchId, `批量发布批次 ${batch.batchId}：成功 ${published}，失败 ${failures.length}`, {});
+      return finish(next, action, published > 0, `批次 ${batch.batchId} 批量发布完成：成功 ${published} 条${failures.length ? `，失败 ${failures.length} 条（${failures.map((f) => f.ruleCode).join('、')}，原因见批次详情）` : ''}`, { batchId: batch.batchId, published, failed: failures.length, failures }, false, at);
+    }
+    case 'alarm/rule/rollback': {
+      // 版本回滚（P2）：读取历史版本快照内容，作为新版本发布（Vn+1），不改写任何历史快照。
+      const { ruleCode, version } = payload;
+      const rule = E.alarmRulesById[ruleCode];
+      if (!rule) return reject(state, action, '规则不存在');
+      const snap = E.alarmRuleVersionsById[`${ruleCode}|${version}`];
+      if (!snap) return reject(state, action, `版本快照 ${ruleCode} ${version} 不存在`);
+      if (!snap.triggerSnapshot) return reject(state, action, `版本 ${version} 为旧结构快照（无结构化触发配置），不支持回滚；请手动调整当前配置`);
+      if (rule.status === '已发布' && rule.publishedVersion === version) return reject(state, action, `当前发布版本即为 ${version}，无需回滚`);
+      const rollbackDraft = {
+        ...rule,
+        code: ruleCode,
+        name: snap.name || rule.name,
+        severity: rule.severity || '重要',
+        target: snap.targetSnapshot ? structuredClone(snap.targetSnapshot) : null,
+        metricCode: snap.targetSnapshot?.metricCode || rule.metricCode || null,
+        triggerConfig: structuredClone(snap.triggerSnapshot),
+        recoveryConfig: snap.recoverySnapshot ? structuredClone(snap.recoverySnapshot) : rule.recoveryConfig,
+        notificationConfig: snap.notificationSnapshot ? structuredClone(snap.notificationSnapshot) : rule.notificationConfig,
+        suppressionConfig: snap.suppressionSnapshot ? structuredClone(snap.suppressionSnapshot) : rule.suppressionConfig,
+        stormConfig: snap.stormSnapshot ? structuredClone(snap.stormSnapshot) : rule.stormConfig,
+        silenceConfig: snap.silenceSnapshot ? structuredClone(snap.silenceSnapshot) : rule.silenceConfig,
+        qualityPolicy: snap.qualitySnapshot ? structuredClone(snap.qualitySnapshot) : rule.qualityPolicy,
+      };
+      const [next, result] = publishRuleCore(state, rollbackDraft, at, actor);
+      if (!result.ok) return reject(state, action, `回滚发布未通过校验：${result.message}`);
+      const nextWithHistory = addHistory(next, at, 'alarm-rule', ruleCode, `回滚规则 ${ruleCode} 至 ${version} 内容，发布为 ${result.version}`, {});
+      return finish(nextWithHistory, action, true, `已按 ${version} 快照内容回滚并发布为 ${result.version}（历史快照不变）`, { ruleCode, fromVersion: version, version: result.version }, false, at);
+    }
+
+    // ================= 规则模板（P2 模板持久化） =================
+    case 'alarm/template/save': {
+      const tpl = payload.template || {};
+      if (!(tpl.name || '').trim()) return reject(state, action, '模板名称必填');
+      const templates = state.entities.ruleTemplatesById || {};
+      const prev = templates[tpl.templateId];
+      const record = {
+        ...prev,
+        ...tpl,
+        templateId: tpl.templateId || `RT-${Object.keys(templates).length + 101}`,
+        refs: prev?.refs ?? 0,
+        updatedBy: actor.userName, updatedAt: at,
+        createdBy: prev?.createdBy || actor.userName,
+        createdAt: prev?.createdAt || at,
+      };
+      let next = setE(state, 'ruleTemplatesById', record.templateId, record);
+      next = addHistory(next, at, 'alarm-rule-template', record.templateId, `${prev ? '更新' : '创建'}规则模板「${record.name}」`, {});
+      return finish(next, action, true, `模板「${record.name}」已${prev ? '更新' : '保存'}，可在新增规则时导入或应用到设备`, { templateId: record.templateId }, false, at);
+    }
+    case 'alarm/template/delete': {
+      const templates = state.entities.ruleTemplatesById || {};
+      const tpl = templates[payload.templateId];
+      if (!tpl) return reject(state, action, '模板不存在');
+      let next = { ...state, entities: { ...state.entities, ruleTemplatesById: { ...templates } } };
+      delete next.entities.ruleTemplatesById[payload.templateId];
+      next = addHistory(next, at, 'alarm-rule-template', payload.templateId, `删除规则模板「${tpl.name}」（不影响已发布规则与版本快照）`, {});
+      return finish(next, action, true, `模板「${tpl.name}」已删除；已发布规则与版本快照不受影响`, {}, false, at);
     }
 
     // ================= 维修 =================

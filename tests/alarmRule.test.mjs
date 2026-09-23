@@ -8,7 +8,8 @@ import assert from 'node:assert/strict';
 import {
   normalizeMetricMeta, parseLegacyCondition, parseLegacyRecovery, normalizeLegacyRule,
   nextPublishVersion, validateRuleDraft, sampleTriggered, sampleRecovered,
-  createEmptyRuleForm, formToRule, ruleToForm, conditionTextOf, resolveRuleTargets,
+  comboTriggered, comboRecovered, qualityTriggerHit, replayTrend,
+  createEmptyRuleForm, formToRule, ruleToForm, switchRuleFormType, conditionTextOf, resolveRuleTargets,
   groupBatchTargets, batchGroupKey,
 } from '../src/domain/alarmRule.js';
 import { reducer } from '../src/state/reducer.js';
@@ -396,6 +397,329 @@ test('formToRule：deadband 模式保存时固化恢复值并生成展示文本'
 });
 test('conditionTextOf：lower 模式展示 <', () => {
   assert.equal(conditionTextOf({ type: 'threshold', mode: 'lower', threshold: 0.15, unit: 'MPa', durationSec: 30 }), '< 0.15MPa 持续 30s');
+});
+
+// ---------- P2-A：区间规则 ----------
+const rangeTrigger = { type: 'threshold', mode: 'rangeOut', low: 0.6, high: 0.8, unit: 'MPa', durationSec: 30 };
+test('sampleTriggered：区间外两侧触发、带内不触发', () => {
+  assert.equal(sampleTriggered(rangeTrigger, { value: 0.5, qualityCode: 'GOOD' }), true);
+  assert.equal(sampleTriggered(rangeTrigger, { value: 0.9, qualityCode: 'GOOD' }), true);
+  assert.equal(sampleTriggered(rangeTrigger, { value: 0.7, qualityCode: 'GOOD' }), false);
+});
+const rangeRecovery = { condition: { type: 'range', recoveryLow: 0.65, recoveryHigh: 0.75, unit: 'MPa' } };
+test('sampleRecovered：区间恢复带内恢复、带外保持', () => {
+  assert.equal(sampleRecovered(rangeRecovery, { value: 0.7, qualityCode: 'GOOD' }), true);
+  assert.equal(sampleRecovered(rangeRecovery, { value: 0.62, qualityCode: 'GOOD' }), false);
+  assert.equal(sampleRecovered(rangeRecovery, { value: 0.7, qualityCode: 'BAD' }), false);
+});
+test('formToRule：区间规则按独立回差固化恢复带', () => {
+  const form = switchRuleFormType(createEmptyRuleForm(), 'threshold');
+  form.name = '区间固化测试';
+  form.target = { deviceId: 'DEV-006', sourceId: 'iot-main-006', metricCode: 'M.air_pressure' };
+  form.triggerConfig = { type: 'threshold', mode: 'rangeOut', low: 0.6, high: 0.8, unit: 'MPa', durationSec: 30 };
+  form.recoveryConfig.condition = { type: 'range', lowDeadband: 0.05, highDeadband: 0.05, unit: 'MPa' };
+  form.notificationConfig = { policyCode: 'NP-GENERAL', channels: ['站内'], receivers: ['李明'] };
+  const rule = formToRule(form, { code: 'R-RANGE-1' });
+  assert.equal(rule.recoveryConfig.condition.recoveryLow, 0.65);
+  assert.equal(rule.recoveryConfig.condition.recoveryHigh, 0.75);
+  const res = validateRuleDraft(rule, ctx(baseState));
+  assert.deepEqual(res.errors, [], res.errors.join(';'));
+});
+test('validateRuleDraft：区间上下限反转被阻断', () => {
+  const form = switchRuleFormType(createEmptyRuleForm(), 'threshold');
+  form.name = '区间反转测试';
+  form.target = { deviceId: 'DEV-006', sourceId: 'iot-main-006', metricCode: 'M.air_pressure' };
+  form.triggerConfig = { type: 'threshold', mode: 'rangeOut', low: 0.8, high: 0.6, unit: 'MPa', durationSec: 30 };
+  form.recoveryConfig.condition = { type: 'range', recoveryLow: 0.65, recoveryHigh: 0.75, unit: 'MPa' };
+  form.notificationConfig = { policyCode: 'NP-GENERAL', channels: ['站内'], receivers: ['李明'] };
+  const res = validateRuleDraft(formToRule(form, { code: 'R-RANGE-2' }), ctx(baseState));
+  assert.ok(res.errors.some((e) => e.includes('下限必须小于上限')));
+});
+
+// ---------- P2-A：状态规则 ----------
+const stateTrigger = { type: 'state', abnormalValues: ['故障', '急停'], normalValues: ['运行', '待机'], durationSec: 0 };
+test('sampleTriggered：状态枚举命中触发、正常态不触发', () => {
+  assert.equal(sampleTriggered(stateTrigger, { value: '故障', qualityCode: 'GOOD' }), true);
+  assert.equal(sampleTriggered(stateTrigger, { value: '运行', qualityCode: 'GOOD' }), false);
+});
+test('sampleRecovered：状态回到正常枚举恢复', () => {
+  const rc = { condition: { type: 'state', normalValues: ['运行', '待机'] } };
+  assert.equal(sampleRecovered(rc, { value: '运行', qualityCode: 'GOOD' }), true);
+  assert.equal(sampleRecovered(rc, { value: '故障', qualityCode: 'GOOD' }), false);
+});
+test('validateRuleDraft：状态枚举为空 / 重叠被阻断', () => {
+  const form = switchRuleFormType(createEmptyRuleForm(), 'state');
+  form.name = '状态测试';
+  form.target = { deviceId: 'DEV-001', sourceId: 'iot-main-001', metricCode: 'S.machine_state' };
+  form.triggerConfig = { type: 'state', abnormalValues: ['故障', '运行'], normalValues: ['运行', '待机'], durationSec: 0 };
+  form.notificationConfig = { policyCode: 'NP-URGENT', channels: ['站内'], receivers: ['李明'] };
+  const res = validateRuleDraft(formToRule(form, { code: 'R-STATE-T1' }), ctx(baseState));
+  assert.ok(res.errors.some((e) => e.includes('重叠')));
+  const form2 = switchRuleFormType(createEmptyRuleForm(), 'state');
+  form2.name = '状态空枚举测试';
+  form2.target = form.target;
+  form2.triggerConfig = { type: 'state', abnormalValues: [], normalValues: [], durationSec: 0 };
+  form2.notificationConfig = form.notificationConfig;
+  const res2 = validateRuleDraft(formToRule(form2, { code: 'R-STATE-T2' }), ctx(baseState));
+  assert.ok(res2.errors.some((e) => e.includes('异常状态枚举')));
+});
+test('validateRuleDraft：状态规则用于数值指标被阻断', () => {
+  const form = switchRuleFormType(createEmptyRuleForm(), 'state');
+  form.name = '状态类型不匹配';
+  form.target = { deviceId: 'DEV-001', sourceId: 'iot-main-001', metricCode: 'M.spindle_temp' };
+  form.triggerConfig = { type: 'state', abnormalValues: ['故障'], normalValues: ['运行'], durationSec: 0 };
+  form.notificationConfig = { policyCode: 'NP-URGENT', channels: ['站内'], receivers: ['李明'] };
+  const res = validateRuleDraft(formToRule(form, { code: 'R-STATE-T3' }), ctx(baseState));
+  assert.ok(res.errors.some((e) => e.includes('状态类')));
+});
+
+// ---------- P2-A：质量规则 ----------
+test('qualityTriggerHit：中断 / 延迟 / 无效率模式', () => {
+  assert.equal(qualityTriggerHit({ type: 'quality', mode: 'outage' }, { status: '数据中断' }), true);
+  assert.equal(qualityTriggerHit({ type: 'quality', mode: 'outage' }, { status: '正常' }), false);
+  assert.equal(qualityTriggerHit({ type: 'quality', mode: 'delay', delaySec: 30 }, { status: '延迟', latencySec: 32 }), true);
+  assert.equal(qualityTriggerHit({ type: 'quality', mode: 'delay', delaySec: 30 }, { status: '延迟', latencySec: 5 }), false);
+  assert.equal(qualityTriggerHit({ type: 'quality', mode: 'invalidRate', invalidRatePercent: 5 }, { status: '正常', qualityRate: '94.00%' }), true);
+});
+test('validateRuleDraft：质量规则缺模式参数被阻断', () => {
+  const form = switchRuleFormType(createEmptyRuleForm(), 'quality');
+  form.name = '质量参数缺失';
+  form.target = { deviceId: 'DEV-001', sourceId: null, metricCode: null };
+  form.triggerConfig = { type: 'quality', mode: 'delay', durationMin: 5, delaySec: null };
+  form.notificationConfig = { policyCode: 'NP-GENERAL', channels: ['站内'], receivers: ['李明'] };
+  const res = validateRuleDraft(formToRule(form, { code: 'R-QUAL-T1' }), ctx(baseState));
+  assert.ok(res.errors.some((e) => e.includes('延迟')));
+});
+test('parseLegacyCondition：旧状态 / 质量规则解析为结构化触发', () => {
+  const s = parseLegacyCondition({ type: '状态', condition: '状态 = 故障 立即触发' });
+  assert.equal(s.type, 'state');
+  assert.deepEqual(s.abnormalValues, ['故障']);
+  const q = parseLegacyCondition({ type: '质量', condition: '延迟 > 30s 持续 60s' });
+  assert.equal(q.type, 'quality');
+  assert.equal(q.mode, 'delay');
+  assert.equal(q.delaySec, 30);
+});
+
+// ---------- P2-A：组合规则 ----------
+const comboCfg = {
+  type: 'combo', operator: 'AND', windowSec: 300,
+  conditions: [
+    { target: { deviceId: 'DEV-001', sourceId: 'iot-main-001', metricCode: 'M.spindle_temp' }, operator: '>', value: 80, durationSec: 60 },
+    { target: { deviceId: 'DEV-001', sourceId: 'iot-main-001', metricCode: 'M.coolant_temp' }, operator: '>', value: 42, durationSec: 60 },
+  ],
+};
+const comboSamples = (t1, t2) => ([
+  { deviceId: 'DEV-001', metricCode: 'M.spindle_temp', sample: { value: t1, qualityCode: 'GOOD' } },
+  { deviceId: 'DEV-001', metricCode: 'M.coolant_temp', sample: { value: t2, qualityCode: 'GOOD' } },
+]);
+test('comboTriggered：AND 全满足触发；缺样本返回 null', () => {
+  assert.equal(comboTriggered(comboCfg, comboSamples(90, 44)), true);
+  assert.equal(comboTriggered(comboCfg, comboSamples(90, 30)), false);
+  assert.equal(comboTriggered(comboCfg, [comboSamples(90, 44)[0]]), null);
+});
+test('comboTriggered：OR 任一满足触发', () => {
+  assert.equal(comboTriggered({ ...comboCfg, operator: 'OR' }, comboSamples(90, 30)), true);
+});
+test('comboRecovered：全部子条件退出触发态才恢复', () => {
+  assert.equal(comboRecovered(comboCfg, comboSamples(70, 30)), true);
+  assert.equal(comboRecovered(comboCfg, comboSamples(90, 30)), false);
+});
+test('validateRuleDraft：组合规则少于 2 个子条件被阻断', () => {
+  const form = switchRuleFormType(createEmptyRuleForm(), 'combo');
+  form.name = '组合条件不足';
+  form.triggerConfig = { type: 'combo', operator: 'AND', windowSec: 300, conditions: [comboCfg.conditions[0]] };
+  form.notificationConfig = { policyCode: 'NP-IMPORTANT', channels: ['站内'], receivers: ['李明'] };
+  const res = validateRuleDraft(formToRule(form, { code: 'R-COMBO-T1' }), ctx(baseState));
+  assert.ok(res.errors.some((e) => e.includes('至少需要 2 个子条件')));
+});
+
+// ---------- P2-D：历史趋势回测 ----------
+test('replayTrend：按持续时长与抑制口径真实回放', () => {
+  // 12 点逐 60s：8 个命中点（含 2 点回落打断），durationSec=0 → 每 1 点即事件
+  const trig = { type: 'threshold', mode: 'upper', threshold: 80, durationSec: 0 };
+  const r = replayTrend(trig, [90, 91, 70, 92, 93, 94, 95, 96, 97, 98, 99, 100]);
+  assert.equal(r.hits, 11);
+  assert.equal(r.events, 2, '两段连续超限各生成 1 条事件');
+  assert.equal(r.suppressed, 9, '活动事件期间的命中计为抑制');
+});
+test('replayTrend：持续时间不足不生成事件', () => {
+  const trig = { type: 'threshold', mode: 'upper', threshold: 80, durationSec: 180 };
+  const r = replayTrend(trig, [90, 91, 70, 92, 93]);
+  assert.equal(r.events, 0);
+  assert.equal(r.dataStatus, '已按当前配置回放');
+});
+test('replayTrend：无趋势数据明确标注', () => {
+  const r = replayTrend({ type: 'threshold', mode: 'upper', threshold: 80, durationSec: 0 }, []);
+  assert.equal(r.dataStatus, '无历史趋势数据');
+});
+
+// ---------- P2-A：reducer 全类型触发门禁 ----------
+test('触发门禁：状态规则样本不在异常枚举不触发；命中触发', () => {
+  let s = baseState;
+  const form = switchRuleFormType(createEmptyRuleForm(), 'state');
+  form.name = 'DEV-001 故障立即报警';
+  form.target = { deviceId: 'DEV-001', sourceId: 'iot-main-001', metricCode: 'S.machine_state' };
+  form.triggerConfig = { type: 'state', abnormalValues: ['故障'], normalValues: ['运行', '待机'], durationSec: 0 };
+  form.recoveryConfig = { mode: 'auto', closeMode: 'auto', condition: { type: 'state', normalValues: ['运行', '待机'] }, stabilize: { durationSec: 0, qualityRequired: 'GOOD', invalidDataPolicy: 'hold', rebreachPolicy: 'resetTimer' }, notifyOnRecover: true };
+  form.notificationConfig = { policyCode: 'NP-URGENT', channels: ['站内'], receivers: ['李明'] };
+  s = reducer(s, { type: 'alarm/rule/saveAndPublish', payload: { rule: formToRule(form, { code: 'R-P2-STATE' }) }, actionId: 'p2s1' });
+  assert.equal(lastOf(s).ok, true, lastOf(s).message);
+  const before = Object.keys(s.entities.alarmEventsById).length;
+  s = reducer(s, { type: 'alarm/raise', payload: { deviceId: 'DEV-001', ruleCode: 'R-P2-STATE', sample: { value: '运行', qualityCode: 'GOOD', metricCode: 'S.machine_state' } }, actionId: 'p2s2' });
+  assert.equal(lastOf(s).ok, false, '正常态不能触发');
+  s = reducer(s, { type: 'alarm/raise', payload: { deviceId: 'DEV-001', ruleCode: 'R-P2-STATE', sample: { value: '故障', qualityCode: 'GOOD', metricCode: 'S.machine_state' } }, actionId: 'p2s3' });
+  assert.equal(lastOf(s).ok, true, lastOf(s).message);
+  assert.equal(Object.keys(s.entities.alarmEventsById).length, before + 1);
+});
+test('触发门禁：质量规则按通信健康事实判定（目标一致 + 延迟阈值）', () => {
+  let s = baseState;
+  const form = switchRuleFormType(createEmptyRuleForm(), 'quality');
+  form.name = 'DEV-002 采集延迟质量报警';
+  form.target = { deviceId: 'DEV-002', sourceId: null, metricCode: null };
+  form.triggerConfig = { type: 'quality', mode: 'delay', durationMin: 1, delaySec: 30 };
+  form.notificationConfig = { policyCode: 'NP-GENERAL', channels: ['站内'], receivers: ['李明'] };
+  s = reducer(s, { type: 'alarm/rule/saveAndPublish', payload: { rule: formToRule(form, { code: 'R-P2-QUAL' }) }, actionId: 'p2q1' });
+  assert.equal(lastOf(s).ok, true, lastOf(s).message);
+  // 目标一致性：规则绑定 DEV-002，不能用于 DEV-001
+  s = reducer(s, { type: 'alarm/raise', payload: { deviceId: 'DEV-001', ruleCode: 'R-P2-QUAL' }, actionId: 'p2q2' });
+  assert.equal(lastOf(s).ok, false, '目标不一致不能触发');
+  // DEV-002 延迟 32s > 30s → 触发
+  s = reducer(s, { type: 'alarm/raise', payload: { deviceId: 'DEV-002', ruleCode: 'R-P2-QUAL' }, actionId: 'p2q3' });
+  assert.equal(lastOf(s).ok, true, lastOf(s).message);
+});
+test('触发门禁：组合规则 AND 全满足触发、部分满足不触发', () => {
+  let s = baseState;
+  const form = switchRuleFormType(createEmptyRuleForm(), 'combo');
+  form.name = '主轴高温且冷却液高温组合';
+  form.target = { deviceId: 'DEV-001', sourceId: 'iot-main-001', metricCode: 'M.spindle_temp' };
+  form.triggerConfig = comboCfg;
+  form.notificationConfig = { policyCode: 'NP-IMPORTANT', channels: ['站内'], receivers: ['李明'] };
+  s = reducer(s, { type: 'alarm/rule/saveAndPublish', payload: { rule: formToRule(form, { code: 'R-P2-COMBO' }) }, actionId: 'p2c1' });
+  assert.equal(lastOf(s).ok, true, lastOf(s).message);
+  const before = Object.keys(s.entities.alarmEventsById).length;
+  s = reducer(s, { type: 'alarm/raise', payload: { deviceId: 'DEV-001', ruleCode: 'R-P2-COMBO', conditionSamples: [comboSamples(90, 30)[0]] }, actionId: 'p2c2' });
+  assert.equal(lastOf(s).ok, false, '缺少子条件样本不能触发');
+  s = reducer(s, { type: 'alarm/raise', payload: { deviceId: 'DEV-001', ruleCode: 'R-P2-COMBO', conditionSamples: comboSamples(90, 30) }, actionId: 'p2c3' });
+  assert.equal(lastOf(s).ok, false, 'AND 部分满足不触发');
+  s = reducer(s, { type: 'alarm/raise', payload: { deviceId: 'DEV-001', ruleCode: 'R-P2-COMBO', conditionSamples: comboSamples(90, 44) }, actionId: 'p2c4' });
+  assert.equal(lastOf(s).ok, true, lastOf(s).message);
+  assert.equal(Object.keys(s.entities.alarmEventsById).length, before + 1);
+});
+
+// ---------- P2-C：批量发布 ----------
+const publishableBatch = () => {
+  let s = baseState;
+  const req = batchRequest(['DEV-004']);
+  req.targets = req.targets.slice(0, 1);
+  s = reducer(s, { type: 'alarm/rule/batchCommit', payload: { request: req, batchId: 'BATCH-P2P', clientRequestId: 'crq-p2p', batchName: '批量发布测试' }, actionId: 'g1' });
+  return { s, batchId: 'BATCH-P2P' };
+};
+test('batchPublish：批次内草稿逐条发布，各自独立版本快照', () => {
+  let { s, batchId } = publishableBatch();
+  s = reducer(s, { type: 'alarm/rule/batchPublish', payload: { batchId }, actionId: 'g2' });
+  const res = lastOf(s);
+  assert.equal(res.ok, true, res.message);
+  assert.equal(res.refs.published, 1);
+  const batch = s.entities.alarmBatchesById[batchId];
+  assert.equal(batch.status, '已发布');
+  const rule = Object.values(s.entities.alarmRulesById).find((r) => r.batchId === batchId);
+  assert.equal(rule.status, '已发布');
+  assert.equal(rule.version, 'V1');
+  assert.ok(s.entities.alarmRuleVersionsById[`${rule.code}|V1`].triggerSnapshot);
+  // 幂等：重复发布忽略
+  s = reducer(s, { type: 'alarm/rule/batchPublish', payload: { batchId }, actionId: 'g3' });
+  assert.equal(lastOf(s).idempotent, true);
+});
+test('batchPublish：校验失败条目不发布，部分成功保留原因', () => {
+  let s = baseState;
+  // 真实路径建批次（1 条合法草稿），再追加 1 条不合法草稿挂到同批次（阈值超量程）
+  const req = batchRequest(['DEV-004']);
+  req.targets = req.targets.slice(0, 1);
+  s = reducer(s, { type: 'alarm/rule/batchCommit', payload: { request: req, batchId: 'BATCH-MIX', clientRequestId: 'crq-mix', batchName: '部分成功测试' }, actionId: 'g4' });
+  assert.equal(lastOf(s).refs.created, 1);
+  const badRule = withCode(validForm(), 'R-P2-BAD');
+  badRule.triggerConfig = { ...badRule.triggerConfig, threshold: 999 };
+  badRule.batchId = 'BATCH-MIX';
+  s = reducer(s, { type: 'alarm/rule/saveDraft', payload: { rule: badRule }, actionId: 'g5' });
+  s = reducer(s, { type: 'alarm/rule/batchPublish', payload: { batchId: 'BATCH-MIX' }, actionId: 'g6' });
+  const res = lastOf(s);
+  assert.equal(res.ok, true, '部分成功仍返回成功');
+  assert.equal(res.refs.published, 1);
+  assert.equal(res.refs.failed, 1);
+  const batch = s.entities.alarmBatchesById['BATCH-MIX'];
+  assert.equal(batch.status, '部分发布');
+  assert.equal(batch.publishResult.failures[0].ruleCode, 'R-P2-BAD');
+});
+
+// ---------- P2-C：模板持久化 ----------
+test('template/save + delete：模板实体真实落库与删除', () => {
+  let s = baseState;
+  const tpl = {
+    name: 'P2 测试模板',
+    metricType: '温度类',
+    applicableMetricCodes: ['M.bearing_temp'],
+    status: '启用',
+    triggerConfig: { type: 'threshold', mode: 'upper', threshold: 90, unit: '℃', durationSec: 60 },
+    recoveryConfig: { mode: 'auto', closeMode: 'auto', condition: { type: 'hysteresis', direction: 'upper', thresholdMode: 'deadband', deadband: 5, unit: '℃' }, stabilize: { durationSec: 30, qualityRequired: 'GOOD', invalidDataPolicy: 'hold', rebreachPolicy: 'resetTimer' }, notifyOnRecover: true },
+    notificationConfig: { policyCode: 'NP-IMPORTANT', channels: ['站内'], receivers: ['李明'] },
+  };
+  s = reducer(s, { type: 'alarm/template/save', payload: { template: tpl }, actionId: 'h1' });
+  const res = lastOf(s);
+  assert.equal(res.ok, true, res.message);
+  const id = res.refs.templateId;
+  assert.ok(s.entities.ruleTemplatesById[id], '模板已入库');
+  // 应用模板 → 批量生成草稿并回填 templateId
+  const targets = resolveRuleTargets(s).filter((t) => t.deviceId === 'DEV-004' && t.metricCode === 'M.bearing_temp');
+  s = reducer(s, {
+    type: 'alarm/rule/batchCommit',
+    payload: {
+      request: { metricCode: 'M.bearing_temp', triggerConfig: tpl.triggerConfig, recoveryConfig: tpl.recoveryConfig, notificationConfig: tpl.notificationConfig, templateId: id, targets },
+      batchId: 'BATCH-TPL', clientRequestId: 'crq-tpl', batchName: '模板应用测试',
+    },
+    actionId: 'h2',
+  });
+  const batch = s.entities.alarmBatchesById['BATCH-TPL'];
+  assert.equal(batch.result.created, 1);
+  const draft = Object.values(s.entities.alarmRulesById).find((r) => r.batchId === 'BATCH-TPL');
+  assert.equal(draft.templateId, id, '草稿回填模板引用');
+  // 删除模板不影响已发布规则与草稿
+  s = reducer(s, { type: 'alarm/template/delete', payload: { templateId: id }, actionId: 'h3' });
+  assert.equal(lastOf(s).ok, true);
+  assert.equal(s.entities.ruleTemplatesById[id], undefined);
+  assert.ok(s.entities.alarmRulesById[draft.code], '已生成草稿不受模板删除影响');
+});
+
+// ---------- P2-D：版本回滚 ----------
+test('rollback：按历史快照内容发布为新版本，历史快照不变', () => {
+  let s = baseState;
+  const r1 = withCode(validForm(), 'R-P2-RB');
+  r1.triggerConfig = { ...r1.triggerConfig, threshold: 90 };
+  s = reducer(s, { type: 'alarm/rule/saveAndPublish', payload: { rule: r1 }, actionId: 'k1' });
+  const r2 = withCode(validForm(), 'R-P2-RB');
+  r2.triggerConfig = { ...r2.triggerConfig, threshold: 100 };
+  s = reducer(s, { type: 'alarm/rule/saveAndPublish', payload: { rule: r2 }, actionId: 'k2' });
+  assert.equal(s.entities.alarmRulesById['R-P2-RB'].version, 'V2');
+  const snapV1 = s.entities.alarmRuleVersionsById['R-P2-RB|V1'];
+  s = reducer(s, { type: 'alarm/rule/rollback', payload: { ruleCode: 'R-P2-RB', version: 'V1' }, actionId: 'k3' });
+  const res = lastOf(s);
+  assert.equal(res.ok, true, res.message);
+  const rule = s.entities.alarmRulesById['R-P2-RB'];
+  assert.equal(rule.version, 'V3', '回滚 = 发布新版本 V3');
+  assert.equal(rule.triggerConfig.threshold, 90, '内容回到 V1 快照');
+  assert.equal(s.entities.alarmRuleVersionsById['R-P2-RB|V1'].triggerSnapshot.threshold, 90, 'V1 快照不变');
+  assert.equal(s.entities.alarmRuleVersionsById['R-P2-RB|V2'].triggerSnapshot.threshold, 100, 'V2 快照不变');
+  assert.ok(s.entities.alarmRuleVersionsById['R-P2-RB|V3'], 'V3 快照已写入');
+});
+test('rollback：旧结构快照（无结构化触发配置）明确不可回滚', () => {
+  let s = baseState;
+  s = reducer(s, { type: 'alarm/rule/rollback', payload: { ruleCode: 'R-TEMP-001', version: 'V2' }, actionId: 'k4' });
+  assert.equal(lastOf(s).ok, false);
+  assert.ok(lastOf(s).message.includes('不支持') || lastOf(s).message.includes('快照'));
+});
+test('rollback：当前版本无需回滚被拦截', () => {
+  let s = baseState;
+  s = reducer(s, { type: 'alarm/rule/rollback', payload: { ruleCode: 'R-TEMP-001', version: 'V3' }, actionId: 'k5' });
+  assert.equal(lastOf(s).ok, false);
 });
 
 console.log(`\n${passed} 项契约测试通过${process.exitCode ? '（存在失败）' : ''}`);

@@ -379,6 +379,35 @@ export function createDemoActions(state, dispatch) {
       }, `batch-commit:${clientRequestId}`);
       return res;
     },
+    // 批量发布（P2）：批次内草稿逐条发布（独立校验与版本快照，部分成功）
+    publishBatch(batchId) {
+      const batch = (E.alarmBatchesById || {})[batchId];
+      if (!batch) return fail('批次不存在');
+      if (batch.status === '已发布') return { ok: true, idempotent: true, message: `批次 ${batchId} 已发布，重复请求忽略`, refs: { batchId } };
+      const draftCount = Object.values(E.alarmRulesById || {}).filter((r) => r.batchId === batchId && r.status === '草稿').length;
+      if (draftCount === 0) return fail('批次内没有可发布的草稿规则');
+      return act('alarm/rule/batchPublish', { batchId }, `batch-publish:${batchId}:${draftCount}`);
+    },
+    // 版本回滚（P2）：按历史快照内容发布为新版本，历史快照不变
+    rollbackRule(ruleCode, version) {
+      const rule = E.alarmRulesById[ruleCode];
+      if (!rule) return fail('规则不存在');
+      const snap = E.alarmRuleVersionsById[`${ruleCode}|${version}`];
+      if (!snap) return fail('版本快照不存在');
+      if (!snap.triggerSnapshot) return fail(`版本 ${version} 为旧结构快照，不支持一键回滚`);
+      if (rule.publishedVersion === version) return fail(`当前发布版本即为 ${version}，无需回滚`);
+      return act('alarm/rule/rollback', { ruleCode, version }, `rollback:${ruleCode}:${version}:${(rule.publishedVersion || '') + 1}`);
+    },
+    // 模板持久化（P2）：存为模板真实落库；应用模板只生成草稿
+    saveRuleTemplate(template) {
+      if (!(template.name || '').trim()) return fail('模板名称必填');
+      if (!template.triggerConfig) return fail('模板缺少触发配置');
+      return act('alarm/template/save', { template });
+    },
+    deleteRuleTemplate(templateId) {
+      if (!(E.ruleTemplatesById || {})[templateId]) return fail('模板不存在');
+      return act('alarm/template/delete', { templateId });
+    },
 
     // ---------- 维修 ----------
     createRepairReport(payload) {

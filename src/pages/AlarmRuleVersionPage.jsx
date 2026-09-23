@@ -5,11 +5,11 @@
 // ============================================================
 
 import React, { useMemo, useState } from 'react';
-import { App, Button, Card, Empty, Modal, Space, Table, Tag } from 'antd';
-import { Download, GitCompare } from 'lucide-react';
+import { App, Button, Card, Empty, Modal, Space, Table, Tag, Tooltip } from 'antd';
+import { Download, GitCompare, Undo2 } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import EmptyState from '../components/EmptyState.jsx';
-import { useDemoState } from '../state/DemoStore.jsx';
+import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 
 // 参与比对的版本字段（均为快照只读字段）
 const DIFF_FIELDS = [
@@ -23,8 +23,9 @@ const DIFF_FIELDS = [
 ];
 
 export default function AlarmRuleVersionPage() {
-  const { message } = App.useApp();
+  const { message, modal } = App.useApp();
   const state = useDemoState();
+  const actions = useDemoActions();
   const [compareCode, setCompareCode] = useState(null); // 比对的规则 code
 
   const rows = useMemo(() => Object.values(state.entities.alarmRuleVersionsById)
@@ -62,19 +63,39 @@ export default function AlarmRuleVersionPage() {
     { title: '通知策略快照', dataIndex: 'notify', width: 180, render: v => v || '--' },
     { title: '关联事件', dataIndex: 'events', width: 90, render: v => v ?? '--', sorter: (a, b) => (a.events || 0) - (b.events || 0) },
     { title: '状态', dataIndex: 'status', width: 90, render: v => <Tag color={v === '已归档' ? 'default' : 'success'}>{v || '--'}</Tag> },
-    { title: '操作', fixed: 'right', width: 110, render: (_, r) => (
-      <div className="list-actions">
-        <a onClick={() => setCompareCode(r.code)}>查看</a>
-        <a onClick={() => setCompareCode(r.code)}>比对</a>
-      </div>
-    ) },
+    { title: '操作', fixed: 'right', width: 150, render: (_, r) => {
+      const rule = state.entities.alarmRulesById[r.code];
+      const isCurrent = rule?.publishedVersion === r.version;
+      const rollbackable = !!r.triggerSnapshot && !isCurrent && ['草稿', '已发布', '已停用'].includes(rule?.status || '');
+      return (
+        <div className="list-actions">
+          <a onClick={() => setCompareCode(r.code)}>比对</a>
+          {rollbackable
+            ? <a onClick={() => confirmRollback(r)}>回滚</a>
+            : <Tooltip title={isCurrent ? '当前发布版本无需回滚' : !r.triggerSnapshot ? '旧结构快照（无结构化触发配置），不支持一键回滚' : '规则当前状态不支持回滚'}>
+                <span style={{ color: '#c3ccd4' }}>回滚</span>
+              </Tooltip>}
+        </div>
+      );
+    } },
   ];
+
+  // 版本回滚（P2）：按历史快照内容发布为新版本（Vn+1），历史快照不可变、留痕可追溯
+  const confirmRollback = (r) => modal.confirm({
+    title: '回滚到历史版本',
+    content: `将按 ${r.code} ${r.version} 快照内容（触发 / 恢复 / 通知 / 治理配置）生成新版本发布；历史快照不变，全部留痕。确认回滚？`,
+    okText: '回滚并发布', cancelText: '取消',
+    onOk: () => {
+      const res = actions.rollbackRule(r.code, r.version);
+      message[res.ok ? 'success' : 'error'](res.message);
+    },
+  });
 
   return (
     <>
       <PageHeader
         title="报警规则版本"
-        subtitle="版本快照只读 · 不可修改 · 活动报警使用触发时版本快照 · 比对为只读展示"
+        subtitle="版本快照只读 · 不可修改 · 活动报警使用触发时版本快照 · 比对为只读展示 · 回滚 = 按历史快照内容发布为新版本（历史留痕）"
       />
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>

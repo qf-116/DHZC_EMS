@@ -9,6 +9,7 @@ import { metrics, metricsByKey } from './metrics.js';
 import { bindingsByDeviceId, bindingVersions, sourceDevices } from './bindings.js';
 import { samples, trends, health, ingestionTasks, DEMO_TIME, DEMO_LAST_SAMPLE_AT } from './samples.js';
 import { alarmRules, alarmRuleVersions, alarmEvents, notificationDeliveries, notificationPolicies } from './alarms.js';
+import { normalizeLegacyRule } from '../../domain/alarmRule.js';
 import { repairReports, repairOrders, repairAcceptances } from './repairs.js';
 import { warehouses, spares, stock, inbounds, outbounds, returns, stockFlows } from './spares.js';
 import { downtimeFacts } from './downtime.js';
@@ -16,7 +17,7 @@ import { materialPool, speedConfigs, oeeTargets, shiftCalendar, oeeInputs, oeeEl
 import { programCompare, programBaselines, programHandles } from './programCompare.js';
 import { lifecycleTasks, assetChangeRecords, idleApplications, scrapApplications } from './lifecycle.js';
 
-export const STORE_VERSION = 8; // 快照结构版本：补齐已完结生命周期任务（设备履历数据 + 入账来源关联）
+export const STORE_VERSION = 9; // 快照结构版本：报警规则结构化契约（M0）—— triggerConfig/recoveryConfig/publishedVersion + alarmBatchesById
 
 export const DEMO_META = {
   mode: 'demo',
@@ -47,7 +48,7 @@ export function createDemoState() {
       trends,
       healthByDeviceId: { ...health },
       ingestionTasksById: Object.fromEntries(ingestionTasks.map(t => [t.taskId, t])),
-      alarmRulesById: Object.fromEntries(alarmRules.map(r => [r.code, r])),
+      alarmRulesById: Object.fromEntries(alarmRules.map(r => [r.code, normalizeLegacyRule(r)])),
       alarmRuleVersionsById: Object.fromEntries(alarmRuleVersions.map((v, i) => [`${v.code}|${v.version}`, v])),
       alarmEventsById: Object.fromEntries(alarmEvents.map(a => [a.id, a])),
       notificationDeliveriesById: Object.fromEntries(notificationDeliveries.map(n => [n.id, n])),
@@ -81,6 +82,7 @@ export function createDemoState() {
       assetChangeRecordsById: Object.fromEntries(assetChangeRecords.map(r => [r.changeId, r])),
       idleApplicationsById: Object.fromEntries(idleApplications.map(r => [r.idleId, r])),
       scrapApplicationsById: Object.fromEntries(scrapApplications.map(r => [r.scrapId, r])),
+      alarmBatchesById: {},      // 批量创建批次（M3-M4：逐目标结果 + clientRequestId 幂等）
     },
     ui: {
       filtersByRoute: {},

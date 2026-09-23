@@ -17,7 +17,8 @@ export function createDemoActions(state, dispatch) {
   const actor = state.meta.actorContext || { userId: 'demo-user', userName: '管理员', source: 'host-context' };
 
   const act = (type, payload, idempotencyKey) => {
-    dispatch({ type, payload, actorContext: actor, actionId: nextActionId(), idempotencyKey, at: undefined });
+    // Action 结果契约：返回 reducer 的真实结果 { ok, message, refs }（meta.lastAction）
+    return dispatch({ type, payload, actorContext: actor, actionId: nextActionId(), idempotencyKey, at: undefined });
   };
   const fail = (message) => ({ ok: false, message, refs: {} });
 
@@ -295,27 +296,88 @@ export function createDemoActions(state, dispatch) {
       return { ok: true, message: `已关闭 ${alarm.id}`, refs: { alarmId } };
     },
 
+    // 规则动作（M0 Action 结果契约）：act 返回 dispatch 的真实结果（meta.lastAction），
+    // 页面据此提示成功/失败；保存、发布、批量提交统一此方式。
     saveRuleDraft(rule) {
       const code = (rule.code || '').trim();
       const name = (rule.name || '').trim();
       if (!code) return fail('规则编号必填');
       if (!name) return fail('规则名称必填');
-      act('alarm/rule/saveDraft', { rule: { ...rule, code, name } });
-      return { ok: true, message: `规则 ${code} 草稿已保存`, refs: { ruleCode: code } };
+      return act('alarm/rule/saveDraft', { rule: { ...rule, code, name } });
+    },
+    saveAndPublishRule(rule) {
+      const code = (rule.code || '').trim();
+      const name = (rule.name || '').trim();
+      if (!code) return fail('规则编号必填');
+      if (!name) return fail('规则名称必填');
+      return act('alarm/rule/saveAndPublish', { rule: { ...rule, code, name } });
     },
     publishRule(ruleCode) {
       const rule = E.alarmRulesById[ruleCode];
       if (!rule) return fail('规则不存在');
-      if (rule.status !== '草稿') return fail(`当前状态「${rule.status}」，只有草稿可发布`);
-      act('alarm/rule/publish', { ruleCode });
-      return { ok: true, message: `规则 ${ruleCode} 已发布`, refs: { ruleCode } };
+      if (rule.status !== '草稿' && !rule.draftConfig) return fail(`当前状态「${rule.status}」，只有草稿或存在待发布草稿时可发布`);
+      return act('alarm/rule/publish', { ruleCode });
     },
-    disableRule(ruleCode) {
+    disableRule(ruleCode, reason = '') {
       const rule = E.alarmRulesById[ruleCode];
       if (!rule) return fail('规则不存在');
       if (rule.status !== '已发布') return fail(`当前状态「${rule.status}」，不能停用`);
-      act('alarm/rule/disable', { ruleCode }, `alarm-rule-disable:${ruleCode}`);
-      return { ok: true, message: `规则 ${ruleCode} 已停用`, refs: { ruleCode } };
+      return act('alarm/rule/disable', { ruleCode, reason }, `alarm-rule-disable:${ruleCode}`);
+    },
+
+    // ---------- 批量创建（M3-M4） ----------
+    // 预览为纯计算（不改状态）：按 canonical 目标逐条校验并分组，返回 rows/summary/groups
+    previewBatchRules(request) {
+      if (!request?.targets?.length) return fail('请先选择要批量创建的目标');
+      if (!request.triggerConfig || request.triggerConfig.threshold === null || request.triggerConfig.threshold === undefined || request.triggerConfig.threshold === '') {
+        return fail('触发阈值必填');
+      }
+      const rules = E.alarmRulesById || {};
+      const rows = request.targets.map((target) => {
+        const device = E.devicesById[target.deviceId];
+        const binding = E.bindingsByDeviceId[target.deviceId];
+        if (!device || !binding || binding.configStatus !== '已启用') {
+          return { targetKey: target.key, deviceId: target.deviceId, deviceName: target.deviceName, metricCode: target.metricCode, result: 'blocked', reason: !device ? '设备不存在' : !binding ? '设备尚未创建绑定' : `绑定状态「${binding.configStatus}」` };
+        }
+        const stillBound = (binding.items || []).some(i => i.enabled && (i.metrics || []).some(m => m.selected && m.metricCode === target.metricCode));
+        if (!stillBound) return { targetKey: target.key, deviceId: target.deviceId, deviceName: target.deviceName, metricCode: target.metricCode, result: 'blocked', reason: '指标未在当前启用绑定中' };
+        const existing = Object.values(rules).find((r) => r.type === '阈值'
+          && ['草稿', '已发布'].includes(r.status)
+          && ((r.target?.deviceId === target.deviceId && r.target?.metricCode === target.metricCode)
+            || (!r.target && r.metricCode === target.metricCode)));
+        if (existing) return { targetKey: target.key, deviceId: target.deviceId, deviceName: target.deviceName, metricCode: target.metricCode, result: 'skipped', reason: `已存在${existing.status}规则 ${existing.code}` };
+        return { targetKey: target.key, deviceId: target.deviceId, deviceName: target.deviceName, metricCode: target.metricCode, result: 'creatable', reason: '可创建' };
+      });
+      const summary = {
+        total: rows.length,
+        creatable: rows.filter((r) => r.result === 'creatable').length,
+        skipped: rows.filter((r) => r.result === 'skipped').length,
+        blocked: rows.filter((r) => r.result === 'blocked').length,
+      };
+      return {
+        ok: true,
+        message: `预览完成：可创建 ${summary.creatable}，已存在跳过 ${summary.skipped}，阻断 ${summary.blocked}`,
+        rows,
+        summary,
+        refs: { summary },
+      };
+    },
+    // 提交批量草稿：单批次、逐目标隔离；重复 clientRequestId 由 reducer 幂等登记返回原结果
+    commitBatchDraft(request) {
+      if (!request?.targets?.length) return fail('请先选择要批量创建的目标');
+      const batchId = `BATCH-${String(state.meta.demoDay || '20260916').replaceAll('-', '')}-${String(Object.keys(E.alarmBatchesById || {}).length + 1).padStart(3, '0')}`;
+      const clientRequestId = [
+        request.metricCode, request.triggerConfig?.mode, request.triggerConfig?.threshold,
+        request.triggerConfig?.durationSec, request.recoveryConfig?.condition?.deadband ?? request.recoveryConfig?.condition?.recoveryValue,
+        request.targets.map((t) => t.key).sort().join(','),
+      ].join(':');
+      const res = act('alarm/rule/batchCommit', {
+        request,
+        batchId,
+        clientRequestId,
+        batchName: request.name || `${request.metricCode} 批量创建`,
+      }, `batch-commit:${clientRequestId}`);
+      return res;
     },
 
     // ---------- 维修 ----------

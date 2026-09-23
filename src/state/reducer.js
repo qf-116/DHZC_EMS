@@ -768,7 +768,7 @@ export function reducer(state, action) {
       };
       next = setE(next, 'alarmBatchesById', batchId, batch);
       next = addHistory(next, at, 'alarm-rule', batchId, `批量生成报警规则草稿：创建 ${result.created} / 跳过 ${result.skipped} / 阻断 ${result.blocked} / 失败 ${result.failed}`, {});
-      return finish(next, action, true, `批次 ${batchId} 完成：生成草稿 ${result.created} 条，跳过 ${result.skipped}，阻断 ${result.blocked}，失败 ${result.failed}`, { batchId, ...result }, false, at);
+      return finish(next, action, true, `批次 ${batchId} 完成：生成草稿 ${result.created} 条，跳过 ${result.skipped}，阻断 ${result.blocked}，失败 ${result.failed}`, { batchId, ...result, rows }, false, at);
     }
 
     // ================= 维修 =================

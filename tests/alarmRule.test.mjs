@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import {
   normalizeMetricMeta, parseLegacyCondition, parseLegacyRecovery, normalizeLegacyRule,
   nextPublishVersion, validateRuleDraft, sampleTriggered, sampleRecovered,
-  createEmptyRuleForm, formToRule, conditionTextOf, resolveRuleTargets,
+  createEmptyRuleForm, formToRule, ruleToForm, conditionTextOf, resolveRuleTargets,
   groupBatchTargets, batchGroupKey,
 } from '../src/domain/alarmRule.js';
 import { reducer } from '../src/state/reducer.js';
@@ -352,6 +352,38 @@ test('单动作单 tick：一次用户动作 tick 只 +1', () => {
 });
 
 // ---------- 表单模型 ----------
+test('ruleToForm：结构化规则完整回填，formToRule 往返一致', () => {
+  const rule = withCode(validForm(), 'R-RT-1');
+  rule.triggerConfig = { type: 'threshold', mode: 'lower', operator: '<', threshold: 0.15, unit: 'MPa', durationSec: 30 };
+  rule.recoveryConfig = {
+    mode: 'auto', closeMode: 'auto',
+    condition: { type: 'hysteresis', direction: 'lower', thresholdMode: 'deadband', triggerValue: 0.15, recoveryValue: 0.17, deadband: 0.02, unit: 'MPa' },
+    stabilize: { durationSec: 20, qualityRequired: 'GOOD', invalidDataPolicy: 'hold', rebreachPolicy: 'resetTimer' },
+    notifyOnRecover: true,
+  };
+  rule.target = { deviceId: 'DEV-004', sourceId: 'iot-main-004', metricCode: 'M.oil_pressure' };
+  const form = ruleToForm(rule);
+  assert.equal(form.triggerConfig.mode, 'lower');
+  assert.equal(form.triggerConfig.threshold, 0.15);
+  assert.equal(form.triggerConfig.durationSec, 30);
+  assert.equal(form.target.metricCode, 'M.oil_pressure');
+  assert.equal(form.recoveryConfig.condition.deadband, 0.02);
+  assert.equal(form.recoveryConfig.stabilize.durationSec, 20);
+  const rebuilt = formToRule(form, { code: 'R-RT-1' });
+  assert.equal(rebuilt.triggerConfig.threshold, 0.15);
+  assert.equal(rebuilt.recoveryConfig.condition.recoveryValue, 0.17, 'deadband 保存时固化恢复值 0.15 + 0.02');
+  assert.equal(rebuilt.condition, '< 0.15MPa 持续 30s');
+});
+test('ruleToForm：legacy 阈值规则经 adapter 回填触发与恢复', () => {
+  const legacy = normalizeLegacyRule({
+    code: 'R-TEMP-001', type: '阈值', status: '已发布', version: 'V3',
+    condition: '> 80℃ 持续 60s', recoverCondition: '< 75℃（回差 5℃）持续 30s',
+  });
+  const form = ruleToForm(legacy);
+  assert.equal(form.triggerConfig.mode, 'upper');
+  assert.equal(form.triggerConfig.threshold, 80);
+  assert.equal(form.recoveryConfig.condition.deadband, 5);
+});
 test('formToRule：deadband 模式保存时固化恢复值并生成展示文本', () => {
   const form = createEmptyRuleForm();
   form.name = '固化测试';

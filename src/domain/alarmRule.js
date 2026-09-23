@@ -170,7 +170,8 @@ export function formToRule(form, extra = {}) {
     const t = Number(triggerConfig.threshold);
     const d = Number(recoveryConfig.condition.deadband);
     if (!Number.isNaN(t) && !Number.isNaN(d)) {
-      recoveryConfig.condition.recoveryValue = triggerConfig.mode === 'lower' ? t + d : t - d;
+      const raw = triggerConfig.mode === 'lower' ? t + d : t - d;
+      recoveryConfig.condition.recoveryValue = Math.round(raw * 1e10) / 1e10; // 消除浮点噪声（0.15+0.02）
     }
   }
   return {

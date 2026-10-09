@@ -4,9 +4,10 @@ React 19 + Vite 7 + Ant Design 6 构建的设备管理监测系统标准版演�
 
 ## 在线浏览
 
-启用 GitHub Pages 后访问：<https://qf-116.github.io/BZ_EMS/>
+启用 GitHub Pages 后访问：<https://qf-116.github.io/DHZC_EMS/>
 
 > 单文件构建（JS/CSS 全部内联），无需任何服务端，双击 `index.html` 本地打开亦可运行。
+> 工作台顶栏与左侧菜单「监测大屏」按钮在新标签页打开独立大屏页 `设备监测大屏演示.html`。
 
 ## 功能范围
 

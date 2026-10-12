@@ -231,8 +231,10 @@ export default function App() {
   // 需求细则：按当前路由取本页规则说明（/monitor-overview 复用工作台细则）
   const spec = specForPath(location.pathname === '/monitor-overview' ? '/' : location.pathname);
 
-  // 监测大屏：直接打开独立的大屏页面（public/ 下，构建后位于 dist/index.html 同级）
-  const openScreen = () => window.open('设备监测大屏演示.html', '_blank');
+  // 监测大屏：打开「装备智能运营中枢」双屏版（运营总览 / 设备监测 顶部 Tab 切换），
+  // 独立单文件页面（public/ 下，构建后位于 dist/index.html 同级）；
+  // 旧单屏 设备监测大屏演示.html 保留备用，可手动访问。
+  const openScreen = () => window.open('装备智能运营中枢大屏.html', '_blank');
 
   const handleLogin = (u) => {
     localStorage.setItem('dms-user', JSON.stringify(u));

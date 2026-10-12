@@ -1010,7 +1010,7 @@ const specs = {
     content: (
       <>
         <h4>页面目标</h4>
-        <p>param 路由 <code>/device-ledger/detail/:deviceId</code>（兼容 <code>/device-ledger/detail?deviceId=</code> query 形式）：单台设备的档案视图——资产信息、编码映射、绑定与版本历史、接入状态、业务履历，以及关联业务记录（点检 / 保养 / 巡检 / 报修与维修工单 / 报警 Tab 页）。</p>
+        <p>param 路由 <code>/device-ledger/detail/:deviceId</code>（兼容 <code>/device-ledger/detail?deviceId=</code> query 形式）：单台设备的档案视图——资产信息、编码映射、绑定与版本历史、接入状态、业务履历，以及关联业务记录（点检 / 保养 / 巡检 / 报修与维修工单 / 报警 Tab 页）。页面也提供可嵌入的大屏内容入口：隐藏平台左侧菜单与顶部标题栏，并可将默认栏目设为「状态与趋势」。</p>
         <h4>数据来源与刷新</h4>
         <ol>
           <li>档案来自 <code>selectDevice(state, deviceId)</code>；编码映射来自 <code>selectDeviceCrosswalk</code>；绑定与版本历史来自 <code>selectBinding / selectBindingVersions</code>；接入任务来自 <code>selectIngestionTasks(deviceId)</code>；通用动作履历来自 <code>selectBusinessHistory(device, deviceId)</code>。</li>
@@ -1037,6 +1037,8 @@ const specs = {
         <ol>
           <li>跳转入口：设备监测详情（/device/:deviceId）、联网配置（/device-ledger/net-config，只读）、历史 OEE 详情。</li>
           <li>状态与趋势栏目：点「配置监控曲线」勾选数值型指标（可多选），确定后形成各指标曲线趋势图进行监控。</li>
+          <li>大屏嵌入模式：在居中大弹窗中复用同一档案页面，默认「状态与趋势」，预选数值曲线；保留全部栏目，隐藏返回列表与跨模块业务跳转，关闭后保留大屏筛选、搜索和分页。使用独立只读快照，不改写标准版演示状态或借用其他设备档案；缺失信息显示 -- 或空态。</li>
+          <li>指标历史时间默认锚定传入快照的截止时间；大屏快照与标准版演示时钟分别展示，不混用日期。</li>
           <li>param 与 query 两种进入形式均解析 deviceId，解析不到时显示「未找到对象」。</li>
         </ol>
         <h4>边界与显示规则</h4>
@@ -1368,6 +1370,7 @@ const specs = {
       <>
         <h4>页面目标</h4>
         <p>管理层快速查看设备运行、报警与数据接入质量的深色大屏（独立渲染，不经后台布局）。</p>
+        <p><b>2026-10-12 调整：大屏入口已切换为「装备智能运营中枢」双屏版</b>（独立单文件页面 <code>装备智能运营中枢大屏.html</code>，后台顶栏按钮 / 菜单「监测大屏」新标签打开）——顶部 Tab 在「运营总览 / 设备监测」两个大屏间切换，支持车间 / 产线筛选、设备明细清单与设备档案弹窗；打开默认落地「运营总览」。旧单屏 <code>设备监测大屏演示.html</code> 保留备用，可手动访问，不再作为默认入口。</p>
         <h4>数据来源与刷新</h4>
         <ol>
           <li>读模型来自 <code>selectScreenViewModel(state)</code>：与后台同源 selector——取前 5 台设备（DEV-001..005）的实时状态、健康、主轴 / 冷却温度、实时 OEE 与活动报警，并汇总 running / fault / noData / activeAlarms / unacked。</li>

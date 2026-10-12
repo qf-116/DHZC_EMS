@@ -15,24 +15,31 @@ import { selectDevice360 } from '../state/selectors.js';
 import { inspectionTaskDetails, inspectionTasks, maintenanceTasks, patrolTaskDetails, patrolPlanDevices, patrolTasks } from '../data/standardData.js';
 import { reportRows } from '../data/demoData.js';
 
-const QUALITY_COLOR = { GOOD: 'success', DELAYED: 'processing', NO_VALUE: 'warning', OFFLINE: 'error', BAD: 'error' };
-const QUALITY_LABEL = { GOOD: '正常', DELAYED: '延迟', NO_VALUE: '无值', OFFLINE: '离线', BAD: '异常' };
-const hint = { fontSize: 12, color: '#5d6b78', lineHeight: 1.8 };
+const QUALITY_COLOR = { GOOD: 'success', DELAYED: 'processing', NO_VALUE: 'warning', OFFLINE: 'error', BAD: 'error', NO_DATA: 'default' };
+const QUALITY_LABEL = { GOOD: '正常', DELAYED: '延迟', NO_VALUE: '无值', OFFLINE: '离线', BAD: '异常', NO_DATA: '无数据' };
+const hint = { fontSize: 12, color: 'var(--detail-muted, #5d6b78)', lineHeight: 1.8 };
 const dash = (v) => (v === null || v === undefined || v === '' ? '--' : v);
 const emptyText = (label) => <span style={{ color: '#8a97a3' }}>该设备暂无{label}</span>;
+const NO_CURVES = [];
 
 // 设备详情（统一页面）：/device-ledger/detail/:deviceId；兼容旧 query（deviceId / monitorCode / code=资产编码）。
 // /device/:deviceId 与 /device-ledger/net-config 重定向到本页。
 // 栏目：基础信息 / 生命周期履历 / 点检 / 巡检 / 保养 / 维修 / 联网配置（全设备）；联网设备另有 实时监测 / 指标历史数据 / 状态与趋势 / 报警事件 / 生产记录。
 export default function DeviceLedgerDetailPage() {
+  const state = useDemoState();
+  return <DeviceLedgerDetailContent state={state} />;
+}
+
+// Shared content entry for the dashboard modal; no application shell or store writes.
+export function DeviceLedgerDetailContent({ state, deviceId: suppliedDeviceId, embedded = false, initialTab = 'base', initialCurves = NO_CURVES }) {
   const { deviceId: deviceIdParam } = useParams();
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
-  const state = useDemoState();
   const { message } = App.useApp();
   const meta = state.meta;
 
   const deviceId = useMemo(() => {
+    if (suppliedDeviceId) return state.entities.devicesById[suppliedDeviceId] ? suppliedDeviceId : null;
     if (deviceIdParam && state.entities.devicesById[deviceIdParam]) return deviceIdParam;
     const qDeviceId = searchParams.get('deviceId') || searchParams.get('monitorCode');
     if (qDeviceId && state.entities.devicesById[qDeviceId]) return qDeviceId;
@@ -42,35 +49,35 @@ export default function DeviceLedgerDetailPage() {
       if (hit) return hit.deviceId;
     }
     return null;
-  }, [deviceIdParam, searchParams, state]);
+  }, [suppliedDeviceId, deviceIdParam, searchParams, state]);
 
   const d360 = useMemo(() => (deviceId ? selectDevice360(state, deviceId) : null), [state, deviceId]);
 
   const [trendKey, setTrendKey] = useState(null);
-  const [activeTab, setActiveTab] = useState(searchParams.get('tab') || null);
+  const [activeTab, setActiveTab] = useState(embedded ? initialTab : searchParams.get('tab') || initialTab);
   // 自定义监控曲线：本页 UI 偏好（不入 store / 不入绑定），换设备时清空
-  const [monitorCurves, setMonitorCurves] = useState([]);   // 已选数值指标 metricCode 列表
+  const [monitorCurves, setMonitorCurves] = useState(initialCurves);   // 已选数值指标 metricCode 列表
   const [curveModalOpen, setCurveModalOpen] = useState(false);
   const [curveDraft, setCurveDraft] = useState([]);         // 弹窗内的临时勾选
 
-  useEffect(() => { setMonitorCurves([]); setCurveDraft([]); setCurveModalOpen(false); }, [deviceId]);
+  useEffect(() => { setMonitorCurves(initialCurves); setCurveDraft([]); setCurveModalOpen(false); }, [deviceId, initialCurves]);
   useEffect(() => { if (curveModalOpen) setCurveDraft(monitorCurves); }, [curveModalOpen]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!d360) {
-    const shown = deviceIdParam || searchParams.get('deviceId') || searchParams.get('code') || '未提供设备编号';
+    const shown = suppliedDeviceId || deviceIdParam || searchParams.get('deviceId') || searchParams.get('code') || '未提供设备编号';
     return (
       <>
-        <PageHeader
+        {!embedded && <PageHeader
           title="设备详情"
           subtitle={`未找到设备：${shown}`}
           actions={<Button icon={<ArrowLeft size={14} />} onClick={() => navigate('/device-ledger')}>返回列表</Button>}
-        />
+        />}
         <Card size="small">
           <EmptyState
             description="未找到对象：该设备编号在设备台账中不存在"
             reason="设备可能已被移除，或链接中的设备编号有误"
-            next="返回设备台账"
-            onNext={() => navigate('/device-ledger')}
+            onNext={embedded ? undefined : () => navigate('/device-ledger')}
+            next={embedded ? undefined : '返回设备台账'}
             nextLabel="返回设备台账"
           />
         </Card>
@@ -155,6 +162,10 @@ export default function DeviceLedgerDetailPage() {
       return +(value * (1 + wave + drift)).toFixed(3);
     });
   };
+  const chartPoint = (value, index, count) => {
+    const times = state.entities.trendTimes?.[device.deviceId];
+    return { i: embedded && times?.length === count ? times[index] : `t${index + 1}`, v: value };
+  };
 
   const metricColumns = [
     { title: '指标编码', dataIndex: 'metricCode', width: 160 },
@@ -194,7 +205,7 @@ export default function DeviceLedgerDetailPage() {
             <Descriptions.Item label="入账来源">
               {lifecycleTaskForDevice ? (
                 <Space size={6}>
-                  <a onClick={() => navigate('/lifecycle/tasks')}>{lifecycleTaskForDevice.taskNo}</a>
+                  {embedded ? <span>{lifecycleTaskForDevice.taskNo}</span> : <a onClick={() => navigate('/lifecycle/tasks')}>{lifecycleTaskForDevice.taskNo}</a>}
                   <Tag color={lifecycleTaskForDevice.sourceType === 'MANUAL' ? 'default' : 'processing'}>
                     {lifecycleTaskForDevice.sourceType === 'MANUAL' ? '手工新增' : '采购系统同步'}
                   </Tag>
@@ -216,13 +227,13 @@ export default function DeviceLedgerDetailPage() {
         <Card size="small" style={{ marginBottom: 12 }} title="OEE 资格">
           <Descriptions size="small" bordered column={3} labelStyle={{ width: 120 }}>
             <Descriptions.Item label="是否纳入 OEE 分析">
-              <Tag color={device.oeeEligible ? 'success' : 'default'}>{device.oeeEligible ? '是' : '否'}</Tag>
+              <Tag color={device.oeeEligible ? 'success' : 'default'}>{device.oeeEligible == null ? '--' : device.oeeEligible ? '是' : '否'}</Tag>
             </Descriptions.Item>
             <Descriptions.Item label="绑定前提">
               {binding?.configStatus === '已启用' ? <Tag color="success">绑定已启用</Tag> : <Tag color="default">绑定未启用</Tag>}
             </Descriptions.Item>
             <Descriptions.Item label="OEE 统计">
-              <Tag color={device.oeeEligible ? 'success' : 'default'}>{device.oeeEligible ? '是' : '否'}</Tag>
+              <Tag color={device.oeeEligible ? 'success' : 'default'}>{device.oeeEligible == null ? '--' : device.oeeEligible ? '是' : '否'}</Tag>
             </Descriptions.Item>
           </Descriptions>
           <div style={hint}>纳入 OEE 分析的设备需绑定已启用并在 OEE 效率分析中维护理想速度与计划停机口径。</div>
@@ -239,7 +250,7 @@ export default function DeviceLedgerDetailPage() {
             </div>
           </div>
           <div style={{ marginTop: 12 }}>
-            <Button icon={<Printer size={14} />} onClick={() => message.info('已打印（38*68 mm 标签）')}>打印二维码</Button>
+            {!embedded && <Button icon={<Printer size={14} />} onClick={() => message.info('已打印（38*68 mm 标签）')}>打印二维码</Button>}
           </div>
         </Card>
       </>
@@ -354,7 +365,7 @@ export default function DeviceLedgerDetailPage() {
           columns={[
             {
               title: '工单号', dataIndex: 'repairOrderId', width: 150,
-              render: (v, r) => <a onClick={() => navigate(`/repair-orders/${r.repairOrderId}`)}>{v}</a>,
+              render: (v, r) => embedded ? v : <a onClick={() => navigate(`/repair-orders/${r.repairOrderId}`)}>{v}</a>,
             },
             { title: '工单标题', dataIndex: 'title' },
             { title: '故障类型', dataIndex: 'faultType', width: 90, render: dash },
@@ -425,9 +436,9 @@ export default function DeviceLedgerDetailPage() {
             <div style={hint}>
               来源设备编码全局唯一（排他校验由绑定保存流程执行）；绑定关系与指标选择变更请前往「绑定总览」。
             </div>
-            <div style={{ marginTop: 12 }}>
+            {!embedded && <div style={{ marginTop: 12 }}>
               <Button onClick={() => navigate('/binding-overview')}>前往绑定总览</Button>
-            </div>
+            </div>}
           </Card>
         </>
       ) : (
@@ -435,7 +446,7 @@ export default function DeviceLedgerDetailPage() {
           <EmptyState
             description="该设备尚未创建 IoT 绑定，未接入运行监测"
             reason="未绑定设备不参与运行监测、报警判定与 OEE 统计"
-            next="前往绑定总览创建首个绑定"
+            next={embedded ? undefined : '前往绑定总览创建首个绑定'}
             onNext={() => navigate('/binding-overview')}
             nextLabel="前往绑定总览"
           />
@@ -467,7 +478,7 @@ export default function DeviceLedgerDetailPage() {
               size="small" pagination={false}
               dataSource={realtime.metrics}
               columns={metricColumns}
-              locale={{ emptyText: <EmptyState description="该设备未配置启用的监测指标" reason="绑定指标未启用，可在绑定总览中调整" next="前往绑定总览" onNext={() => navigate('/binding-overview')} /> }}
+              locale={{ emptyText: <EmptyState description="该设备未配置启用的监测指标" reason="绑定指标未启用，可在绑定总览中调整" next={embedded ? undefined : '前往绑定总览'} onNext={() => navigate('/binding-overview')} /> }}
             />
             {realtime.healthStatus === '数据中断' && (
               <div style={hint}>
@@ -480,14 +491,25 @@ export default function DeviceLedgerDetailPage() {
     });
     tabItems.push({
       key: 'metric-history', label: '指标历史数据', children: (
-        <MetricHistoryPanel device={device} realtime={realtime} metricsByKey={state.entities.metricsByKey} />
+        <MetricHistoryPanel device={device} realtime={realtime} metricsByKey={state.entities.metricsByKey} referenceTime={meta.updatedAt} />
       ),
     });
     tabItems.push({
       key: 'trend', label: '状态与趋势', children: (
         <>
+          {embedded && (
+            <dl className="device-ledger-summary">
+              <div><dt>运行状态</dt><dd>{realtime.runStatus || '--'}</dd></div>
+              <div><dt>今日稼动率</dt><dd>{device.dashboardUtilization == null ? '--' : `${device.dashboardUtilization}%`}</dd></div>
+              {['S.lubricant_state', 'S.coolant_state', 'S.program_compare'].map(metricCode => {
+                const metric = realtime.metrics.find(row => row.metricCode === metricCode);
+                return metric && <div key={metricCode}><dt>{metric.name}</dt><dd data-status={metric.value}>{metric.value ?? '--'}</dd></div>;
+              })}
+            </dl>
+          )}
           {(numericMetricOptions.length > 0 || monitorCurves.length > 0) && (
             <Card
+              className={embedded ? 'device-ledger-monitor' : undefined}
               size="small" style={{ marginBottom: 12 }}
               title={`监控曲线（${monitorCurves.length ? `已配置 ${monitorCurves.length} 项` : '未配置'}）`}
               extra={(
@@ -501,30 +523,30 @@ export default function DeviceLedgerDetailPage() {
                   尚未配置：点击「配置监控曲线」，勾选该设备已绑定来源中类型为「数值」的指标，选择后在此形成曲线趋势图进行监控。
                 </span>
               ) : (
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
+                <div className={embedded ? 'device-ledger-curves' : undefined} style={embedded ? undefined : { display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 12 }}>
                   {monitorCurves.map((code) => {
                     const row = numericMetricOptions.find(r => r.metricCode === code);
                     const values = curveSeries(code, row?.value ?? null);
                     return (
-                      <div key={code}>
+                      <div className={embedded ? 'device-ledger-curve' : undefined} key={code}>
                         <div style={{ fontSize: 12, marginBottom: 4, display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
                           <b>{row?.name || code}</b>
-                          <span style={{ color: '#8a97a3' }}>{code} · 来源 {row?.iotDeviceCode || '--'}</span>
+                          <span style={{ color: 'var(--detail-muted, #8a97a3)' }}>{code} · 来源 {row?.iotDeviceCode || '--'}</span>
                           <Tag color="processing">{row?.value ?? '--'} {row?.unit || ''}</Tag>
                           <Tag color={QUALITY_COLOR[row?.qualityCode] || 'default'}>{QUALITY_LABEL[row?.qualityCode] || row?.qualityCode || '--'}</Tag>
                         </div>
                         {values ? (
-                          <ResponsiveContainer width="100%" height={160}>
-                            <LineChart data={values.map((v, i) => ({ i: `t${i + 1}`, v }))}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#e5e8ea" />
-                              <XAxis dataKey="i" tick={{ fontSize: 10 }} />
-                              <YAxis tick={{ fontSize: 10 }} domain={['auto', 'auto']} />
-                              <Tooltip />
-                              <Line type="linear" dataKey="v" stroke="#00b8d4" dot={false} />
+                          <ResponsiveContainer width="100%" height={embedded ? '100%' : 160} className={embedded ? 'device-ledger-chart' : undefined}>
+                            <LineChart data={values.map((v, i) => chartPoint(v, i, values.length))}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="var(--detail-chart-grid, #e5e8ea)" />
+                              <XAxis dataKey="i" tick={{ fontSize: 10, fill: 'var(--detail-chart-label, #5d6b78)' }} />
+                              <YAxis tick={{ fontSize: 10, fill: 'var(--detail-chart-label, #5d6b78)' }} domain={['auto', 'auto']} />
+                              <Tooltip contentStyle={{ background: 'var(--detail-tooltip-bg, #fff)', borderColor: 'var(--detail-chart-grid, #e5e8ea)', color: 'var(--detail-tooltip-text, #202730)' }} />
+                              <Line type="linear" dataKey="v" stroke="var(--detail-chart-line, #00b8d4)" strokeWidth={2} dot={false} isAnimationActive={!embedded} />
                             </LineChart>
                           </ResponsiveContainer>
                         ) : (
-                          <div style={{ color: '#8a97a3', fontSize: 12, padding: '48px 0', textAlign: 'center', border: '1px dashed #eef1f4', borderRadius: 6 }}>
+                          <div className={embedded ? 'device-ledger-chart-empty' : undefined} style={embedded ? undefined : { color: '#8a97a3', fontSize: 12, padding: '48px 0', textAlign: 'center', border: '1px dashed #eef1f4', borderRadius: 6 }}>
                             当前无数据（数据中断或指标无值），无法成图
                           </div>
                         )}
@@ -534,13 +556,13 @@ export default function DeviceLedgerDetailPage() {
                 </div>
               )}
               {monitorCurves.length > 0 && (
-                <div style={hint}>
-                  序列说明：优先使用平台快照趋势，无快照时按当前采样值生成确定性演示序列；监控曲线为页面级配置（不写入绑定），换设备后需重新配置。
+                <div style={hint} className={embedded ? 'device-ledger-series-note' : undefined}>
+                  {embedded ? '演示序列 · 近 55 分钟，每 5 分钟一个采样点；仅用于界面演示。' : '序列说明：优先使用平台快照趋势，无快照时按当前采样值生成确定性演示序列；监控曲线为页面级配置（不写入绑定），换设备后需重新配置。'}
                 </div>
               )}
             </Card>
           )}
-          {trendEntries.length === 0 ? (
+          {embedded && monitorCurves.length > 0 ? null : trendEntries.length === 0 ? (
             <Card size="small">
               <EmptyState
                 description="该设备暂无可展示的趋势序列"
@@ -563,12 +585,12 @@ export default function DeviceLedgerDetailPage() {
                 )}
               >
                 <ResponsiveContainer width="100%" height={220}>
-                  <LineChart data={currentTrend.values.map((v, i) => ({ i: `t${i + 1}`, v }))}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e8ea" />
-                    <XAxis dataKey="i" tick={{ fontSize: 10 }} />
-                    <YAxis tick={{ fontSize: 10 }} domain={['auto', 'auto']} />
-                    <Tooltip />
-                    <Line type="linear" dataKey="v" stroke="#1668dc" dot={false} />
+                  <LineChart data={currentTrend.values.map((v, i) => chartPoint(v, i, currentTrend.values.length))}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--detail-chart-grid, #e5e8ea)" />
+                    <XAxis dataKey="i" tick={{ fontSize: 10, fill: 'var(--detail-chart-label, #5d6b78)' }} />
+                    <YAxis tick={{ fontSize: 10, fill: 'var(--detail-chart-label, #5d6b78)' }} domain={['auto', 'auto']} />
+                    <Tooltip contentStyle={{ background: 'var(--detail-tooltip-bg, #fff)', borderColor: 'var(--detail-chart-grid, #e5e8ea)', color: 'var(--detail-tooltip-text, #202730)' }} />
+                    <Line type="linear" dataKey="v" stroke="var(--detail-chart-line, #1668dc)" strokeWidth={2} dot={false} isAnimationActive={!embedded} />
                   </LineChart>
                 </ResponsiveContainer>
               </Card>
@@ -590,7 +612,7 @@ export default function DeviceLedgerDetailPage() {
         <Card size="small" title="该设备报警事件">
           <Table
             rowKey="key" size="small" pagination={false}
-            locale={{ emptyText: <EmptyState description="该设备暂无报警事件" reason="报警由监测指标触发，已关闭事件可在报警中心查看全部" next="前往报警中心" onNext={() => navigate('/alarm-center')} nextLabel="前往报警中心" /> }}
+            locale={{ emptyText: <EmptyState description="该设备暂无报警事件" reason="报警由监测指标触发，已关闭事件可在报警中心查看全部" next={embedded ? undefined : '前往报警中心'} onNext={() => navigate('/alarm-center')} nextLabel="前往报警中心" /> }}
             dataSource={alarmRows}
             columns={[
               { title: '报警ID', dataIndex: 'id', width: 150 },
@@ -604,7 +626,7 @@ export default function DeviceLedgerDetailPage() {
               { title: '持续时长', dataIndex: 'duration', width: 90, render: dash },
               {
                 title: '操作', width: 80,
-                render: (_, r) => (r.status === '已关闭' ? null : <Button type="link" size="small" onClick={() => navigate('/alarm-center')}>去处理</Button>),
+                render: (_, r) => (embedded || r.status === '已关闭' ? null : <Button type="link" size="small" onClick={() => navigate('/alarm-center')}>去处理</Button>),
               },
             ]}
           />
@@ -635,7 +657,7 @@ export default function DeviceLedgerDetailPage() {
 
   return (
     <>
-      <PageHeader
+      {!embedded && <PageHeader
         title={`${device.name} · ${device.assetCode}`}
         subtitle={`${device.location || device.workshopName || '--'} · 生命周期 ${device.lifecycleStatus || '--'}`}
         actions={(
@@ -644,8 +666,8 @@ export default function DeviceLedgerDetailPage() {
             <Button icon={<ArrowLeft size={14} />} onClick={() => navigate('/device-ledger')}>返回列表</Button>
           </Space>
         )}
-      />
-      <DegradedBanner meta={meta} />
+      />}
+      {!embedded && <DegradedBanner meta={meta} />}
       {lifecycleOnly && (
         <Alert
           type="info" showIcon style={{ marginBottom: 12 }}
@@ -656,7 +678,7 @@ export default function DeviceLedgerDetailPage() {
         <Alert
           type="warning" showIcon style={{ marginBottom: 12 }}
           message="该设备数据中断：所有指标无数据（无数据 ≠ 0）"
-          description={`最后样本 ${health.lastSampleAt || '--'}。可查看接入任务了解失败原因与下一步处理建议。`}
+          description={`最后样本 ${health.lastSampleAt || '--'}。${embedded ? '恢复采集前不使用历史值推断当前状态。' : '可查看接入任务了解失败原因与下一步处理建议。'}`}
         />
       )}
 
@@ -672,6 +694,8 @@ export default function DeviceLedgerDetailPage() {
       <Modal
         title={`配置监控曲线 · ${device.name}（${device.deviceId}）`}
         width={640}
+        centered={embedded}
+        rootClassName={embedded ? 'device-archive-curve-modal' : undefined}
         open={curveModalOpen}
         onCancel={() => setCurveModalOpen(false)}
         onOk={() => {

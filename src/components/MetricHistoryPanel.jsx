@@ -13,10 +13,6 @@ import { DEMO_TIME } from '../data/demo/samples.js';
 // 演示数据为确定性生成（1 分钟粒度，锚定实时样本当前值）。
 // ============================================================
 
-const DEMO_TODAY = DEMO_TIME.slice(0, 10); // '2026-09-16'
-const DEMO_NOW = dayjs(DEMO_TIME);         // 演示基准时间 16:41
-const DEMO_LAST_MINUTE = 16 * 60 + 41;     // 演示日数据截至 16:41
-
 const QUALITY_COLOR = { GOOD: 'success', DELAYED: 'processing', NO_VALUE: 'warning', OFFLINE: 'error', BAD: 'error' };
 const QUALITY_LABEL = { GOOD: '正常', DELAYED: '延迟', NO_VALUE: '无值', OFFLINE: '离线', BAD: '异常' };
 
@@ -42,10 +38,14 @@ function buildPulls(deviceId, dateStr, lastMinute) {
   return pulls;
 }
 
-export default function MetricHistoryPanel({ device, realtime, metricsByKey }) {
+export default function MetricHistoryPanel({ device, realtime, metricsByKey, referenceTime = DEMO_TIME }) {
+  const reference = dayjs(referenceTime);
+  const cutoff = reference.isValid() ? reference : dayjs(DEMO_TIME);
+  const cutoffDay = cutoff.format('YYYY-MM-DD');
+  const cutoffMinute = cutoff.hour() * 60 + cutoff.minute();
   const metricOptions = realtime.metrics || [];
-  const [range, setRange] = useState([DEMO_NOW.startOf('day'), DEMO_NOW]);
-  const [applied, setApplied] = useState({ range: [DEMO_NOW.startOf('day'), DEMO_NOW] });
+  const [range, setRange] = useState(() => [cutoff.startOf('day'), cutoff]);
+  const [applied, setApplied] = useState(() => ({ range: [cutoff.startOf('day'), cutoff] }));
 
   const precisionOf = (metricCode) => metricsByKey?.[metricCode]?.precision ?? 0.1;
   // 纳入宽表的指标：只有存在采样数据的指标才生成/展示（无数据不存储、不显示占位）；
@@ -68,8 +68,7 @@ export default function MetricHistoryPanel({ device, realtime, metricsByKey }) {
     let guard = 0;
     while (cur <= endDay && guard < 31) {
       const dateStr = dayjs(cur).format('YYYY-MM-DD');
-      const isDemoToday = dateStr === DEMO_TODAY;
-      const lastMinute = isDemoToday ? DEMO_LAST_MINUTE : 24 * 60;
+      const lastMinute = dateStr > cutoffDay ? -1 : dateStr === cutoffDay ? cutoffMinute : 24 * 60 - 1;
       for (const pull of buildPulls(device.deviceId, dateStr, lastMinute)) {
         if (pull.sourceTime >= start.format('YYYY-MM-DD HH:mm:ss') && pull.sourceTime <= `${end.format('YYYY-MM-DD HH:mm')}:59`) {
           const row = { key: pull.sourceTime, sourceTime: pull.sourceTime, qualityCode: pull.qualityCode, receiveTime: pull.receiveTime };
@@ -92,12 +91,12 @@ export default function MetricHistoryPanel({ device, realtime, metricsByKey }) {
       guard += 1;
     }
     return out;
-  }, [applied, targets, device.deviceId]);
+  }, [applied, targets, device.deviceId, cutoffDay, cutoffMinute]);
 
   const handleQuery = () => setApplied({ range: range && range.length === 2 ? [range[0], range[1]] : null });
   const handleReset = () => {
-    setRange([DEMO_NOW.startOf('day'), DEMO_NOW]);
-    setApplied({ range: [DEMO_NOW.startOf('day'), DEMO_NOW] });
+    setRange([cutoff.startOf('day'), cutoff]);
+    setApplied({ range: [cutoff.startOf('day'), cutoff] });
   };
 
   const handleExport = () => {

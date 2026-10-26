@@ -5,7 +5,7 @@
 // 协议/网关/IP/端口/点位不在本系统维护（IoT 平台职责），此处只存来源编码与指标选择。
 // ============================================================
 
-const sel = (code, version, selected = true) => ({ metricCode: code, metricVersion: version, selected });
+const sel = (code, version, monitored = true) => ({ metricCode: code, metricVersion: version, monitored });
 
 export const bindingsByDeviceId = {
   'DEV-001': {

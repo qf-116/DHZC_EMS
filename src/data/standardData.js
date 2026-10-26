@@ -340,9 +340,9 @@ export const platformMetrics = [
 // configStatus: 待配置/已启用/已停用（配置状态）；healthStatus: 正常/部分中断/数据中断/延迟（健康状态，不覆盖配置状态）
 const m = (code) => {
   const def = platformMetrics.find(x => x.metricCode === code);
-  return { metricCode: code, metricVersion: def.metricVersion, name: def.name, unit: def.unit, dataType: def.dataType, syncStatus: def.syncStatus, selected: true };
+  return { metricCode: code, metricVersion: def.metricVersion, name: def.name, unit: def.unit, dataType: def.dataType, syncStatus: def.syncStatus, monitored: true };
 };
-const mOff = (code) => ({ ...m(code), selected: false });
+const mOff = (code) => ({ ...m(code), monitored: false });
 
 export const netBindings = [
   {

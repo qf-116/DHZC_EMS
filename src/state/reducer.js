@@ -345,9 +345,20 @@ export function reducer(state, action) {
       if (draft.items.some(i => i.iotDeviceId === payload.source.iotDeviceId)) {
         return reject(state, action, '该 IoT 来源设备已在绑定草稿中');
       }
-      const item = { ...payload.source, enabled: true, metrics: (payload.source.metrics || []) };
+      // 指标自动发现（2026-10 口径）：绑定即接入来源上报的全部指标并存储，
+      // 指标清单由平台指标字典自动带出（失效指标除外），monitored 默认 false；
+      // 换绑时继承现有绑定同来源同指标的监控勾选，避免保存新版本后监控配置丢失。
+      const prevBinding = E.bindingsByDeviceId[payload.deviceId];
+      const prevItem = (prevBinding?.items || []).find(i => i.iotDeviceId === payload.source.iotDeviceId);
+      const autoMetrics = Object.values(E.metricsByKey)
+        .filter(def => def.syncStatus !== '已失效')
+        .map(def => {
+          const prevMetric = (prevItem?.metrics || []).find(m => m.metricCode === def.metricCode);
+          return { metricCode: def.metricCode, metricVersion: def.metricVersion, monitored: !!prevMetric?.monitored };
+        });
+      const item = { ...payload.source, enabled: true, metrics: autoMetrics };
       const next = { ...state, ui: { ...state.ui, bindingDraftsByDeviceId: setIn(drafts, key, { ...draft, items: [...draft.items, item] }) } };
-      return finish(next, action, true, `已将 ${item.iotDeviceCode} 加入绑定草稿（未保存）`, { deviceId: payload.deviceId }, false, at);
+      return finish(next, action, true, `已将 ${item.iotDeviceCode} 加入绑定草稿（自动发现 ${autoMetrics.length} 项指标，保存后全量接入存储）`, { deviceId: payload.deviceId }, false, at);
     }
     case 'binding/removeSource': {
       const key = `draft-${payload.deviceId}`;
@@ -357,23 +368,27 @@ export function reducer(state, action) {
       const next = { ...state, ui: { ...state.ui, bindingDraftsByDeviceId: setIn(drafts, key, { ...draft, items: draft.items.filter(i => i.iotDeviceId !== payload.iotDeviceId) }) } };
       return finish(next, action, true, '已从绑定草稿移除该来源（未保存）', {}, false, at);
     }
-    case 'binding/toggleMetric': {
-      const key = `draft-${payload.deviceId}`;
-      const drafts = state.ui.bindingDraftsByDeviceId || {};
-      const draft = drafts[key];
-      if (!draft) return reject(state, action, '没有进行中的绑定草稿');
+    case 'binding/setMonitored': {
+      // 监控指标开关（2026-10 口径）：直接作用于正式绑定，即时生效、不产生新版本；
+      // 未勾选指标仍全量存储，仅不参与曲线监控（设备台账「数据指标历史」可查）。
+      const binding = E.bindingsByDeviceId[payload.deviceId];
+      if (!binding) return reject(state, action, '该设备尚未创建绑定，请先在「设备绑定管理」中绑定');
       const def = E.metricsByKey[payload.metricCode];
-      if (def && def.syncStatus === '已失效') return reject(state, action, `指标 ${def.name} 已失效，不能参与绑定`);
-      const items = draft.items.map(i => {
+      if (def && def.syncStatus === '已失效') return reject(state, action, `指标 ${def.name} 已失效，不能纳入监控`);
+      let toggled = null;
+      const items = (binding.items || []).map(i => {
         if (i.iotDeviceId !== payload.iotDeviceId) return i;
-        const metrics = [...(i.metrics || [])];
-        const idx = metrics.findIndex(m => m.metricCode === payload.metricCode);
-        if (idx >= 0) metrics[idx] = { ...metrics[idx], selected: !metrics[idx].selected };
-        else metrics.push({ metricCode: payload.metricCode, metricVersion: def?.metricVersion || 'v1', selected: true });
+        const metrics = (i.metrics || []).map(m => {
+          if (m.metricCode !== payload.metricCode) return m;
+          toggled = !m.monitored;
+          return { ...m, monitored: !m.monitored };
+        });
         return { ...i, metrics };
       });
-      const next = { ...state, ui: { ...state.ui, bindingDraftsByDeviceId: setIn(drafts, key, { ...draft, items }) } };
-      return finish(next, action, true, `指标 ${payload.metricCode} 选择状态已切换（未保存）`, {}, false, at);
+      if (toggled === null) return reject(state, action, `指标 ${payload.metricCode} 不在该来源的接入指标中`);
+      let next = setE(state, 'bindingsByDeviceId', payload.deviceId, { ...binding, items });
+      next = addHistory(next, at, 'binding', binding.bindingId, `监控指标${toggled ? '纳入' : '移出'}：${def?.name || payload.metricCode}（${payload.iotDeviceCode || payload.iotDeviceId}）`, { deviceId: payload.deviceId });
+      return finish(next, action, true, `${def?.name || payload.metricCode} 已${toggled ? '纳入监控（曲线呈现）' : '移出监控（数据仍存储，台账历史可查）'}`, { deviceId: payload.deviceId }, false, at);
     }
     case 'bindingTemplate/save': {
       // 按 templateId upsert：新模板插入队首；同 id 视为编辑（保留原创建时间）
@@ -494,7 +509,7 @@ export function reducer(state, action) {
       }
       // 指标有效性：目标指标必须仍在当前启用绑定中
       if (rule.target?.metricCode) {
-        const stillBound = (binding.items || []).some(i => i.enabled && (i.metrics || []).some(m => m.selected && m.metricCode === rule.target.metricCode));
+        const stillBound = (binding.items || []).some(i => i.enabled && (i.metrics || []).some(m => m.metricCode === rule.target.metricCode));
         if (!stillBound) return reject(state, action, `指标 ${rule.target.metricCode} 未在设备 ${deviceId} 当前启用绑定中，不能触发`);
       }
       // 样本判定（M2 阻断项 5 + P2 全类型）：规则必须满足触发条件才实例化事件。
@@ -734,7 +749,7 @@ export function reducer(state, action) {
           rows.push({ ...rowBase, result: 'blocked', reason: !device ? '设备不存在' : !binding ? '设备尚未创建绑定' : `绑定状态「${binding.configStatus}」，必须为已启用` });
           return;
         }
-        const stillBound = (binding.items || []).some(i => i.enabled && (i.metrics || []).some(m => m.selected && m.metricCode === target.metricCode));
+        const stillBound = (binding.items || []).some(i => i.enabled && (i.metrics || []).some(m => m.metricCode === target.metricCode));
         if (!stillBound) {
           result.blocked += 1;
           rows.push({ ...rowBase, result: 'blocked', reason: `指标 ${target.metricCode} 未在当前启用绑定中` });

@@ -51,7 +51,8 @@ export function resolveRuleTargets(state) {
   Object.values(bindings).forEach((b) => {
     if (b.configStatus !== '已启用') return;
     (b.items || []).filter((i) => i.enabled).forEach((item) => {
-      (item.metrics || []).filter((m) => m.selected).forEach((sel) => {
+      // 报警候选 = 启用来源接入的全部指标（绑定即全量接入存储，与监控勾选无关）
+      (item.metrics || []).forEach((sel) => {
         const metric = normalizeMetricMeta(metricsByKey[sel.metricCode]);
         if (!metric || metric.syncStatus === '已失效') return;
         const device = devicesById[b.deviceId];
@@ -517,7 +518,7 @@ export function validateRuleDraft(rule, ctx = {}) {
       return;
     }
     const stillBound = binding
-      ? (binding.items || []).some((i) => i.enabled && (i.metrics || []).some((m) => m.selected && m.metricCode === target.metricCode))
+      ? (binding.items || []).some((i) => i.enabled && (i.metrics || []).some((m) => m.metricCode === target.metricCode))
       : false;
     if (!stillBound) errors.push(`指标 ${target.metricCode} 未在设备当前启用绑定中`);
     const metric = normalizeMetricMeta(metricsByKey[target.metricCode]);

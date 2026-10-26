@@ -145,9 +145,9 @@ export default function WorkbenchPage() {
             />
           )}
         </Card>
-        <Card size="small" title={<Space><Unplug size={15} /> 接入任务异常</Space>} extra={<Button type="link" size="small" onClick={() => navigate('/binding-overview')}>绑定总览</Button>}>
+        <Card size="small" title={<Space><Unplug size={15} /> 接入任务异常</Space>} extra={<Button type="link" size="small" onClick={() => navigate('/binding-overview')}>物联网接入配置</Button>}>
           {wb.ingestionIssues.length === 0 ? (
-            renderEmpty('接入任务均正常', '失败/重试中/部分成功的接入任务会出现在此处', '查看绑定总览', () => navigate('/binding-overview'))
+            renderEmpty('接入任务均正常', '失败/重试中/部分成功的接入任务会出现在此处', '查看物联网接入配置', () => navigate('/binding-overview'))
           ) : (
             <Table
               rowKey="taskId" size="small" pagination={false}

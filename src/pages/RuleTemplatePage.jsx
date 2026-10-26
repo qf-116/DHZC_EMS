@@ -157,7 +157,7 @@ export default function RuleTemplatePage() {
         });
       });
       if (!pairs.length) {
-        message.warning('所选设备中没有启用绑定匹配到模板适用指标；请先在联网配置中启用对应指标');
+        message.warning('所选设备中没有启用绑定匹配到模板适用指标；请先在物联网接入配置中绑定对应来源指标');
         return;
       }
       const byMetric = new Map();

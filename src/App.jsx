@@ -25,7 +25,7 @@ import AlarmRuleVersionPage from './pages/AlarmRuleVersionPage.jsx';
 import NotificationPolicyPage from './pages/NotificationPolicyPage.jsx';
 import RuleTemplatePage from './pages/RuleTemplatePage.jsx';
 // V2.1：设备采集能力/指标字典/点位映射/数据质量/缺失死信/旧联网配置页面已下线，
-// 由 联网配置总览（BindingOverviewPage）与 平台指标清单（PlatformMetricsPage）承接，旧路由做重定向。
+// 由 物联网接入配置（BindingOverviewPage）与 平台指标清单（PlatformMetricsPage）承接，旧路由做重定向。
 import ProgramComparePage from './pages/ProgramComparePage.jsx';
 import ProgramHandleRecordPage from './pages/ProgramHandleRecordPage.jsx';
 // 点检 / 保养 / 巡检：范围外演示模块（应需求恢复），数据为只读演示种子，完整闭环由点巡保养业务模块承接
@@ -118,7 +118,7 @@ const menus = [
     { key: '/device-ledger', icon: <Boxes size={14} />, label: '设备台账' },
     { key: '/doc-library', icon: <BookOpen size={14} />, label: '综合文档库' },
     { key: '/base-type-config', icon: <Settings2 size={14} />, label: '基础类型配置' },
-    // V2.1：设备联网配置移入「数据接入 · 联网配置总览」，设备台账列表提供「联网配置」入口
+    // V2.1：设备联网配置移入「数据接入 · 物联网接入配置」，设备台账列表提供「联网配置」入口
   ] },
   { key: 'lifecycle', icon: <ClipboardCheck size={15} />, label: '生命周期管理', children: [
     // 生命周期工作台（/lifecycle/workbench）暂不下发：按需求移除，旧路由重定向到设备入账；页面文件保留备用
@@ -157,7 +157,7 @@ const menus = [
     { key: '/spare-parts-outbound', icon: <Package size={14} />, label: '出库记录' },
   ] },
   { key: 'data', icon: <DatabaseZap size={15} />, label: '数据接入', children: [
-    { key: '/binding-overview', icon: <DatabaseZap size={14} />, label: '联网配置总览' },
+    { key: '/binding-overview', icon: <DatabaseZap size={14} />, label: '物联网接入配置' },
     { key: '/binding-templates', icon: <LayoutTemplate size={14} />, label: '绑定模板管理' },
     { key: '/platform-metrics', icon: <BookOpen size={14} />, label: '平台指标清单' },
     { key: '/program-compare', icon: <BookOpen size={14} />, label: '程序参数比对' },

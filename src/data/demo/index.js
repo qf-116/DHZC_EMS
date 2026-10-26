@@ -18,7 +18,7 @@ import { programCompare, programBaselines, programHandles } from './programCompa
 import { lifecycleTasks, assetChangeRecords, idleApplications, scrapApplications } from './lifecycle.js';
 import { ruleTemplateSeeds } from './ruleTemplates.js';
 
-export const STORE_VERSION = 10; // 快照结构版本：P2 模板持久化（ruleTemplatesById 实体容器）
+export const STORE_VERSION = 11; // 快照结构版本：绑定/监控拆分（binding metrics 标志 selected → monitored）
 
 export const DEMO_META = {
   mode: 'demo',

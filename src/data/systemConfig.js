@@ -167,7 +167,7 @@ export const sysPermissionTree = [
     { title: '入库 / 出库记录', key: 'menu:spare-parts-io' },
   ] },
   { title: '数据接入', key: 'group:data', children: [
-    { title: '联网配置总览', key: 'menu:binding-overview' },
+    { title: '物联网接入配置', key: 'menu:binding-overview' },
     { title: '平台指标清单', key: 'menu:platform-metrics' },
     { title: '程序参数比对', key: 'menu:program-compare' },
   ] },

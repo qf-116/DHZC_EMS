@@ -1,7 +1,7 @@
 // ============================================================
-// 绑定模板管理（/binding-templates · 数据接入域）
-// 绑定模板独立管理页：新建 / 编辑 / 删除 / 应用到设备（批量）。
-// 模板记录「来源结构（N 个平级来源设备，不分主/子）+ 指标口径」，不记录具体 IoT 编码——
+// 监控指标模板管理（/binding-templates · 数据接入域）
+// 监控指标模板独立管理页：新建 / 编辑 / 删除 / 应用到设备（批量）。
+// 模板记录「来源结构（N 个平级来源设备，不分主/子）+ 监控指标口径」，不记录具体 IoT 编码——
 // 批量应用时由物联网平台按设备自动分配专属来源编码（演示模拟，见 actions.applyBindingTemplate）。
 // 保存走 bindingTemplate/save（reducer 按 templateId upsert：同 id 即编辑，保留原创建时间）。
 // ============================================================
@@ -44,7 +44,7 @@ function TemplateEditorModal({ template, open, onClose }) {
       ? (template.items || []).map((i) => ({
         uid: nextUid(),
         sensorType: (i.sensorType && i.sensorType !== '--' ? i.sensorType : '') || (i.kind && i.kind !== '主设备' ? i.kind : '') || '',
-        metrics: (i.metrics || []).map((m) => ({ metricCode: m.metricCode, metricVersion: m.metricVersion, selected: !!m.selected })),
+        metrics: (i.metrics || []).map((m) => ({ metricCode: m.metricCode, metricVersion: m.metricVersion, monitored: !!m.monitored })),
       }))
       : []);
   }
@@ -69,8 +69,8 @@ function TemplateEditorModal({ template, open, onClose }) {
       if (i.uid !== uid) return i;
       const list = [...(i.metrics || [])];
       const idx = list.findIndex((x) => x.metricCode === m.metricCode);
-      if (idx >= 0) list[idx] = { ...list[idx], selected: !list[idx].selected };
-      else list.push({ metricCode: m.metricCode, metricVersion: m.metricVersion, selected: true });
+      if (idx >= 0) list[idx] = { ...list[idx], monitored: !list[idx].monitored };
+      else list.push({ metricCode: m.metricCode, metricVersion: m.metricVersion, monitored: true });
       return { ...i, metrics: list };
     }));
   };
@@ -80,7 +80,7 @@ function TemplateEditorModal({ template, open, onClose }) {
   if (items.length === 0) problems.push('至少添加 1 个来源结构');
   items.forEach((i, idx) => {
     if (!(i.sensorType || '').trim()) problems.push(`来源 ${idx + 1}：请填写来源类型`);
-    if ((i.metrics || []).filter((m) => m.selected).length === 0) problems.push(`来源 ${idx + 1}：至少选择 1 项指标`);
+    if ((i.metrics || []).filter((m) => m.monitored).length === 0) problems.push(`来源 ${idx + 1}：至少勾选 1 项监控指标`);
   });
 
   const doSave = () => {
@@ -88,10 +88,10 @@ function TemplateEditorModal({ template, open, onClose }) {
     const payload = {
       templateId: template?.templateId || `bt-${Date.now()}`,
       name: name.trim(),
-      sourceName: template?.sourceName || '绑定模板管理页创建',
+      sourceName: template?.sourceName || '监控指标模板管理页创建',
       items: items.map((i) => ({
         sensorType: i.sensorType.trim(),
-        metrics: (i.metrics || []).map((m) => ({ metricCode: m.metricCode, metricVersion: m.metricVersion, selected: !!m.selected })),
+        metrics: (i.metrics || []).map((m) => ({ metricCode: m.metricCode, metricVersion: m.metricVersion, monitored: !!m.monitored })),
       })),
     };
     const r = actions.saveBindingTemplate(payload);
@@ -100,7 +100,7 @@ function TemplateEditorModal({ template, open, onClose }) {
 
   return (
     <Modal
-      title={template?.templateId ? `编辑绑定模板 · ${template.name}` : '新建绑定模板'}
+      title={template?.templateId ? `编辑监控指标模板 · ${template.name}` : '新建监控指标模板'}
       width={860}
       open={open}
       onCancel={onClose}
@@ -114,12 +114,12 @@ function TemplateEditorModal({ template, open, onClose }) {
       />
       <div style={{ marginBottom: 10 }}>
         <div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>模板名称 <span style={{ color: '#cf1322' }}>*</span></div>
-        <Input style={{ width: 420 }} placeholder="如：CNC 加工中心标准联网模板" value={name} onChange={(e) => setName(e.target.value)} />
+        <Input style={{ width: 420 }} placeholder="如：CNC 加工中心标准监控模板" value={name} onChange={(e) => setName(e.target.value)} />
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          来源结构（来源设备平级、不分主/子；每个来源至少选 1 项指标）
+          来源结构（来源设备平级、不分主/子；每个来源至少勾选 1 项监控指标）
         </Typography.Text>
         <Space size={8}>
           <Button size="small" type="primary" ghost icon={<Plus size={13} />} onClick={addItem}>添加来源设备</Button>
@@ -130,7 +130,7 @@ function TemplateEditorModal({ template, open, onClose }) {
         <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未添加来源结构：请点击右上角「添加来源设备」" />
       )}
       {items.map((item, idx) => {
-        const selCount = (item.metrics || []).filter((m) => m.selected).length;
+        const selCount = (item.metrics || []).filter((m) => m.monitored).length;
         const err = selCount === 0 || !(item.sensorType || '').trim();
         return (
           <Card
@@ -149,7 +149,7 @@ function TemplateEditorModal({ template, open, onClose }) {
             )}
             extra={(
               <Space size={8}>
-                <span style={{ fontSize: 12, color: selCount ? '#8a97a3' : '#cf1322' }}>已选 {selCount} 项指标</span>
+                <span style={{ fontSize: 12, color: selCount ? '#8a97a3' : '#cf1322' }}>监控 {selCount} 项指标</span>
                 <Button size="small" type="text" danger icon={<Trash2 size={13} />} onClick={() => removeItem(item.uid)}>移除</Button>
               </Space>
             )}
@@ -158,7 +158,7 @@ function TemplateEditorModal({ template, open, onClose }) {
               {metrics.map((m) => {
                 const sel = (item.metrics || []).find((x) => x.metricCode === m.metricCode);
                 return (
-                  <Checkbox key={m.metricCode} checked={!!sel?.selected} onChange={() => toggleMetric(item.uid, m)}>
+                  <Checkbox key={m.metricCode} checked={!!sel?.monitored} onChange={() => toggleMetric(item.uid, m)}>
                     <span>{m.name}（{m.metricCode} · {m.metricVersion}）</span>
                   </Checkbox>
                 );
@@ -206,7 +206,7 @@ export default function BindingTemplatesPage() {
       <Button
         type="link" size="small" danger icon={<Trash2 size={13} />}
         onClick={() => modal.confirm({
-          title: '删除绑定模板',
+          title: '删除监控指标模板',
           content: `确定删除模板「${t.name}」吗？已应用过的设备绑定不受影响。`,
           okText: '删除', okButtonProps: { danger: true }, cancelText: '取消',
           onOk: () => { const r = actions.deleteBindingTemplate(t.templateId, t.name); r.ok ? message.success(r.message) : message.error(r.message); },
@@ -220,14 +220,14 @@ export default function BindingTemplatesPage() {
   return (
     <>
       <PageHeader
-        title="绑定模板管理"
-        subtitle="绑定模板的新建 / 编辑 / 删除与应用（一次配置、批量应用——几十台上百台同型号设备不必逐台手配）"
+        title="监控指标模板管理"
+        subtitle="监控指标模板的新建 / 编辑 / 删除与应用：一次完成「设备绑定接入 + 监控指标勾选」两步，批量应用到同型号设备"
       />
       <Alert
         type="info" showIcon style={{ marginBottom: 12 }}
-        message="模板记录「来源结构 + 指标口径」，不记录具体 IoT 编码：应用到设备时由物联网平台按每台设备自动分配专属来源编码（演示模拟），全局唯一、不与已占用编码冲突；应用后可在联网配置总览中逐台启用。"
+        message="模板记录「来源结构 + 监控指标口径」，不记录具体 IoT 编码：应用到设备时自动创建绑定（绑定即全量接入存储）并按模板预置监控勾选；由物联网平台按每台设备自动分配专属来源编码（演示模拟），全局唯一、不与已占用编码冲突；应用后可在物联网接入配置中逐台启用。"
       />
-      <Card size="small" title={<Space size={6}><LayoutTemplate size={14} />绑定模板（{templates.length}）</Space>}>
+      <Card size="small" title={<Space size={6}><LayoutTemplate size={14} />监控指标模板（{templates.length}）</Space>}>
         <Space wrap style={{ marginBottom: 12 }}>
           <Button type="primary" icon={<Plus size={14} />} onClick={() => setEditorTarget({})}>
             新建模板
@@ -238,7 +238,7 @@ export default function BindingTemplatesPage() {
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={(
               <span style={{ fontSize: 12 }}>
-                暂无模板：点击右上角「新建模板」从零创建；或在联网配置总览的绑定弹窗中配好后「存为模板」。
+                暂无模板：点击右上角「新建模板」从零创建；或在物联网接入配置「监控指标配置」中勾选好后「存为模板」。
               </span>
             )}
           />
@@ -252,13 +252,13 @@ export default function BindingTemplatesPage() {
                 title: '来源结构', width: 240,
                 render: (_, t) => t.items.map((i, idx) => (
                   <Tag key={idx}>
-                    {i.sensorType && i.sensorType !== '--' ? i.sensorType : '来源设备'}×{(i.metrics || []).filter((m) => m.selected).length}
+                    {i.sensorType && i.sensorType !== '--' ? i.sensorType : '来源设备'}×{(i.metrics || []).filter((m) => m.monitored).length}
                   </Tag>
                 )),
               },
               {
                 title: '指标数', width: 90,
-                render: (_, t) => `${t.items.reduce((s, i) => s + (i.metrics || []).filter((m) => m.selected).length, 0)} 项`,
+                render: (_, t) => `${t.items.reduce((s, i) => s + (i.metrics || []).filter((m) => m.monitored).length, 0)} 项`,
               },
               { title: '来源', dataIndex: 'sourceName', width: 200, ellipsis: true, render: (v) => v || '--' },
               { title: '创建时间', dataIndex: 'createdAt', width: 170 },

@@ -67,7 +67,7 @@ export const health = {
 // 接入任务（ingestionTasksById）：含状态机、失败原因、影响范围与下一步（§6.2）
 export const ingestionTasks = [
   { taskId: 'IT-20260916-001', deviceId: 'DEV-002', deviceName: 'CNC加工中心-02', type: '补传任务', status: '重试中', startedAt: '16:20:00', updatedAt: '16:38:22', failCount: 2, successCount: 6, failReason: '网关重连后部分报文乱序', impact: '冷却液温度指标延迟约 32s；影响实时监测与报警判定', owner: '系统自动', nextStep: '等待下一轮重试；连续 3 次失败转人工处理' },
-  { taskId: 'IT-20260916-002', deviceId: 'DEV-003', deviceName: '激光焊接机-03', type: '补偿任务', status: '部分成功', startedAt: '15:10:00', updatedAt: '15:35:00', failCount: 1, successCount: 1, failReason: '温度子传感器 IOT-S-20032 已停用，2 条样本无法补偿', impact: '轴承温度指标缺口 5 分钟', owner: '李明', nextStep: '如需恢复轴承温度，请在联网配置总览重新启用该子传感器' },
+  { taskId: 'IT-20260916-002', deviceId: 'DEV-003', deviceName: '激光焊接机-03', type: '补偿任务', status: '部分成功', startedAt: '15:10:00', updatedAt: '15:35:00', failCount: 1, successCount: 1, failReason: '温度子传感器 IOT-S-20032 已停用，2 条样本无法补偿', impact: '轴承温度指标缺口 5 分钟', owner: '李明', nextStep: '如需恢复轴承温度，请在物联网接入配置重新启用该子传感器' },
   { taskId: 'IT-20260916-003', deviceId: 'DEV-005', deviceName: '机器人焊接-05', type: '拉取任务', status: '失败', startedAt: '15:22:30', updatedAt: '16:41:00', failCount: 3, successCount: 0, failReason: '主设备 IOT-D-10005 心跳超时（数据中断）', impact: '该设备全部指标无数据；OEE 不可计算；实时页显示离线', owner: '王强', nextStep: '现场检查设备网络；或重新绑定备用主控制器' },
   { taskId: 'IT-20260916-004', deviceId: 'DEV-001', deviceName: 'CNC加工中心-01', type: '拉取任务', status: '成功', startedAt: '16:40:10', updatedAt: '16:41:08', failCount: 0, successCount: 6, failReason: '--', impact: '--', owner: '系统自动', nextStep: '--' },
 ];

@@ -143,10 +143,13 @@ export function DeviceLedgerDetailContent({ state, deviceId: suppliedDeviceId, e
       : (health?.status === '数据中断' ? <Tag color="error">数据中断</Tag> : <Tag color="success">监测中</Tag>));
 
   const sourceItems = (binding?.items || []).filter(i => i.enabled);
-  const totalSelected = (binding?.items || [])
-    .reduce((s, i) => s + (i.enabled ? (i.metrics || []).filter(m => m.selected).length : 0), 0);
+  // 2026-10 口径：绑定即全量接入存储——接入指标 = 绑定来源上报的全部指标；监控中 = 勾选纳入曲线呈现的子集
+  const totalMetrics = (binding?.items || [])
+    .reduce((s, i) => s + (i.enabled ? (i.metrics || []).length : 0), 0);
+  const totalMonitored = (binding?.items || [])
+    .reduce((s, i) => s + (i.enabled ? (i.metrics || []).filter(m => m.monitored).length : 0), 0);
 
-  // ===== 自定义监控曲线：候选 = 该设备绑定（启用）来源中类型为「数值」的已选指标（状态/事件类 S.* 不参与） =====
+  // ===== 自定义监控曲线：候选 = 监控中（monitored）的数值类指标（状态/事件类 S.* 不参与） =====
   const numericMetricOptions = (realtime.metrics || [])
     .filter(r => state.entities.metricsByKey[r.metricCode]?.dataType === '数值');
 
@@ -412,7 +415,7 @@ export function DeviceLedgerDetailContent({ state, deviceId: suppliedDeviceId, e
               协议 / 网关 / IP / 端口 / 点表由 IoT 平台接入服务维护，本系统不存储也不展示具体值（-- 表示由平台管理，非未配置）。
             </div>
           </Card>
-          <Card size="small" title={`来源设备（共 ${(binding.items || []).length} 个，已选指标 ${totalSelected} 项）`}>
+          <Card size="small" title={`来源设备（共 ${(binding.items || []).length} 个，接入指标 ${totalMetrics} 项 / 监控中 ${totalMonitored} 项）`}>
             <Table
               rowKey="iotDeviceId" size="small" pagination={false}
               dataSource={binding.items || []}
@@ -422,22 +425,22 @@ export function DeviceLedgerDetailContent({ state, deviceId: suppliedDeviceId, e
                 { title: '类型', width: 110, render: (_, r) => (r.sensorType && r.sensorType !== '--' ? <Tag color="cyan">{r.sensorType}</Tag> : '--') },
                 { title: '启用', dataIndex: 'enabled', width: 90, render: v => <StatusTag value={v ? '已启用' : '已停用'} /> },
                 {
-                  title: '已选指标', render: (_, r) => (
+                  title: '接入指标（蓝色 = 监控中）', render: (_, r) => (
                     <Space size={4} wrap>
-                      {(r.metrics || []).filter(m => m.selected).map(m => (
-                        <Tag key={m.metricCode}>{m.metricCode}{m.metricVersion ? ` · ${m.metricVersion}` : ''}</Tag>
+                      {(r.metrics || []).map(m => (
+                        <Tag key={m.metricCode} color={m.monitored ? 'blue' : 'default'}>{m.metricCode}{m.metricVersion ? ` · ${m.metricVersion}` : ''}</Tag>
                       ))}
-                      {(r.metrics || []).filter(m => m.selected).length === 0 && <span style={{ color: '#8a97a3', fontSize: 12 }}>--</span>}
+                      {(r.metrics || []).length === 0 && <span style={{ color: '#8a97a3', fontSize: 12 }}>--</span>}
                     </Space>
                   ),
                 },
               ]}
             />
             <div style={hint}>
-              来源设备编码全局唯一（排他校验由绑定保存流程执行）；绑定关系与指标选择变更请前往「绑定总览」。
+              来源设备编码全局唯一（排他校验由绑定保存流程执行）；绑定即全量接入存储：蓝色为监控中指标（曲线呈现），其余指标仍存储，可在本页「数据指标历史」中查看。绑定与监控指标变更请前往「物联网接入配置」。
             </div>
             {!embedded && <div style={{ marginTop: 12 }}>
-              <Button onClick={() => navigate('/binding-overview')}>前往绑定总览</Button>
+              <Button onClick={() => navigate('/binding-overview')}>前往物联网接入配置</Button>
             </div>}
           </Card>
         </>
@@ -446,9 +449,9 @@ export function DeviceLedgerDetailContent({ state, deviceId: suppliedDeviceId, e
           <EmptyState
             description="该设备尚未创建 IoT 绑定，未接入运行监测"
             reason="未绑定设备不参与运行监测、报警判定与 OEE 统计"
-            next={embedded ? undefined : '前往绑定总览创建首个绑定'}
+            next={embedded ? undefined : '前往物联网接入配置创建首个绑定'}
             onNext={() => navigate('/binding-overview')}
-            nextLabel="前往绑定总览"
+            nextLabel="前往物联网接入配置"
           />
         </Card>
       )
@@ -478,7 +481,7 @@ export function DeviceLedgerDetailContent({ state, deviceId: suppliedDeviceId, e
               size="small" pagination={false}
               dataSource={realtime.metrics}
               columns={metricColumns}
-              locale={{ emptyText: <EmptyState description="该设备未配置启用的监测指标" reason="绑定指标未启用，可在绑定总览中调整" next={embedded ? undefined : '前往绑定总览'} onNext={() => navigate('/binding-overview')} /> }}
+              locale={{ emptyText: <EmptyState description="该设备未配置监控指标（仅存储未监控）" reason="可在物联网接入配置「监控指标配置」中勾选纳入曲线监控的指标" next={embedded ? undefined : '前往物联网接入配置'} onNext={() => navigate('/binding-overview')} /> }}
             />
             {realtime.healthStatus === '数据中断' && (
               <div style={hint}>
@@ -711,7 +714,7 @@ export function DeviceLedgerDetailContent({ state, deviceId: suppliedDeviceId, e
         />
         {numericMetricOptions.length === 0 ? (
           <div style={{ color: '#8a97a3', fontSize: 12, padding: '8px 0' }}>
-            该设备绑定的来源中没有类型为「数值」的已选指标：请先在「联网配置」中为来源勾选数值型指标。
+            该设备监控中（monitored）的数值类指标为空：请先在「物联网接入配置 · 监控指标配置」中把数值型指标勾选纳入监控。
           </div>
         ) : (
           <div style={{ border: '1px solid #eef1f4', borderRadius: 6, padding: '8px 12px', maxHeight: 320, overflow: 'auto' }}>

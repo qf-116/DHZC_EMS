@@ -66,7 +66,8 @@ export function selectRealtime(state, deviceId) {
   const disconnected = state.meta.provider === 'disconnect' || health.status === '数据中断';
   const metricRows = (binding?.items || [])
     .filter(i => i.enabled)
-    .flatMap(i => (i.metrics || []).filter(m => m.selected).map(m => {
+    // 实时监测行只呈现「监控中」指标（monitored）；未勾选指标仍存储，台账数据指标历史可查
+    .flatMap(i => (i.metrics || []).filter(m => m.monitored).map(m => {
       const def = state.entities.metricsByKey[m.metricCode];
       const sample = disconnected
         ? null
@@ -83,8 +84,8 @@ export function selectRealtime(state, deviceId) {
         metricVersion: m.metricVersion,
       };
     }));
-  // 设备状态样本来源：任一启用的来源设备勾选了 S.machine_state 即可（来源不再分主/子）
-  const stateItem = (binding?.items || []).find(i => i.enabled && (i.metrics || []).some(m => m.selected && m.metricCode === 'S.machine_state'));
+  // 设备状态样本来源：任一启用来源接入 S.machine_state 即可（状态采集用于状态派生，不受监控勾选影响）
+  const stateItem = (binding?.items || []).find(i => i.enabled && (i.metrics || []).some(m => m.metricCode === 'S.machine_state'));
   const stateSample = disconnected
     ? null
     : samples.find(s => s.sourceId === stateItem?.iotDeviceId && s.metricCode === 'S.machine_state');

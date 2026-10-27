@@ -115,7 +115,7 @@ export default function MaintenancePlansPage() {
     <>
       <PageHeader
         title="保养计划"
-        subtitle={`年度 / 循环保养计划 · 共 ${rows.length} 条 · 行点击进入计划详情（关联设备 / 关联保养任务）`}
+        subtitle={`数据更新于 ${meta.demoDay}`}
       />
       <DegradedBanner meta={meta} />
       <Card size="small" style={{ marginBottom: 12 }}>

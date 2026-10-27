@@ -45,7 +45,6 @@ export default function SpareOutboundDetailPage() {
     <>
       <PageHeader
         title={`出库详情 · ${detail.code}`}
-        subtitle="维修出库单由维修领料动作生成，与维修工单关联；退库回冲原出库仓库在库量"
         actions={<Button icon={<ArrowLeft size={14} />} onClick={() => navigate('/spare-parts-outbound')}>返回列表</Button>}
       />
       <DegradedBanner meta={state.meta} />

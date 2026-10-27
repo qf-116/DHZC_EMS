@@ -121,10 +121,7 @@ export default function SparePartsOutboundPage() {
 
   return (
     <>
-      <PageHeader
-        title="出库记录"
-        subtitle="维修领料出库关联维修工单（已派工/维修中） · 同一 requestId 重复提交幂等忽略 · 余料退库不超过已出库未归还量"
-      />
+      <PageHeader title="出库记录" />
       <DegradedBanner meta={state.meta} />
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space wrap>
@@ -142,7 +139,6 @@ export default function SparePartsOutboundPage() {
             onChange={setTypeKw}
             options={['领用出库', '维修出库'].map(v => ({ value: v, label: v }))}
           />
-          <Button type="primary">查询</Button>
           <Button onClick={() => { setRange(null); setTypeKw(null); }}>重置</Button>
         </Space>
       </Card>

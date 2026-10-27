@@ -101,7 +101,6 @@ export default function RepairPendingPage() {
     <>
       <PageHeader
         title="待维修"
-        subtitle="显示所有待派工的维修工单与报修单 · 按紧急>严重>一般排序，故障发生时间降序 · 支持按紧急程度筛选与模糊搜索"
       />
       <DegradedBanner meta={meta} />
       <Card size="small" style={{ marginBottom: 12 }}>

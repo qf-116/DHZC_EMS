@@ -7,7 +7,7 @@
 // ============================================================
 
 import React, { useMemo, useState } from 'react';
-import { App, Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tag, Typography } from 'antd';
+import { App, Button, Card, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tag } from 'antd';
 import { Plus } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import StatusTag from '../components/StatusTag.jsx';
@@ -140,7 +140,7 @@ export default function SystemDictPage() {
     <>
       <PageHeader
         title="字典管理"
-        subtitle="系统级枚举字典（标签 + 键值 + 排序）· 业务下拉与状态标签统一取数于此 · 数据更新于 2026-09-16"
+        subtitle="数据更新于 2026-09-16"
       />
 
       <div style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
@@ -184,9 +184,6 @@ export default function SystemDictPage() {
             onSearch={setEntryKw} onChange={(e) => { if (!e.target.value) setEntryKw(''); }} />}>
           <Space wrap style={{ marginBottom: 12 }}>
             <Button type="primary" icon={<Plus size={14} />} onClick={openEntryCreate} disabled={!currentType}>新增字典项</Button>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              同一类型内 标签 / 键值 均唯一；停用项不进入业务下拉，历史数据不受影响
-            </Typography.Text>
           </Space>
           <Table
             rowKey="entryId" size="small"

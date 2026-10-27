@@ -129,14 +129,9 @@ export default function ProgramCompareReportPage() {
     <>
       <PageHeader
         title="程序比对统计报表"
-        subtitle={`程序下发与参数比对结果按设备统计 · 统计日 ${meta.demoDay || '--'} · 口径截止 ${meta.lastSampleAt || '--'}`}
+        subtitle={`统计日 ${meta.demoDay || '--'} · 口径截止 ${meta.lastSampleAt || '--'}`}
       />
       <DegradedBanner meta={meta} />
-      <div style={{ marginBottom: 12 }}>
-        <Space wrap>
-          <Button type="primary" icon={<Download size={14} />} onClick={handleExport}>导出</Button>
-        </Space>
-      </div>
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space wrap>
           <RangePicker
@@ -153,13 +148,9 @@ export default function ProgramCompareReportPage() {
           <Button onClick={handleReset}>重置</Button>
         </Space>
       </Card>
-      <Alert
-        className="rule-alert"
-        type="info"
-        showIcon
-        style={{ marginBottom: 12 }}
-        message="口径：未处理数 = 处置状态为「待确认」或「处理中」的比对记录；不一致 / 比对失败需在「程序比对」页确认处置后闭环。"
-      />
+      <Space wrap style={{ marginBottom: 12 }}>
+        <Button type="primary" icon={<Download size={14} />} onClick={handleExport}>导出</Button>
+      </Space>
       <div className="metric-grid" style={{ marginBottom: 12 }}>
         <MetricTile label="比对记录总数" value={totals.total} unit="条" />
         <MetricTile label="参数不一致" value={totals.diff} unit="条" color="#dc2626" />

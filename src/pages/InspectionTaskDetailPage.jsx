@@ -60,7 +60,7 @@ export default function InspectionTaskDetailPage() {
     <>
       <PageHeader
         title="点检任务详情"
-        subtitle={`任务：${task.code} · ${task.plan} · 点检日期：${task.date} · 数据更新于 ${meta.demoDay} · 设备展示经 canonical 设备映射`}
+        subtitle={`任务：${task.code} · ${task.plan} · 点检日期：${task.date} · 数据更新于 ${meta.demoDay}`}
         actions={<Space>
           {['未开始', '进行中'].includes(task.status) && !overdue && (
             <Button type="primary" onClick={() => navigate(`/inspection-tasks/execute?code=${encodeURIComponent(task.code)}`)}>执行点检</Button>

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Descriptions, Tag, Button, Space, App, Alert, Table, Timeline, Radio, Input, Select, Form, Modal } from 'antd';
+import { Card, Descriptions, Tag, Button, Space, App, Table, Timeline, Radio, Input, Select, Form, Modal } from 'antd';
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate, useParams, useSearchParams, useLocation } from 'react-router-dom';
 import PageHeader from '../components/PageHeader.jsx';
@@ -188,8 +188,6 @@ export default function RepairDetailPage() {
         <div style={{ fontWeight: 600, marginBottom: 12 }}>验收</div>
         {order.status === '待验收' && (
           <>
-            <Alert type="info" showIcon style={{ marginBottom: 12 }}
-              message="验收通过后：工单完成、设备恢复、关联维修停机自动结束、关联报警进入恢复流程；返修则退回「维修中」（原履历保留，返修次数 +1）。" />
             <Form layout="vertical" style={{ maxWidth: 640 }}>
               <Form.Item label="验收结论" required>
                 <Radio.Group value={acceptResult} onChange={e => setAcceptResult(e.target.value)}>

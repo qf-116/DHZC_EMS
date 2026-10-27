@@ -149,7 +149,7 @@ export default function DeviceLedgerPage() {
     <>
       <PageHeader
         title="设备台账"
-        subtitle={`数据更新于 ${meta.updatedAt || '--'} · 台账↔监测映射由 crosswalk 统一解析 · 新增/编辑为弹窗`}
+        subtitle={`数据更新于 ${meta.updatedAt || '--'}`}
       />
       <div style={{ display: 'flex', gap: 12 }}>
         <Card size="small" title="设备类型" style={{ width: 200, flexShrink: 0 }}>
@@ -166,7 +166,6 @@ export default function DeviceLedgerPage() {
               <Select style={{ width: 130 }} placeholder="生命周期" allowClear value={lifecycle} onChange={setLifecycle} options={lifecycles.map(v => ({ value: v, label: v }))} />
               <Select style={{ width: 130 }} placeholder="车间" allowClear value={workshop} onChange={setWorkshop} options={workshops.map(v => ({ value: v, label: v }))} />
               <Input style={{ width: 200 }} placeholder="资产编号 / 名称 / 型号 / 负责人" allowClear value={kw} onChange={e => setKw(e.target.value)} />
-              <Button type="primary" onClick={() => message.info('列表已按当前条件实时筛选')}>查询</Button>
               <Button onClick={() => { setLifecycle(null); setWorkshop(null); setKw(''); }}>重置</Button>
             </Space>
           </Card>

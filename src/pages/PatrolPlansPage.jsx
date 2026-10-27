@@ -140,7 +140,7 @@ export default function PatrolPlansPage() {
     <>
       <PageHeader
         title="巡检计划"
-        subtitle={`巡检计划（按线路设备生成巡检任务）· 周期：${[...new Set(patrolPlans.map(r => r.cycle))].join('/')} · 数据更新于 ${meta.updatedAt}`}
+        subtitle={`数据更新于 ${meta.updatedAt}`}
       />
       <DegradedBanner meta={meta} />
       <Card size="small" style={{ marginBottom: 12 }}>

@@ -97,18 +97,18 @@ export default function PatrolReportPage() {
         <Col span={6}><Card size="small"><Statistic title="逾期任务" value={totalOverdue} valueStyle={{ color: totalOverdue > 0 ? '#cf1322' : undefined }} /></Card></Col>
         <Col span={6}><Card size="small"><Statistic title="漏检项目数" value={totalMissed} valueStyle={{ color: totalMissed > 0 ? '#cf1322' : undefined }} /></Card></Col>
       </Row>
-      <Card size="small" title={<Space><FileBarChart size={14} />按巡检线路统计
-        <RangePicker
-          style={{ width: 250 }} allowClear
-          value={range} onChange={setRange}
-          presets={[
-            { label: '最近7天', value: [dayjs().subtract(6, 'day'), dayjs()] },
-            { label: '最近30天', value: [dayjs().subtract(29, 'day'), dayjs()] },
-          ]}
-          placeholder={['开始日期', '结束日期']}
-        />
-      </Space>}>
+      <Card size="small" title={<Space size={8}><FileBarChart size={14} />按巡检线路统计</Space>}>
         <Space wrap style={{ marginBottom: 12 }}>
+          <RangePicker
+            style={{ width: 250 }} allowClear
+            value={range} onChange={setRange}
+            presets={[
+              { label: '最近7天', value: [dayjs().subtract(6, 'day'), dayjs()] },
+              { label: '最近30天', value: [dayjs().subtract(29, 'day'), dayjs()] },
+            ]}
+            placeholder={['开始日期', '结束日期']}
+          />
+          <Button onClick={() => setRange(null)}>重置</Button>
           <Button icon={<Download size={14} />} onClick={() => message.success('已导出')}>导出</Button>
         </Space>
         <Table

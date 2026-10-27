@@ -7,7 +7,6 @@ import EmptyState from '../components/EmptyState.jsx';
 import { useNavigate } from 'react-router-dom';
 import { useDemoState } from '../state/DemoStore.jsx';
 import { selectAllRepairOrders } from '../state/selectors.js';
-import { SLA_HOURS } from '../domain/repair.js';
 
 const levelColor = { 紧急: 'red', 严重: 'orange', 一般: 'blue' };
 const sourceLabel = { alarm: '报警转维修', report: '人工报修', 'alarm+report': '报警+报修' };
@@ -39,7 +38,6 @@ export default function RepairOrdersPage() {
     <>
       <PageHeader
         title="维修任务"
-        subtitle={`维修主工单（报修与维修统一对象）· 状态：${statusOptions.map(o => o.value).join('/') || '--'} · SLA 按等级自动带出（紧急 ${SLA_HOURS['紧急']}h / 严重 ${SLA_HOURS['严重']}h / 一般 ${SLA_HOURS['一般']}h） · 按创建时间倒序`}
       />
       <DegradedBanner meta={meta} />
       <Card size="small" style={{ marginBottom: 12 }}>

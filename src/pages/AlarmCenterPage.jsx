@@ -229,7 +229,7 @@ export default function AlarmCenterPage() {
     <>
       <PageHeader
         title="报警中心"
-        subtitle={`活动 ${counts.active} 条 · 待确认 ${counts.unacked} · 确认/处理中 ${counts.handling} · 恢复待关闭 ${counts.pendingClose} · 状态机：已触发→已确认→处理中→已恢复待关闭→已关闭`}
+        subtitle={`活动 ${counts.active} 条 · 待确认 ${counts.unacked} · 确认/处理中 ${counts.handling} · 恢复待关闭 ${counts.pendingClose}`}
       />
       <DegradedBanner meta={state.meta} />
       {/* 筛选卡：查询条件独立在列表卡上方 */}

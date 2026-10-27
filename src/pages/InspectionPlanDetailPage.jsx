@@ -67,7 +67,7 @@ export default function InspectionPlanDetailPage() {
     <>
       <PageHeader
         title="点检计划详情"
-        subtitle={`计划：${plan.code} · ${planView.name} · 状态：${plan.status} · 数据更新于 ${meta.demoDay}`}
+        subtitle={`计划：${plan.code} · ${planView.name} · 数据更新于 ${meta.demoDay}`}
         actions={(
           <Space>
             <Button icon={<ArrowLeft size={14} />} onClick={() => navigate('/inspection-plans')}>返回列表</Button>
@@ -141,7 +141,6 @@ export default function InspectionPlanDetailPage() {
           <Form.Item label="负责人" name="owner"><Input /></Form.Item>
           <Form.Item label="备注" name="remark"><Input.TextArea rows={2} maxLength={200} /></Form.Item>
         </Form>
-        <div style={{ color: '#8a97a3', fontSize: 12 }}>执行周期、起止日期等口径在计划列表「编辑」中维护。</div>
       </Modal>
     </>
   );

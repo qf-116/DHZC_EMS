@@ -191,10 +191,6 @@ export default function MaintenancePlanDetailPage() {
         )}
       </Card>
 
-      <div style={{ textAlign: 'right' }}>
-        <Button type="primary" onClick={() => navigate('/maintenance-plans')}>关闭</Button>
-      </div>
-
       <Modal
         title={`编辑保养计划（${plan.code}）`}
         width={640}
@@ -210,7 +206,6 @@ export default function MaintenancePlanDetailPage() {
           <Form.Item label="执行人" name="executor"><Input /></Form.Item>
           <Form.Item label="备注" name="remark"><Input.TextArea rows={2} maxLength={200} /></Form.Item>
         </Form>
-        <div style={{ color: '#8a97a3', fontSize: 12 }}>保养周期、计划日期等口径在计划列表「编辑」中维护。</div>
       </Modal>
     </>
   );

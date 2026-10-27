@@ -26,7 +26,7 @@ export default function RepairKnowledgePage() {
 
   return (
     <>
-      <PageHeader title="维修经验库" subtitle="维修过程中自动创建、在经验库中创建的经验内容都可编辑 · 按创建时间倒序 · 新增/编辑为弹窗，删除需二次确认" />
+      <PageHeader title="维修经验库" />
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space wrap>
           <Select style={{ width: 110 }} placeholder="故障类型" allowClear options={['过热', '磨损', '异响', '短路', '漏水', '压力不足', '响应故障'].map(v => ({ value: v, label: v }))} />

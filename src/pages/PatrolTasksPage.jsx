@@ -113,7 +113,7 @@ export default function PatrolTasksPage() {
     <>
       <PageHeader
         title="巡检任务"
-        subtitle={`巡检任务（按巡检计划生成，任务状态：${[...new Set(patrolTasks.map(r => r.status))].join('/')}）· 行点击进入详情 · 数据更新于 ${meta.updatedAt}`}
+        subtitle={`数据更新于 ${meta.updatedAt}`}
       />
       <DegradedBanner meta={meta} />
       <Card size="small" style={{ marginBottom: 12 }}>

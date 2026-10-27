@@ -110,13 +110,14 @@ export default function MaintenanceItemsPage() {
     <>
       <PageHeader
         title="保养项目"
-        subtitle={`保养项目基础档案 · 按分组展示：${maintenanceItemGroups.join(' / ')}`}
+        subtitle={`数据更新于 ${meta.demoDay}`}
       />
       <DegradedBanner meta={meta} />
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space wrap>
           <Input.Search style={{ width: 240 }} placeholder="项目编号 / 名称 / 部位 / 要求" allowClear
             onSearch={setKw} onChange={e => { if (!e.target.value) setKw(''); }} />
+          <Button onClick={() => { setKw(''); setActiveGroup('all'); }}>重置</Button>
         </Space>
       </Card>
       <Card size="small">

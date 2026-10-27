@@ -147,7 +147,7 @@ export default function AlarmReportPage() {
     <>
       <PageHeader
         title="报警统计报表"
-        subtitle={`按设备 × 级别 × 状态聚合报警事件 · 统计日 ${meta.demoDay || '--'} · 口径截止 ${meta.lastSampleAt || '--'}`}
+        subtitle={`统计日 ${meta.demoDay || '--'} · 口径截止 ${meta.lastSampleAt || '--'}`}
       />
       <DegradedBanner meta={meta} />
       <div style={{ marginBottom: 12 }}>

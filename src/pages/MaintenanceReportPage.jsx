@@ -164,7 +164,7 @@ export default function MaintenanceReportPage() {
     <>
       <PageHeader
         title="保养执行统计"
-        subtitle={`按设备 / 执行人聚合保养任务（共 ${maintenanceTasks.length} 条）：计划完成率 = 已完成 /（总数 − 已关闭）`}
+        subtitle={`共 ${maintenanceTasks.length} 条保养任务 · 数据基准 ${meta.updatedAt || '--'}`}
       />
       <DegradedBanner meta={meta} />
 
@@ -183,9 +183,7 @@ export default function MaintenanceReportPage() {
           <Typography.Text>已完成：<strong>{totals.done}</strong></Typography.Text>
           <Typography.Text>已关闭：<strong>{totals.closed}</strong></Typography.Text>
           <Typography.Text>整体计划完成率：<strong>{totals.rate}</strong></Typography.Text>
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            数据基准：{meta.updatedAt}
-          </Typography.Text>
+          <Button onClick={() => setRange(null)}>重置</Button>
         </Space>
       </Card>
 

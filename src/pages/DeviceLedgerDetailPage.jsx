@@ -239,7 +239,6 @@ export function DeviceLedgerDetailContent({ state, deviceId: suppliedDeviceId, e
               <Tag color={device.oeeEligible ? 'success' : 'default'}>{device.oeeEligible == null ? '--' : device.oeeEligible ? '是' : '否'}</Tag>
             </Descriptions.Item>
           </Descriptions>
-          <div style={hint}>纳入 OEE 分析的设备需绑定已启用并在 OEE 效率分析中维护理想速度与计划停机口径。</div>
         </Card>
         <Card size="small" title="设备二维码">
           <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
@@ -276,7 +275,6 @@ export function DeviceLedgerDetailContent({ state, deviceId: suppliedDeviceId, e
             { title: '状态', dataIndex: 'status', width: 100, render: v => <StatusTag value={v} /> },
           ]}
         />
-        <div style={hint}>履历由生命周期单据和动作事实聚合生成，只读展示，不在本页直接修改历史记录。</div>
       </Card>
     ),
   });
@@ -378,7 +376,6 @@ export function DeviceLedgerDetailContent({ state, deviceId: suppliedDeviceId, e
             { title: '创建时间', dataIndex: 'createdAt', width: 140, render: dash },
           ]}
         />
-        <div style={hint}>维修工单可在「维修管理」中派工 / 执行 / 验收；状态变化实时反映在本页与各业务页面。</div>
       </>
     ),
   });
@@ -411,9 +408,6 @@ export function DeviceLedgerDetailContent({ state, deviceId: suppliedDeviceId, e
               <Descriptions.Item label="端口">--</Descriptions.Item>
               <Descriptions.Item label="点表">--</Descriptions.Item>
             </Descriptions>
-            <div style={hint}>
-              协议 / 网关 / IP / 端口 / 点表由 IoT 平台接入服务维护，本系统不存储也不展示具体值（-- 表示由平台管理，非未配置）。
-            </div>
           </Card>
           <Card size="small" title={`来源设备（共 ${(binding.items || []).length} 个，接入指标 ${totalMetrics} 项 / 监控中 ${totalMonitored} 项）`}>
             <Table
@@ -436,9 +430,6 @@ export function DeviceLedgerDetailContent({ state, deviceId: suppliedDeviceId, e
                 },
               ]}
             />
-            <div style={hint}>
-              来源设备编码全局唯一（排他校验由绑定保存流程执行）；绑定即全量接入存储：蓝色为监控中指标（曲线呈现），其余指标仍存储，可在本页「数据指标历史」中查看。绑定与监控指标变更请前往「物联网接入配置」。
-            </div>
             {!embedded && <div style={{ marginTop: 12 }}>
               <Button onClick={() => navigate('/binding-overview')}>前往物联网接入配置</Button>
             </div>}
@@ -483,11 +474,6 @@ export function DeviceLedgerDetailContent({ state, deviceId: suppliedDeviceId, e
               columns={metricColumns}
               locale={{ emptyText: <EmptyState description="该设备未配置监控指标（仅存储未监控）" reason="可在物联网接入配置「监控指标配置」中勾选纳入曲线监控的指标" next={embedded ? undefined : '前往物联网接入配置'} onNext={() => navigate('/binding-overview')} /> }}
             />
-            {realtime.healthStatus === '数据中断' && (
-              <div style={hint}>
-                注：数据中断期间指标值显示 --（无数据 ≠ 0），最后样本时间 {health.lastSampleAt || '--'}。
-              </div>
-            )}
           </Card>
         </>
       ),
@@ -558,9 +544,9 @@ export function DeviceLedgerDetailContent({ state, deviceId: suppliedDeviceId, e
                   })}
                 </div>
               )}
-              {monitorCurves.length > 0 && (
-                <div style={hint} className={embedded ? 'device-ledger-series-note' : undefined}>
-                  {embedded ? '演示序列 · 近 55 分钟，每 5 分钟一个采样点；仅用于界面演示。' : '序列说明：优先使用平台快照趋势，无快照时按当前采样值生成确定性演示序列；监控曲线为页面级配置（不写入绑定），换设备后需重新配置。'}
+              {embedded && monitorCurves.length > 0 && (
+                <div style={hint} className="device-ledger-series-note">
+                  {'演示序列 · 近 55 分钟，每 5 分钟一个采样点；仅用于界面演示。'}
                 </div>
               )}
             </Card>
@@ -671,12 +657,6 @@ export function DeviceLedgerDetailContent({ state, deviceId: suppliedDeviceId, e
         )}
       />}
       {!embedded && <DegradedBanner meta={meta} />}
-      {lifecycleOnly && (
-        <Alert
-          type="info" showIcon style={{ marginBottom: 12 }}
-          message={`该设备生命周期状态为「${device.lifecycleStatus}」，不参与运行监测与 OEE 统计，以下仅展示台账与绑定信息。`}
-        />
-      )}
       {hasBinding && !lifecycleOnly && realtime.healthStatus === '数据中断' && (
         <Alert
           type="warning" showIcon style={{ marginBottom: 12 }}

@@ -66,10 +66,7 @@ export default function ProgramComparePage() {
 
   return (
     <>
-      <PageHeader
-        title="程序参数比对"
-        subtitle="程序下发后自动比对基线参数与设备实际参数（超容差标红）· 比对由接入服务执行，本页只读"
-      />
+      <PageHeader title="程序参数比对" />
       {/* 筛选卡：查询条件独立在列表卡上方 */}
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space wrap>
@@ -137,10 +134,6 @@ export default function ProgramComparePage() {
             },
           ]}
         />
-        <div style={{ color: '#5d6b78', fontSize: 12, marginTop: 8 }}>
-          说明：行展开可查看「基线 vs 实际」逐项参数（超容差项标红）。PC-20260916-001（CNC加工中心-02）参数不一致，关联报警
-          {' '}ALM-20260916-003，处置依据见「比对处理记录」PCR-20260916-001（关联维修工单 RO-20260916-001）。
-        </div>
       </Card>
     </>
   );

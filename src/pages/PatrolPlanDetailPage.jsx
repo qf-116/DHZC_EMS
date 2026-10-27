@@ -174,7 +174,6 @@ export default function PatrolPlanDetailPage() {
           <Form.Item label="负责人" name="owner"><Input /></Form.Item>
           <Form.Item label="备注" name="remark"><Input.TextArea rows={2} maxLength={200} /></Form.Item>
         </Form>
-        <div style={{ color: '#8a97a3', fontSize: 12 }}>巡检周期、起止时间等口径在计划列表「编辑」中维护。</div>
       </Modal>
     </>
   );

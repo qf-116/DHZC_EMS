@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Table, Tag, Button, Space, Select, App, Modal, Form, Input, InputNumber, Tooltip, Alert } from 'antd';
+import { Card, Table, Tag, Button, Space, Select, App, Modal, Form, Input, InputNumber, Tooltip } from 'antd';
 
 import { Plus, AppWindow, Edit3, Trash2 } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
@@ -237,7 +237,6 @@ export default function RuleTemplatePage() {
     <>
       <PageHeader
         title="报警规则模板"
-        subtitle="模板实体存于 DemoStore · 增删改真实落库 · 应用 = 选模板 + 选设备 + 匹配启用绑定指标 · 只生成草稿 · 模板更新不回写已发布规则"
       />
       {/* 筛选卡：查询条件独立在列表卡上方 */}
       <Card size="small" style={{ marginBottom: 12 }}>
@@ -253,7 +252,6 @@ export default function RuleTemplatePage() {
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
           <Button type="primary" icon={<Plus size={14} />} onClick={() => openModal(null)}>新增模板</Button>
-          <Alert type="info" showIcon style={{ padding: '2px 10px' }} message="模板在「报警规则配置」保存规则时也可一键沉淀（存为模板）" />
         </Space>
         <Table
           rowKey="templateId" size="small" scroll={{ x: 2100 }}

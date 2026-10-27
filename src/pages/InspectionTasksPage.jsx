@@ -81,7 +81,7 @@ export default function InspectionTasksPage() {
     <>
       <PageHeader
         title="点检任务"
-        subtitle={`点检任务列表 · 状态：待执行 / 进行中 / 已完成 / 已关闭 / 已逾期 · 已逾期 = 点检日期早于 ${meta.demoDay} 且未完结 · 数据更新于 ${meta.demoDay}`}
+        subtitle={`数据更新于 ${meta.demoDay}`}
       />
       <DegradedBanner meta={meta} />
       <Card size="small" style={{ marginBottom: 12 }}>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Descriptions, Table, Button, Tag, Tooltip, Alert } from 'antd';
+import { Card, Descriptions, Table, Button, Tag, Tooltip, Space } from 'antd';
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import PageHeader from '../components/PageHeader.jsx';
@@ -81,18 +81,16 @@ export default function MaintenanceTaskDetailPage() {
       <PageHeader
         title={`保养任务详情 · ${task.code}`}
         subtitle={`${task.name}`}
-        actions={<Button icon={<ArrowLeft size={14} />} onClick={() => navigate('/maintenance-tasks')}>返回列表</Button>}
+        actions={(
+          <Space>
+            {canExecute && (
+              <Button type="primary" onClick={() => navigate(`/maintenance-tasks/execute?code=${encodeURIComponent(task.code)}`)}>前往执行</Button>
+            )}
+            <Button icon={<ArrowLeft size={14} />} onClick={() => navigate('/maintenance-tasks')}>返回列表</Button>
+          </Space>
+        )}
       />
       <DegradedBanner meta={meta} />
-      {canExecute && (
-        <Alert
-          type="info" showIcon style={{ marginBottom: 12 }}
-          message={`该任务当前状态「${task.status}」，可前往执行页逐项登记保养结果`}
-          action={
-            <Button size="small" type="primary" onClick={() => navigate(`/maintenance-tasks/execute?code=${encodeURIComponent(task.code)}`)}>前往执行</Button>
-          }
-        />
-      )}
       <Card size="small" style={{ marginBottom: 12 }}>
         <Descriptions column={3} size="small" bordered>
           <Descriptions.Item label="任务编号">{task.code}</Descriptions.Item>
@@ -154,10 +152,6 @@ export default function MaintenanceTaskDetailPage() {
           ]}
         />
       </Card>
-
-      <div style={{ textAlign: 'right' }}>
-        <Button type="primary" onClick={() => navigate('/maintenance-tasks')}>关闭</Button>
-      </div>
     </>
   );
 }

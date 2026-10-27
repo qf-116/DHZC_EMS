@@ -1,6 +1,5 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Table, Button, Input, Space, Modal, Form, InputNumber, DatePicker, Tag, Alert, App, Card } from 'antd';
-import { Search } from 'lucide-react';
+import { Table, Button, Input, Space, Modal, Form, InputNumber, DatePicker, Tag, App, Card } from 'antd';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import { selectOeeRecomputeLog } from '../state/selectors.js';
 import PageHeader from '../components/PageHeader.jsx';
@@ -52,22 +51,15 @@ export default function SpeedConfigPage() {
   return (
     <>
       <DegradedBanner meta={state.meta} />
-      <PageHeader
-        title="理想生产速度配置"
-        subtitle="设备 × 物料的理论生产速度基准（个/小时）· 用于 OEE 性能率计算：性能率 = 实际生产速度 / 理想生产速度 · 未配置速度的物料 OEE 不可计算（如 DEV-005）"
-      />
-      <Alert
-        type="info" showIcon style={{ marginBottom: 12 }}
-        message="保存后实时 OEE 按新理想速度重算"
-        description="保存将生成新版本（版本 +1）并写入 OEE 重算记录；实时/历史 OEE 页面随之刷新，无需手工刷新。"
-      />
-      <Space wrap style={{ marginBottom: 12 }}>
-        <Input allowClear placeholder="设备名称 / 编号" style={{ width: 180 }} value={filters.deviceCode} onChange={setF('deviceCode')} />
-        <Input allowClear placeholder="物料编码" style={{ width: 180 }} value={filters.materialCode} onChange={setF('materialCode')} />
-        <Input allowClear placeholder="物料名称" style={{ width: 180 }} value={filters.materialName} onChange={setF('materialName')} />
-        <Button icon={<Search size={13} />}>查询</Button>
-        <Button onClick={() => setFilters({ deviceCode: '', materialCode: '', materialName: '' })}>重置</Button>
-      </Space>
+      <PageHeader title="理想生产速度配置" />
+      <Card size="small" style={{ marginBottom: 12 }}>
+        <Space wrap size={8}>
+          <Input.Search allowClear placeholder="设备名称 / 编号" style={{ width: 240 }} value={filters.deviceCode} onChange={setF('deviceCode')} />
+          <Input.Search allowClear placeholder="物料编码" style={{ width: 180 }} value={filters.materialCode} onChange={setF('materialCode')} />
+          <Input.Search allowClear placeholder="物料名称" style={{ width: 180 }} value={filters.materialName} onChange={setF('materialName')} />
+          <Button onClick={() => setFilters({ deviceCode: '', materialCode: '', materialName: '' })}>重置</Button>
+        </Space>
+      </Card>
       <Table
         rowKey="id" size="small" scroll={{ x: 1100 }}
         dataSource={filtered}

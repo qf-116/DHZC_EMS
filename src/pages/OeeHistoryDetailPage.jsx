@@ -96,7 +96,7 @@ export default function OeeHistoryDetailPage() {
       <DegradedBanner meta={state.meta} />
       <PageHeader
         title="历史 OEE 详情"
-        subtitle={`${device.name}（${device.assetCode}）· ${day} · OEE = 可用率 × 性能率 × 合格率 · 计划停机只影响可用率分母`}
+        subtitle={`${device.name}（${device.assetCode}）· ${day}`}
         actions={<Button onClick={() => navigate('/oee-history')}>返回历史 OEE</Button>}
       />
       {/* 筛选卡：设备 / 日期切换（规范 §1/§4） */}

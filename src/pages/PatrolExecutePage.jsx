@@ -159,8 +159,7 @@ export default function PatrolExecutePage() {
           pagination={false}
           locale={{ emptyText: <EmptyState description="暂无待执行巡检项" reason="暂无该任务的巡检项" /> }}
         />
-        <div style={{ marginTop: 12, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-          <span style={{ fontSize: 12, color: '#8a97a3' }}>判断结果类型：单选（选项判定）/ 数值（正常范围 {patrolExecItems.find(i => i.resultType === '数值')?.normalValue || '--'}）/ 文本（直接填写）</span>
+        <div style={{ marginTop: 12, display: 'flex', justifyContent: 'flex-end' }}>
           <Button type="primary" icon={<CheckCircle2 size={14} />} onClick={handleSubmit}>提交巡检结果</Button>
         </div>
       </Card>

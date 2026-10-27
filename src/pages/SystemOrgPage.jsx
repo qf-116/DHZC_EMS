@@ -164,19 +164,19 @@ export default function SystemOrgPage() {
     <>
       <PageHeader
         title="组织机构"
-        subtitle="部门树 + 部门人员（数据权限范围按本树过滤）· 数据更新于 2026-09-16"
+        subtitle="数据更新于 2026-09-16"
       />
 
       <div style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
         {/* 左：部门树 */}
-        <Card size="small" style={{ width: 320, flexShrink: 0 }} title={<Space><Building2 size={14} /> 部门树</Space>}
-          extra={<Button type="primary" size="small" icon={<Plus size={12} />} onClick={openDeptCreate}>新增部门</Button>}>
-          {currentDept && currentDept.key !== 'DHZC' && (
-            <Alert type="info" showIcon style={{ marginBottom: 8 }} closable
-              message={<Space size={0}>
-                <Button type="link" size="small" onClick={openDeptEdit}>编辑</Button>
+        <Card size="small" style={{ width: 320, flexShrink: 0 }} title={<Space><Building2 size={14} /> 部门树</Space>}>
+          <Space wrap style={{ marginBottom: 12 }}>
+            <Button type="primary" size="small" icon={<Plus size={12} />} onClick={openDeptCreate}>新增部门</Button>
+            {currentDept && currentDept.key !== 'DHZC' && (
+              <>
+                <Button size="small" onClick={openDeptEdit}>编辑</Button>
                 <Popconfirm title={`确认删除部门「${currentDept.title}」？存在子部门或人员时无法删除。`} onConfirm={() => handleDeptDelete(currentDept)}>
-                  <Button type="link" size="small" danger>删除</Button>
+                  <Button size="small" danger>删除</Button>
                 </Popconfirm>
                 <Popconfirm title={currentDept.status === '启用' ? '确认停用该部门？停用后不可新增人员。' : '确认启用该部门？'}
                   onConfirm={() => {
@@ -184,10 +184,11 @@ export default function SystemOrgPage() {
                     setDeptRows((rs) => rs.map((d) => (d.key === currentDept.key ? { ...d, status: next } : d)));
                     message.success(`部门「${currentDept.title}」已${next === '停用' ? '停用' : '启用'}`);
                   }}>
-                  <Button type="link" size="small">{currentDept.status === '启用' ? '停用' : '启用'}</Button>
+                  <Button size="small">{currentDept.status === '启用' ? '停用' : '启用'}</Button>
                 </Popconfirm>
-              </Space>} />
-          )}
+              </>
+            )}
+          </Space>
           <div style={{ maxHeight: 520, overflow: 'auto' }}>
             <Tree
               blockNode

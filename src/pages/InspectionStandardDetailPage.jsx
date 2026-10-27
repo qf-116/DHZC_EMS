@@ -57,7 +57,7 @@ export default function InspectionStandardDetailPage() {
     <>
       <PageHeader
         title="点检标准详情"
-        subtitle={`标准：${standard.code} · ${standard.name} · 状态：${standard.status} · 数据更新于 ${meta.demoDay} · 设备展示经 canonical 设备映射`}
+        subtitle={`标准：${standard.code} · ${standard.name} · 数据更新于 ${meta.demoDay}`}
         actions={<Space><Button icon={<ArrowLeft size={14} />} onClick={() => navigate('/inspection-standards')}>返回列表</Button></Space>}
       />
       <DegradedBanner meta={meta} />

@@ -92,7 +92,7 @@ export default function OeeRealtimePage() {
       <DegradedBanner meta={state.meta} />
       <PageHeader
         title="实时 OEE"
-        subtitle={`统计窗口：最近 1 小时（统计日 ${state.meta.demoDay}）· OEE = 可用率 × 性能率 × 合格率 · 可用率 = 运行时间 / (负荷时间 − 计划停机时间) · 性能率 = 实际速度 / 理想速度 · 合格率 = 良品 / 总产量 · “--”表示不可计算（悬停查看原因），不按 0 处理`}
+        subtitle={`统计窗口：最近 1 小时（统计日 ${state.meta.demoDay}）`}
       />
       <div className="metric-grid" style={{ marginBottom: 12 }}>
         <MetricTile label="平均 OEE（可计算设备）" value={avgOf('oee')} unit="%" color="#1668dc" />

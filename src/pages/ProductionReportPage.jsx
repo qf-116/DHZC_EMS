@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, App, Button, Card, DatePicker, Select, Space, Table, Tag } from 'antd';
+import { App, Button, Card, DatePicker, Select, Space, Table, Tag } from 'antd';
 import dayjs from 'dayjs';
 import { Download, Search } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
@@ -104,14 +104,9 @@ export default function ProductionReportPage() {
     <>
       <PageHeader
         title="生产产出报表"
-        subtitle={`产量 · 合格率 · 加工节拍 · 统计日 ${meta.demoDay || '--'} · 口径截止 ${meta.lastSampleAt || '--'}`}
+        subtitle={`统计日 ${meta.demoDay || '--'} · 口径截止 ${meta.lastSampleAt || '--'}`}
       />
       <DegradedBanner meta={meta} />
-      <div style={{ marginBottom: 12 }}>
-        <Space wrap>
-          <Button type="primary" icon={<Download size={14} />} onClick={handleExport}>导出</Button>
-        </Space>
-      </div>
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space wrap>
           <RangePicker
@@ -130,13 +125,9 @@ export default function ProductionReportPage() {
           <Button onClick={handleReset}>重置</Button>
         </Space>
       </Card>
-      <Alert
-        className="rule-alert"
-        type="info"
-        showIcon
-        style={{ marginBottom: 12 }}
-        message="产量 / 加工数量 / 合格数量来自生产与质量点位按日汇总；无生产数据的设备不出现在表内，空值以 '--' 显示（无数据 ≠ 0）。"
-      />
+      <Space wrap style={{ marginBottom: 12 }}>
+        <Button type="primary" icon={<Download size={14} />} onClick={handleExport}>导出</Button>
+      </Space>
       {rows.length === 0 ? (
         <EmptyState
           description="当前筛选条件下无生产产出统计行"

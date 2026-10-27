@@ -12,7 +12,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  App, Alert, Button, Card, Checkbox, Col, Input, Modal, Row, Select, Space, Statistic, Steps, Table, Tag, Tooltip, Typography,
+  App, Alert, Button, Card, Checkbox, Input, Modal, Select, Space, Steps, Table, Tag, Tooltip, Typography,
 } from 'antd';
 import { Plus, Save, Play, PauseCircle, Settings2, LayoutTemplate, Activity, ArrowRight, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -523,9 +523,20 @@ export default function BindingOverviewPage() {
     return { device: d, binding, draft, health, status, metricTotal, metricMonitored };
   }), [state]);
 
-  const activeCount = rows.filter((r) => r.status === '已启用').length;
-  const unconfiguredCount = rows.filter((r) => r.status === '未配置').length;
-  const interruptedCount = rows.filter((r) => r.health.status === '数据中断').length;
+  // 查询条件（实时筛选；规范 §4：关键词 → 下拉 → 重置）
+  const [kw, setKw] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [healthFilter, setHealthFilter] = useState('all');
+  const statusOptions = useMemo(() => [...new Set(rows.map((r) => r.status))], [rows]);
+  const healthOptions = useMemo(() => [...new Set(rows.map((r) => r.health.status).filter(Boolean))], [rows]);
+  const filteredRows = useMemo(() => rows.filter((r) => {
+    const k = kw.trim().toLowerCase();
+    if (k && !`${r.device.deviceId} ${r.device.name} ${r.device.assetCode || ''}`.toLowerCase().includes(k)) return false;
+    if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+    if (healthFilter !== 'all' && (r.health.status || '--') !== healthFilter) return false;
+    return true;
+  }), [rows, kw, statusFilter, healthFilter]);
+  const resetFilters = () => { setKw(''); setStatusFilter('all'); setHealthFilter('all'); };
 
   const enable = (r) => {
     const res = actions.enableBinding(r.device.deviceId);
@@ -565,41 +576,39 @@ export default function BindingOverviewPage() {
     return <Button size="small" onClick={() => setDraftTarget({ deviceId: device.deviceId, deviceName: device.name })}>继续编辑</Button>;
   };
 
-  // ===== 主视图：设备绑定列表（原双 Tab 已合并为单页） =====
+  // ===== 主视图：设备绑定列表（规范结构：查询条件 → 工具栏（左上）→ 列表） =====
   const bindingTab = (
     <>
-      <Row gutter={12} style={{ marginBottom: 12 }}>
-        <Col span={6}><Card size="small"><Statistic title="设备绑定关系" value={rows.length} suffix="台" /></Card></Col>
-        <Col span={6}><Card size="small"><Statistic title="已启用（接入中）" value={activeCount} suffix="台" valueStyle={{ color: '#3f8600' }} /></Card></Col>
-        <Col span={6}><Card size="small"><Statistic title="未配置" value={unconfiguredCount} suffix="台" valueStyle={{ color: unconfiguredCount ? '#d46b08' : undefined }} /></Card></Col>
-        <Col span={6}><Card size="small"><Statistic title="数据中断" value={interruptedCount} suffix="台" valueStyle={{ color: interruptedCount ? '#cf1322' : undefined }} /></Card></Col>
-      </Row>
+      <Card size="small" style={{ marginBottom: 12 }}>
+        <Space wrap size={8}>
+          <Input.Search
+            allowClear placeholder="搜索设备编号 / 名称 / 资产编码" style={{ width: 240 }}
+            value={kw} onChange={(e) => setKw(e.target.value)}
+          />
+          <Select
+            style={{ width: 140 }} value={statusFilter}
+            onChange={setStatusFilter}
+            options={[{ value: 'all', label: '配置状态：全部' }, ...statusOptions.map((s) => ({ value: s, label: s }))]}
+          />
+          <Select
+            style={{ width: 140 }} value={healthFilter}
+            onChange={setHealthFilter}
+            options={[{ value: 'all', label: '健康状态：全部' }, ...healthOptions.map((s) => ({ value: s, label: s }))]}
+          />
+          <Button onClick={resetFilters}>重置</Button>
+        </Space>
+      </Card>
 
-      <Alert
-        type="info" showIcon icon={<LayoutTemplate size={14} />} style={{ marginBottom: 12 }}
-        message={(
-          <Space size={4} wrap>
-            <span>同型号设备可用「监控指标模板」一次完成绑定接入 + 监控勾选：模板的新建 / 编辑 / 删除在「监控指标模板管理」页维护。</span>
-            <a onClick={() => navigate('/binding-templates')}>前往监控指标模板管理 →</a>
-          </Space>
-        )}
-      />
-
-      <Card
-        size="small" style={{ marginBottom: 12 }}
-        title="设备绑定列表（8 台设备）"
-        extra={(
-          <Space size={8}>
-            <Button size="small" icon={<LayoutTemplate size={13} />} onClick={() => setApplyTarget('')}>模板快速接入</Button>
-            {/* 顶部「新建绑定」不预选设备：向导第 1 步先选设备管理系统的设备 */}
-            <Button type="primary" size="small" icon={<Plus size={13} />} onClick={() => setDraftTarget({})}>新建绑定</Button>
-          </Space>
-        )}
-      >
+      <Card size="small">
+        <Space wrap style={{ marginBottom: 12 }}>
+          <Button type="primary" size="small" icon={<Plus size={13} />} onClick={() => setDraftTarget({})}>新建绑定</Button>
+          <Button size="small" icon={<LayoutTemplate size={13} />} onClick={() => setApplyTarget('')}>模板快速接入</Button>
+          <Button size="small" icon={<Settings2 size={13} />} onClick={() => navigate('/binding-templates')}>监控指标模板管理</Button>
+        </Space>
         <Table
           rowKey={(r) => r.device.deviceId}
           size="small"
-          dataSource={rows}
+          dataSource={filteredRows}
           pagination={false}
           columns={[
             { title: '设备编号', width: 100, render: (_, r) => r.device.deviceId },
@@ -668,22 +677,13 @@ export default function BindingOverviewPage() {
             },
           }}
         />
-        <div style={{ color: '#5d6b78', fontSize: 12, marginTop: 8 }}>
-          绑定即接入：绑定启用后系统获取物联网平台子设备上报的全部数据指标并存储（指标自动发现）；是否纳入曲线监控在向导第 3 步按需勾选（可以不选），未纳入监控的指标在设备台账「数据指标历史」中可查，保存后也可通过行内「监控指标」随时补选或调整。
-          换绑说明：已启用设备可点击「换绑」打开绑定草稿，修改来源与监控指标后保存将生成新版本（旧版本留痕不覆盖，监控勾选按来源+指标自动继承），新版本状态「待生效」，点「启用」后完成换绑。
-          校验规则：至少 1 个启用的物联网平台子设备、同一绑定内子设备编码不重复；子设备编码被其它设备占用仅提示、不限制绑定。
-          接入任务健康度在本页总览与设备台账联网配置中查看。
-        </div>
       </Card>
     </>
   );
 
   return (
     <>
-      <PageHeader
-        title="物联网接入配置"
-        subtitle="绑定向导三步走：① 选择主设备 → ② 选择物联网平台子设备（绑定即全量接入存储）→ ③ 选择监控指标（可选，不选则无可视化监控指标、数据仍全量存储可查）。协议/网关/点位由物联网平台管理，本页不维护"
-      />
+      <PageHeader title="物联网接入配置" />
       {bindingTab}
 
       <BindingDraftModal

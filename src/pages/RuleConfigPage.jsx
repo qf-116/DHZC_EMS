@@ -341,7 +341,7 @@ export default function RuleConfigPage() {
 
   return (
     <>
-      <PageHeader title="报警规则配置" subtitle="规则目标 = 设备 → 子设备 → 指标（正式绑定事实）· 受控表单真实落库 · 原子保存并发布 · 首次发布 V1 · 已发布规则编辑生成待发布草稿 · 同类指标批量创建（只生成草稿）" />
+      <PageHeader title="报警规则配置" />
 
       {chattering.length > 0 && (
         <Alert

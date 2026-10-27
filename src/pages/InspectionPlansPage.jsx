@@ -94,7 +94,7 @@ export default function InspectionPlansPage() {
     <>
       <PageHeader
         title="点检计划"
-        subtitle={`点检计划档案 · 周期（日/周/月/自定义）+ 间隔 + 跳过规则 · 数据更新于 ${meta.demoDay}`}
+        subtitle={`数据更新于 ${meta.demoDay}`}
       />
       <DegradedBanner meta={meta} />
       <Card size="small" style={{ marginBottom: 12 }}>

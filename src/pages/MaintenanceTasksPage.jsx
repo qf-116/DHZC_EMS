@@ -102,7 +102,7 @@ export default function MaintenanceTasksPage() {
     <>
       <PageHeader
         title="保养任务"
-        subtitle={`保养计划生成的执行任务 · 共 ${rows.length} 条 · 按计划时间正序 · 行点击进入详情 / 执行`}
+        subtitle={`数据更新于 ${meta.demoDay}`}
       />
       <DegradedBanner meta={meta} />
       <Card size="small" style={{ marginBottom: 12 }}>

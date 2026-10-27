@@ -211,14 +211,9 @@ export default function MttrMtbfReportPage() {
     <>
       <PageHeader
         title="MTTR / MTBF 分析报表"
-        subtitle={`由已完成维修单与已关闭故障事件派生 · 统计日 ${meta.demoDay || '--'} · 口径截止 ${meta.lastSampleAt || '--'}`}
+        subtitle={`统计日 ${meta.demoDay || '--'} · 口径截止 ${meta.lastSampleAt || '--'}`}
       />
       <DegradedBanner meta={meta} />
-      <div style={{ marginBottom: 12 }}>
-        <Space wrap>
-          <Button type="primary" icon={<Download size={14} />} onClick={handleExport}>导出</Button>
-        </Space>
-      </div>
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space wrap>
           <RangePicker
@@ -236,13 +231,9 @@ export default function MttrMtbfReportPage() {
           <Button onClick={handleReset}>重置</Button>
         </Space>
       </Card>
-      <Alert
-        className="rule-alert"
-        type="info"
-        showIcon
-        style={{ marginBottom: 12 }}
-        message="口径：MTTR = 已完成维修单（开工 → 验收通过）修复时长均值；MTBF = 有效运行时长 ÷ 已关闭的设备状态故障事件数；可用率 = 运行 ÷（运行 + 故障维修）。指标从维修单与故障事件事实推导，不从页面数值二次平均。"
-      />
+      <Space wrap style={{ marginBottom: 12 }}>
+        <Button type="primary" icon={<Download size={14} />} onClick={handleExport}>导出</Button>
+      </Space>
       <div className="metric-grid" style={{ marginBottom: 12 }}>
         <MetricTile label="平均 MTTR（全部设备）" value={overall.mttr === null ? '--' : fmtDur(overall.mttr)} color="#d46b08" />
         <MetricTile label="平均 MTBF（全部设备）" value={overall.mtbf === null ? '--' : fmtDur(overall.mtbf)} color="#1668dc" />

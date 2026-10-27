@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, App, Button, Card, DatePicker, Select, Space, Table, Tag, Tooltip } from 'antd';
+import { App, Button, Card, DatePicker, Select, Space, Table, Tag, Tooltip } from 'antd';
 import dayjs from 'dayjs';
 import { Download, Search } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
@@ -167,14 +167,9 @@ export default function ComprehensiveReportPage() {
     <>
       <PageHeader
         title="设备综合运行分析报表"
-        subtitle={`状态 · 稼动率 · OEE · 报警 · 质量 · 产出综合视图 · 统计日 ${meta.demoDay || '--'} · 口径截止 ${meta.lastSampleAt || '--'}`}
+        subtitle={`统计日 ${meta.demoDay || '--'} · 口径截止 ${meta.lastSampleAt || '--'}`}
       />
       <DegradedBanner meta={meta} />
-      <div style={{ marginBottom: 12 }}>
-        <Space wrap>
-          <Button type="primary" icon={<Download size={14} />} onClick={handleExport}>导出</Button>
-        </Space>
-      </div>
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space wrap>
           <RangePicker
@@ -192,13 +187,9 @@ export default function ComprehensiveReportPage() {
           <Button onClick={handleReset}>重置</Button>
         </Space>
       </Card>
-      <Alert
-        className="rule-alert"
-        type="info"
-        showIcon
-        style={{ marginBottom: 12 }}
-        message={`口径：OEE / 可用率 / 性能率 / 质量率为统计日 ${meta.demoDay || '--'} 的按天窗口结果（由生产输入 + 停机事实 + 速度配置推导，不可计算时显示 '--' 并悬浮说明原因）；运行状态 / 稼动率 / 报警 / 数据完整率 / 参数不一致数来自报表快照汇总。两路数据按设备合并，缺失列显示 '--'。日期范围不含统计日时无数据。`}
-      />
+      <Space wrap style={{ marginBottom: 12 }}>
+        <Button type="primary" icon={<Download size={14} />} onClick={handleExport}>导出</Button>
+      </Space>
       {filteredRows.length === 0 ? (
         <EmptyState
           description="当前筛选条件下无综合分析行"

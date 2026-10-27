@@ -52,15 +52,12 @@ export default function SparePartsStockPage() {
 
   return (
     <>
-      <PageHeader
-        title="备件库存总览"
-        subtitle="库存口径：可用 = 在库 − 预留 · 低于安全库存自动标红预警"
-      />
+      <PageHeader title="备件库存总览" />
       <DegradedBanner meta={state.meta} />
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space wrap>
           <Input
-            style={{ width: 200 }}
+            style={{ width: 240 }}
             placeholder="备件编码 / 名称 / 品牌"
             allowClear
             value={keyword}
@@ -74,7 +71,6 @@ export default function SparePartsStockPage() {
             onChange={setWarehouseId}
             options={Object.values(state.entities.warehousesById).map(w => ({ value: w.warehouseId, label: w.name }))}
           />
-          <Button type="primary">查询</Button>
           <Button onClick={() => { setKeyword(''); setWarehouseId(null); }}>重置</Button>
         </Space>
       </Card>

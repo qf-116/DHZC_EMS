@@ -69,10 +69,7 @@ export default function SparePartsInboundPage() {
 
   return (
     <>
-      <PageHeader
-        title="入库记录"
-        subtitle="入库后对应仓库在库量增加并生成库存流水"
-      />
+      <PageHeader title="入库记录" />
       <DegradedBanner meta={state.meta} />
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space wrap>
@@ -82,8 +79,7 @@ export default function SparePartsInboundPage() {
             value={range}
             onChange={setRange}
           />
-          <Input style={{ width: 180 }} placeholder="供应商名称" allowClear value={supplierKw} onChange={e => setSupplierKw(e.target.value)} />
-          <Button type="primary">查询</Button>
+          <Input style={{ width: 240 }} placeholder="供应商名称" allowClear value={supplierKw} onChange={e => setSupplierKw(e.target.value)} />
           <Button onClick={() => { setRange(null); setSupplierKw(''); }}>重置</Button>
         </Space>
       </Card>

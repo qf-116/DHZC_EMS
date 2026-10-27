@@ -204,7 +204,6 @@ export default function LifecycleTasksPage({ mode = null }) {
     <>
       <PageHeader
         title={currentMode?.title || '设备入账流程'}
-        subtitle="采购入账 → 使用部门试用确认 → 设备办理手续入账；采购到货信息由采购系统（SRM/WMS）同步生成任务，直接入列表，无需新建"
       />
       {!mode && (
         <Tabs

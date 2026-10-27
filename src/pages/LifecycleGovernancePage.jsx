@@ -29,6 +29,8 @@ export default function LifecycleGovernancePage({ kind = 'change' }) {
   const [modalOpen, setModalOpen] = useState(false);
   const [reviewing, setReviewing] = useState(null);
   const [form] = Form.useForm();
+  const [kw, setKw] = useState('');
+  const [statusFilter, setStatusFilter] = useState(null);
 
   const closeModal = () => { setModalOpen(false); setReviewing(null); form.resetFields(); };
   const submit = async () => {
@@ -64,6 +66,19 @@ export default function LifecycleGovernancePage({ kind = 'change' }) {
   };
 
   const deviceName = (deviceId) => devices.find(d => d.deviceId === deviceId)?.name || deviceId || '--';
+
+  const kindRows = kind === 'change' ? changes : kind === 'idle' ? idle : scraps;
+  const statusOptions = useMemo(
+    () => [...new Set(kindRows.map((r) => r.status).filter(Boolean))].map((v) => ({ value: v, label: v })),
+    [kindRows],
+  );
+  const filtered = useMemo(() => {
+    const k = kw.trim().toLowerCase();
+    return kindRows
+      .filter((r) => !k || [r.changeNo, r.idleNo, r.scrapNo, r.reason, r.appraisal, deviceName(r.deviceId)]
+        .some((v) => String(v || '').toLowerCase().includes(k)))
+      .filter((r) => !statusFilter || r.status === statusFilter);
+  }, [kindRows, kw, statusFilter]); // eslint-disable-line react-hooks/exhaustive-deps
   const changeColumns = [
     { title: '变更单号', dataIndex: 'changeNo', width: 160 },
     { title: '设备', render: (_, r) => deviceName(r.deviceId), width: 150 },
@@ -126,15 +141,22 @@ export default function LifecycleGovernancePage({ kind = 'change' }) {
 
   return (
     <>
-      <PageHeader title={cfg.title} subtitle={kind === 'change' ? '仅支持调拨、改造、借用、外送；不包含移位' : kind === 'idle' ? '仅支持闲置、复核、再启用；不包含保全' : '仅支持报废、鉴定、财务核销、归档；不包含处置执行'} />
+      <PageHeader title={cfg.title} />
       <Tabs items={cfg.tabs} />
+      <Card size="small" style={{ marginBottom: 12 }}>
+        <Space wrap>
+          <Input.Search allowClear style={{ width: 240 }} placeholder="单号 / 设备 / 原因" value={kw} onChange={(e) => setKw(e.target.value)} />
+          <Select allowClear style={{ width: 160 }} placeholder="状态" value={statusFilter} onChange={setStatusFilter} options={statusOptions} />
+          <Button onClick={() => { setKw(''); setStatusFilter(null); }}>重置</Button>
+        </Space>
+      </Card>
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
           <Button type="primary" icon={<FilePlus2 size={14} />} onClick={openCreate}>{kind === 'change' ? '新建变更' : kind === 'idle' ? '新建闲置申请' : '新建报废申请'}</Button>
         </Space>
-        {kind === 'change' && <Table rowKey="changeId" size="small" dataSource={changes} columns={changeColumns} pagination={false} locale={{ emptyText: <EmptyState description="暂无资产变更" reason="可提交调拨、改造、借用或外送申请" /> }} />}
-        {kind === 'idle' && <Table rowKey="idleId" size="small" dataSource={idle} columns={idleColumns} pagination={false} locale={{ emptyText: <EmptyState description="暂无闲置申请" reason="可提交闲置申请并设置复核日期" /> }} />}
-        {kind === 'scrap' && <Table rowKey="scrapId" size="small" dataSource={scraps} columns={scrapColumns} pagination={false} locale={{ emptyText: <EmptyState description="暂无报废记录" reason="报废申请需经过技术鉴定和财务核销" /> }} />}
+        {kind === 'change' && <Table rowKey="changeId" size="small" dataSource={filtered} columns={changeColumns} pagination={false} locale={{ emptyText: <EmptyState description="暂无资产变更" reason="可提交调拨、改造、借用或外送申请" /> }} />}
+        {kind === 'idle' && <Table rowKey="idleId" size="small" dataSource={filtered} columns={idleColumns} pagination={false} locale={{ emptyText: <EmptyState description="暂无闲置申请" reason="可提交闲置申请并设置复核日期" /> }} />}
+        {kind === 'scrap' && <Table rowKey="scrapId" size="small" dataSource={filtered} columns={scrapColumns} pagination={false} locale={{ emptyText: <EmptyState description="暂无报废记录" reason="报废申请需经过技术鉴定和财务核销" /> }} />}
       </Card>
       <Modal title={reviewing ? `${cfg.title} · ${reviewing.changeNo || reviewing.idleNo || reviewing.scrapNo}` : `新建${kind === 'change' ? '资产变更' : kind === 'idle' ? '闲置申请' : '报废申请'}`} open={modalOpen} width={620} destroyOnClose onCancel={closeModal} onOk={submit} okText={reviewing?.status === '已报废' ? '确认归档' : '提交'}>
         {reviewing && <Descriptions size="small" column={2} style={{ marginBottom: 12 }} items={[{ key: 'device', label: '设备', children: deviceName(reviewing.deviceId) }, { key: 'status', label: '状态', children: <StatusTag value={reviewing.status} /> }]} />}

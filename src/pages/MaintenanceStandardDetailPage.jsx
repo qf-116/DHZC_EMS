@@ -1,5 +1,5 @@
 import React from 'react';
-import { Card, Descriptions, Table, Button, Tag, Typography } from 'antd';
+import { Card, Descriptions, Table, Button, Tag } from 'antd';
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import PageHeader from '../components/PageHeader.jsx';
@@ -142,13 +142,6 @@ export default function MaintenanceStandardDetailPage() {
           />
         )}
       </Card>
-
-      <div style={{ textAlign: 'right' }}>
-        <Typography.Text type="secondary" style={{ fontSize: 12, marginRight: 12 }}>
-          标准详情只读展示
-        </Typography.Text>
-        <Button type="primary" onClick={() => navigate('/maintenance-standards')}>关闭</Button>
-      </div>
     </>
   );
 }

@@ -8,7 +8,7 @@
 // ============================================================
 
 import React, { useMemo, useState } from 'react';
-import { App, Button, Card, Input, Popconfirm, Select, Space, Table, Tabs, Tag, Typography } from 'antd';
+import { App, Button, Card, Input, Popconfirm, Select, Space, Table, Tabs, Tag } from 'antd';
 import { Download, Eraser } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import StatusTag from '../components/StatusTag.jsx';
@@ -63,7 +63,7 @@ export default function SystemLogsPage() {
     <>
       <PageHeader
         title="日志管理"
-        subtitle="登录日志（登录成败与失败原因）+ 系统操作日志（关键业务动作追溯）· 数据更新于 2026-09-16"
+        subtitle="数据更新于 2026-09-16"
       />
 
       <Card size="small">
@@ -178,10 +178,6 @@ export default function SystemLogsPage() {
             },
           ]}
         />
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          口径说明：登录日志与操作日志均由系统自动写入，不提供人工新增/编辑；「清空」需二次确认并建议先导出留档。
-          密码连续输错 5 次账号锁定 30 分钟，失败原因记录在登录日志描述列。
-        </Typography.Text>
       </Card>
     </>
   );

@@ -61,7 +61,7 @@ export default function InspectionItemsPage() {
     <>
       <PageHeader
         title="点检项目"
-        subtitle={`点检项目基础档案 · 判断结果类型：单选 / 数值 / 文本（单选默认选项 正常/异常）· 数据更新于 ${meta.demoDay}`}
+        subtitle={`数据更新于 ${meta.demoDay}`}
       />
       <DegradedBanner meta={meta} />
       <Card size="small" style={{ marginBottom: 12 }}>

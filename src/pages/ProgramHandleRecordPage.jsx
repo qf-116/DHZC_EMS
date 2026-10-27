@@ -44,10 +44,7 @@ export default function ProgramHandleRecordPage() {
 
   return (
     <>
-      <PageHeader
-        title="比对处理记录"
-        subtitle="程序参数比对的处理留痕 · 记录不可删除、不可修改（只读）"
-      />
+      <PageHeader title="比对处理记录" />
       {/* 筛选卡：查询条件独立在列表卡上方 */}
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space wrap>
@@ -99,10 +96,6 @@ export default function ProgramHandleRecordPage() {
           ]}
           pagination={false}
         />
-        <div style={{ color: '#5d6b78', fontSize: 12, marginTop: 8 }}>
-          说明：处理记录由处置动作自动生成（如 PCR-20260916-001：ALM-20260916-003 的处置依据，关联维修单 RO-20260916-001），
-          不可删除、不可修改；比对结果恢复一致后可关闭关联报警。
-        </div>
       </Card>
 
       {/* 详情（弹窗）：只读展示处理记录全部字段 */}

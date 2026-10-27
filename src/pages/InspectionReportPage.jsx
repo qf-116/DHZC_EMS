@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Card, Table, Button, Space, Statistic, App, DatePicker } from 'antd';
 import dayjs from 'dayjs';
+import { Download } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
 import StatusTag from '../components/StatusTag.jsx';
@@ -99,15 +100,9 @@ export default function InspectionReportPage() {
     <>
       <PageHeader
         title="点检执行统计"
-        subtitle={`按设备 / 执行人 / 状态聚合点检任务 · 统计基准日：${demoDay}`}
+        subtitle={`统计基准日：${demoDay}`}
       />
       <DegradedBanner meta={meta} />
-
-      <div style={{ marginBottom: 12 }}>
-        <Space wrap>
-          <Button type="primary" onClick={handleExport}>导出报表</Button>
-        </Space>
-      </div>
 
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space size={40} wrap>
@@ -125,10 +120,14 @@ export default function InspectionReportPage() {
           <Statistic title="完成率" value={pct(totalDone, totalTasks)} />
           <Statistic title="逾期数" value={totalOverdue} />
           <Statistic title="计划任务总数" value={inspectionPlans.reduce((s, p) => s + (p.totalTasks || 0), 0)} />
+          <Button onClick={() => setRange(null)}>重置</Button>
         </Space>
       </Card>
 
       <Card size="small" style={{ marginBottom: 12 }}>
+        <Space wrap style={{ marginBottom: 12 }}>
+          <Button type="primary" icon={<Download size={14} />} onClick={handleExport}>导出报表</Button>
+        </Space>
         <div style={{ fontWeight: 600, marginBottom: 12 }}>按执行人聚合（任务口径）</div>
         <Table
           rowKey="owner" size="small" pagination={false}

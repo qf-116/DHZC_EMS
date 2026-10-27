@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Card, Table, Tag, Button, Space, Select, Input, Alert, DatePicker } from 'antd';
+import { Card, Table, Tag, Button, Space, Select, Input, DatePicker } from 'antd';
 import dayjs from 'dayjs';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Download, Search } from 'lucide-react';
@@ -160,7 +160,7 @@ export default function SparePartReportPage() {
     <>
       <PageHeader
         title="备件管理统计报表"
-        subtitle={`库存水位 · 出入库 / 退库累计 · 低于安全库存预警 · 口径截止 ${meta.lastSampleAt || '--'}`}
+        subtitle={`数据口径截止 ${meta.lastSampleAt || '--'}`}
       />
       <DegradedBanner meta={meta} />
       <div style={{ marginBottom: 12 }}>
@@ -192,13 +192,6 @@ export default function SparePartReportPage() {
           <Button onClick={handleReset}>重置</Button>
         </Space>
       </Card>
-      <Alert
-        className="rule-alert"
-        type="info"
-        showIcon
-        style={{ marginBottom: 12 }}
-        message="口径：可用 = 现存 − 预留；库存水位按各仓库现存合计与安全 / 最大库存比较判定（低于安全库存自动联动备件库存报警）。"
-      />
       <div className="metric-grid" style={{ marginBottom: 12 }}>
         <MetricTile label="备件种类" value={rows.length} unit="种" />
         <MetricTile label="低于安全库存" value={totals.low} unit="种" color="#d97706" />

@@ -64,7 +64,7 @@ export default function OeeHistoryPage() {
       <DegradedBanner meta={state.meta} />
       <PageHeader
         title="历史 OEE"
-        subtitle={`统计日期：${day} · 当天 OEE = 当天可用率 × 性能率 × 合格率（逐日独立计算）· 点击行查看该设备当日明细 · 无生产数据/不可计算显示 “--”，不按 0 处理`}
+        subtitle={`统计日期：${day}`}
       />
       <Space wrap style={{ marginBottom: 12 }}>
         <Select value={day} onChange={setDay} style={{ width: 140 }} options={dayOptions.map(d => ({ value: d, label: d }))} />

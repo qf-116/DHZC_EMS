@@ -7,7 +7,7 @@ import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import { selectAllRepairReports, selectAllRepairOrders, selectAllDevices } from '../state/selectors.js';
-import { REPAIR_LEVELS, FAULT_TYPES, SLA_HOURS } from '../domain/repair.js';
+import { REPAIR_LEVELS, FAULT_TYPES } from '../domain/repair.js';
 import { users } from '../data/demo/masterData.js';
 
 const levelColor = { 紧急: 'red', 严重: 'orange', 一般: 'blue' };
@@ -112,7 +112,6 @@ export default function RepairReportsPage() {
     <>
       <PageHeader
         title="故障报修"
-        subtitle={`报修记录派工后即形成维修任务 · 状态：${statusOptions.map(o => o.value).join('/') || '--'} · 派工在「待维修」或本页指派完成 · SLA 按等级自动带出（紧急 ${SLA_HOURS['紧急']}h / 严重 ${SLA_HOURS['严重']}h / 一般 ${SLA_HOURS['一般']}h）`}
       />
       <DegradedBanner meta={meta} />
       <Card size="small" style={{ marginBottom: 12 }}>

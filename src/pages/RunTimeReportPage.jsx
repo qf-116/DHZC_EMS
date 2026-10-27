@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Alert, App, Button, Card, DatePicker, Select, Space, Table, Tag, Tooltip } from 'antd';
+import { App, Button, Card, DatePicker, Select, Space, Table, Tag, Tooltip } from 'antd';
 import dayjs from 'dayjs';
 import { Download, Search } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
@@ -115,14 +115,9 @@ export default function RunTimeReportPage() {
     <>
       <PageHeader
         title="运行时长与设备状态统计报表"
-        subtitle={`状态时长 · 稼动率 · 状态占比 · 切换行为 · 统一时区 ${meta.timezone || '+08:00'} · 统计日 ${meta.demoDay || '--'} · 口径截止 ${meta.lastSampleAt || '--'}`}
+        subtitle={`统一时区 ${meta.timezone || '+08:00'} · 统计日 ${meta.demoDay || '--'} · 口径截止 ${meta.lastSampleAt || '--'}`}
       />
       <DegradedBanner meta={meta} />
-      <div style={{ marginBottom: 12 }}>
-        <Space wrap>
-          <Button type="primary" icon={<Download size={14} />} onClick={handleExport}>导出</Button>
-        </Space>
-      </div>
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space wrap>
           <RangePicker
@@ -141,13 +136,9 @@ export default function RunTimeReportPage() {
           <Button onClick={handleReset}>重置</Button>
         </Space>
       </Card>
-      <Alert
-        className="rule-alert"
-        type="info"
-        showIcon
-        style={{ marginBottom: 12 }}
-        message="稼动率 = 运行 ÷（运行+待机+故障），离线不计入分母；状态占比 = 各状态时长 ÷ 总统计时长；切换次数不含离线恢复；数据完整率不足 95% 标黄提示。"
-      />
+      <Space wrap style={{ marginBottom: 12 }}>
+        <Button type="primary" icon={<Download size={14} />} onClick={handleExport}>导出</Button>
+      </Space>
       {rows.length === 0 ? (
         <EmptyState
           description="当前筛选条件下无运行时长统计行"

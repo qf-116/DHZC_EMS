@@ -101,10 +101,7 @@ export default function PlannedDowntimePage() {
   return (
     <>
       <DegradedBanner meta={state.meta} />
-      <PageHeader
-        title="计划停机时间管理"
-        subtitle="计划内停机登记（计划停机 / 换模）· OEE 可用率扣除：可用率 = 运行时间 / (负荷时间 − 计划停机时间) · 保存后已触发 OEE 重算，重算记录见下方日志"
-      />
+      <PageHeader title="计划停机时间管理" />
       {/* 筛选卡：查询条件独立在列表卡上方 */}
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space wrap>

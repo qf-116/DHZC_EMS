@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Card, Table, Tag, Button, Space, Select, Alert, DatePicker } from 'antd';
+import { Card, Table, Tag, Button, Space, Select, DatePicker } from 'antd';
 import dayjs from 'dayjs';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Download, Search } from 'lucide-react';
@@ -153,7 +153,7 @@ export default function RepairReportPage() {
     <>
       <PageHeader
         title="维修统计报表"
-        subtitle={`维修工单闭环 · 返修 · SLA 达成 · 故障类型分布 · 统计日 ${meta.demoDay || '--'} · 口径截止 ${meta.lastSampleAt || '--'}`}
+        subtitle={`统计日 ${meta.demoDay || '--'} · 口径截止 ${meta.lastSampleAt || '--'}`}
       />
       <DegradedBanner meta={meta} />
       <div style={{ marginBottom: 12 }}>
@@ -178,13 +178,6 @@ export default function RepairReportPage() {
           <Button onClick={handleReset}>重置</Button>
         </Space>
       </Card>
-      <Alert
-        className="rule-alert"
-        type="info"
-        showIcon
-        style={{ marginBottom: 12 }}
-        message={`口径：SLA 达成 = 已完成工单中「验收时间 ≤ 承诺完成时间（${totals.slaDone} 单已闭环）」；超期未闭环 = 未结单且承诺完成时间早于统计日 ${meta.demoDay || '--'}；返修 = 存在返修记录（reworkCount > 0）的工单。`}
-      />
       <div className="metric-grid" style={{ marginBottom: 12 }}>
         <MetricTile label="维修工单" value={totals.total} unit="单" />
         <MetricTile label="报修记录" value={reports.length || '--'} unit={reports.length ? '单' : ''} />

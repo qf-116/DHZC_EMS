@@ -111,7 +111,7 @@ export default function SystemUsersPage() {
     <>
       <PageHeader
         title="用户管理"
-        subtitle={`系统独立运行后的账号管理入口 · 新增/编辑/启停用/重置密码 · 数据更新于 ${meta.demoDay}`}
+        subtitle={`数据更新于 ${meta.demoDay}`}
       />
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space wrap>

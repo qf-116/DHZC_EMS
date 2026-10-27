@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Card, Descriptions, Table, Button, Alert, Tag, Tooltip } from 'antd';
+import { Card, Descriptions, Table, Button, Tag, Tooltip } from 'antd';
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import PageHeader from '../components/PageHeader.jsx';
@@ -62,7 +62,7 @@ export default function PatrolStandardDetailPage() {
     <>
       <PageHeader
         title={`巡检标准详情 · ${standard.name}`}
-        subtitle={`标准编号 ${standard.code} · 巡检线路即标准覆盖的设备检查线路 · 数据更新于 ${standard.updateTime || meta.updatedAt}`}
+        subtitle={`标准编号 ${standard.code} · 数据更新于 ${standard.updateTime || meta.updatedAt}`}
         actions={<Button icon={<ArrowLeft size={14} />} onClick={() => navigate('/patrol-standards')}>返回列表</Button>}
       />
       <DegradedBanner meta={meta} />
@@ -100,10 +100,6 @@ export default function PatrolStandardDetailPage() {
         type="inner" size="small"
         title={<span>巡检项目清单</span>}
       >
-        <Alert
-          type="info" showIcon style={{ marginBottom: 8 }}
-          message="未包含「标准—项目」关联明细，以下为巡检项目基础档案（已启用）清单。"
-        />
         <Table
           rowKey="code" size="small" pagination={false}
           dataSource={items}

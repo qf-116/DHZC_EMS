@@ -81,10 +81,7 @@ export default function PatrolItemsPage() {
 
   return (
     <>
-      <PageHeader
-        title="巡检项目"
-        subtitle={`巡检项目基础档案 · 判断结果类型：${RESULT_TYPES.join('/')}（单选默认 正常/异常，数值在正常范围内为正常，文本直接填写结果）`}
-      />
+      <PageHeader title="巡检项目" />
       <DegradedBanner meta={meta} />
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space wrap>

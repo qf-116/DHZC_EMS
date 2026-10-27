@@ -76,7 +76,7 @@ export default function PatrolStandardsPage() {
     <>
       <PageHeader
         title="巡检标准"
-        subtitle={`巡检标准档案 · 行点击进入标准详情（关联设备 / 关联项目）· 数据更新于 ${meta.demoDay} · 设备展示经 canonical 设备映射`}
+        subtitle={`数据更新于 ${meta.demoDay}`}
       />
       <DegradedBanner meta={meta} />
       <Card size="small" style={{ marginBottom: 12 }}>
@@ -137,7 +137,6 @@ export default function PatrolStandardsPage() {
           <Form.Item label="状态" name="status" rules={[{ required: true, message: '请选择状态' }]}><Select options={['已启用', '已停用'].map(v => ({ value: v, label: v }))} /></Form.Item>
           <Form.Item label="备注" name="remark"><Input.TextArea rows={2} maxLength={200} /></Form.Item>
         </Form>
-        <div style={{ color: '#8a97a3', fontSize: 12 }}>关联设备 / 关联巡检项目在「标准详情」页维护。</div>
       </Modal>
     </>
   );

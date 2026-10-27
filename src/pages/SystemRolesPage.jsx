@@ -105,7 +105,7 @@ export default function SystemRolesPage() {
     <>
       <PageHeader
         title="角色管理"
-        subtitle="RBAC 角色：功能权限（菜单 / 页面 / 操作）+ 数据权限（可见范围）· 数据更新于 2026-09-16"
+        subtitle="数据更新于 2026-09-16"
       />
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space wrap>

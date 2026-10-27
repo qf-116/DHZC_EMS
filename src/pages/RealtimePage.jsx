@@ -211,16 +211,6 @@ export default function RealtimePage() {
           ]} />
           <Input allowClear prefix={<Search size={13} />} placeholder="设备名称 / 资产编号" style={{ width: 200 }} value={kw} onChange={e => { setKw(e.target.value); setPage(1); }} />
         </Space>
-        <div style={{ marginTop: 10, display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center', fontSize: 12, color: '#5d6b78' }}>
-          状态图例：
-          {['运行', '待机', '故障', '无数据'].map(k => (
-            <Space key={k} size={4}>
-              <span className="rt-dot" style={{ '--st': stateMeta[k].color }} />
-              {k}
-            </Space>
-          ))}
-          <span style={{ marginLeft: 8 }}>指标标签为采集质量码；无数据显示 --（无数据 ≠ 0）；点击卡片「详情」进入设备监测详情。</span>
-        </div>
       </Card>
 
       {filtered.length === 0 ? (

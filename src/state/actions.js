@@ -198,6 +198,13 @@ export function createDemoActions(state, dispatch) {
       act('binding/removeSource', { deviceId, iotDeviceId });
       return { ok: true, message: '已从绑定草稿移除（未保存）', refs: { deviceId } };
     },
+    setDraftMetricMonitored(deviceId, source, metricCode) {
+      // 监控指标勾选（绑定向导第 3 步）：作用于未保存草稿，保存时随草稿整体落库
+      const iotDeviceId = typeof source === 'object' ? source.iotDeviceId : source;
+      const iotDeviceCode = typeof source === 'object' ? source.iotDeviceCode : undefined;
+      act('binding/setDraftMonitored', { deviceId, iotDeviceId, iotDeviceCode, metricCode });
+      return { ok: true, message: '监控勾选已更新（草稿）', refs: { deviceId } };
+    },
     setMetricMonitored(deviceId, source, metricCode) {
       // 监控指标开关（监控指标配置 Tab）：直接作用于正式绑定，即时生效、不产生新版本
       const iotDeviceId = typeof source === 'object' ? source.iotDeviceId : source;

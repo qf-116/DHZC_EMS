@@ -368,6 +368,30 @@ export function reducer(state, action) {
       const next = { ...state, ui: { ...state.ui, bindingDraftsByDeviceId: setIn(drafts, key, { ...draft, items: draft.items.filter(i => i.iotDeviceId !== payload.iotDeviceId) }) } };
       return finish(next, action, true, '已从绑定草稿移除该来源（未保存）', {}, false, at);
     }
+    case 'binding/setDraftMonitored': {
+      // 监控指标勾选（绑定向导第 3 步，2026-10-27 口径）：作用于未保存的绑定草稿；
+      // 指标可以全部不勾选（仅存储不做曲线监控）；保存时随草稿整体落库（binding/save 展开 draft），
+      // 不单独产生版本与履历。正式绑定保存后的勾选调整走 binding/setMonitored。
+      const key = `draft-${payload.deviceId}`;
+      const drafts = state.ui.bindingDraftsByDeviceId || {};
+      const draft = drafts[key];
+      if (!draft) return reject(state, action, '没有进行中的绑定草稿');
+      const def = E.metricsByKey[payload.metricCode];
+      if (def && def.syncStatus === '已失效') return reject(state, action, `指标 ${def.name} 已失效，不能纳入监控`);
+      let toggled = null;
+      const items = (draft.items || []).map(i => {
+        if (i.iotDeviceId !== payload.iotDeviceId) return i;
+        const metrics = (i.metrics || []).map(m => {
+          if (m.metricCode !== payload.metricCode) return m;
+          toggled = !m.monitored;
+          return { ...m, monitored: !m.monitored };
+        });
+        return { ...i, metrics };
+      });
+      if (toggled === null) return reject(state, action, `指标 ${payload.metricCode} 不在该来源的自动发现指标中`);
+      const next = { ...state, ui: { ...state.ui, bindingDraftsByDeviceId: setIn(drafts, key, { ...draft, items }) } };
+      return finish(next, action, true, `${def?.name || payload.metricCode} 已${toggled ? '纳入监控（曲线呈现）' : '移出监控（数据仍全量存储）'}`, { deviceId: payload.deviceId }, false, at);
+    }
     case 'binding/setMonitored': {
       // 监控指标开关（2026-10 口径）：直接作用于正式绑定，即时生效、不产生新版本；
       // 未勾选指标仍全量存储，仅不参与曲线监控（设备台账「数据指标历史」可查）。

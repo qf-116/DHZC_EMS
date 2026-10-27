@@ -1,20 +1,20 @@
 // ============================================================
 // 物联网接入配置（/binding-overview · 数据接入域核心交互页）
-// 2026-10 口径：绑定与监控指标两步分离，页面按双 Tab 管理——
-//   Tab 1 设备绑定管理：设备 ↔ IoT 来源设备绑定（crosswalk + bindingsByDeviceId + 绑定草稿）。
-//     绑定即接入：保存启用后，平台拉取该来源上报的全部指标并存储（指标自动发现，无需人工勾选）；
-//     未勾选监控的指标照常存储，可在设备台账「数据指标历史」中查看。
-//   Tab 2 监控指标配置：从已接入指标中按需勾选纳入监控（曲线/实时监测呈现）的子集，可以不选；
-//     勾选直通正式绑定（binding/setMonitored，即时生效不产生新版本），支持「存为监控指标模板」批量复用。
+// 2026-10-27 口径：单页单列表（原「设备绑定 / 监控指标」双 Tab 合并）——
+//   绑定向导三步走：① 选择主设备（设备管理台账）→ ② 选择物联网平台子设备（来源，可多选，来源间平级）
+//   → ③ 选择监控指标（可选：不选则无曲线 / 实时监测呈现；无论选否，接入指标均全量存储，
+//   可在设备台账「数据指标历史」查看）。向导内监控勾选作用于草稿（binding/setDraftMonitored，
+//   保存时随草稿整体落库）；已保存绑定的勾选调整走行内「监控指标」（binding/setMonitored，即时生效）。
 // 状态轴：未配置 → 草稿 → 校验 → 待生效 → 已启用 → 已停用/换绑中（domain/binding.js）。
+// 绑定版本不再作为页面列展示（内部仍随保存递增留痕）；待补偿字段已移除。
 // DEV-008 故意未配置，用于演示「首次绑定」全流程（首绑后监控指标默认全部不勾选）。
 // ============================================================
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  App, Alert, Button, Card, Checkbox, Col, Input, Modal, Row, Select, Space, Statistic, Steps, Table, Tabs, Tag, Tooltip, Typography,
+  App, Alert, Button, Card, Checkbox, Col, Input, Modal, Row, Select, Space, Statistic, Steps, Table, Tag, Tooltip, Typography,
 } from 'antd';
-import { Plus, Save, Play, PauseCircle, Settings2, LayoutTemplate, Activity, ArrowRight, ArrowLeft, MonitorCheck } from 'lucide-react';
+import { Plus, Save, Play, PauseCircle, Settings2, LayoutTemplate, Activity, ArrowRight, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader.jsx';
 import StatusTag from '../components/StatusTag.jsx';
@@ -23,15 +23,15 @@ import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import { selectAllDevices, selectBindingDraft } from '../state/selectors.js';
 import { validateBindingDraft } from '../domain/binding.js';
 
-// ---------- 绑定草稿弹窗（两步向导：① 选设备管理系统的设备 → ② 勾选 IoT 来源设备即完成）。
-// 指标不在绑定时勾选：勾选来源即自动发现其上报的全部指标（reducer binding/addSource 自动带出），
-// 保存启用后全量接入存储；是否纳入曲线监控由「监控指标配置」Tab 决定。
+// ---------- 绑定草稿弹窗（三步向导：① 选主设备（设备管理台账）→ ② 选物联网平台子设备 →
+// ③ 选监控指标（可选））。勾选子设备即自动发现其上报的全部指标（reducer binding/addSource 带出），
+// 第 3 步按需勾选纳入曲线监控的子集（可以全不选）；保存时监控勾选随草稿整体落库。
 // 草稿状态全部来自 store，不经页面 useState。从列表行进入时预选设备、直接到第 2 步。 ----------
 function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose }) {
   const state = useDemoState();
   const actions = useDemoActions();
   const { message } = App.useApp();
-  const [step, setStep] = useState(0);                        // 向导步骤：0=选设备，1=选 IoT 来源
+  const [step, setStep] = useState(0);                        // 向导步骤：0=选主设备，1=选 IoT 子设备，2=选监控指标
   const [deviceId, setDeviceId] = useState(null);             // 向导内选定的设备管理台账设备
   const [devKw, setDevKw] = useState('');                     // 第 1 步查询条件：编号/名称/资产编码
   const [devBound, setDevBound] = useState('all');            // 第 1 步查询条件：是否已绑定
@@ -73,6 +73,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
 
   const draftItems = draft?.items || [];
   const discoveredMetrics = draftItems.reduce((s, i) => s + (i.metrics || []).length, 0);
+  const monitoredMetrics = draftItems.reduce((s, i) => s + (i.metrics || []).filter((m) => m.monitored).length, 0);
   const selectedDevice = allDevices.find((d) => d.deviceId === deviceId);
   // 设备绑定情况：已有绑定（含历史停用）即视为「已绑定」——不能重复新建，只能换绑；
   // 未保存的草稿不算已绑定（放弃草稿即可重新新建）
@@ -90,34 +91,52 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
 
   const goNext = () => {
     if (step === 0) {
-      if (!deviceId) { message.warning('请先选择设备管理系统的设备'); return; }
+      if (!deviceId) { message.warning('请先选择设备管理系统的主设备'); return; }
       if (boundOf(deviceId)) { message.warning('该设备已绑定，不能重复绑定：请关闭后使用列表中的「换绑」'); return; }
       setStep(1);
+      return;
+    }
+    if (step === 1) {
+      if (!draftItems.length) { message.warning('请先勾选至少 1 个物联网平台子设备'); return; }
+      setStep(2);
     }
   };
 
   const goPrev = () => setStep(step - 1);
 
-  // 保存：reducer 内部先校验（至少 1 个启用来源 / 同一绑定内来源编码不重复），通过后生成新版本
+  // 保存：reducer 内部先校验（至少 1 个启用来源 / 同一绑定内来源编码不重复），通过后生成新版本；
+  // 监控指标勾选随草稿整体落库（可以全部不勾选）
   const doSave = () => {
-    if (!draft) { message.warning('请先勾选 IoT 数据源，生成绑定草稿'); return; }
+    if (!draft) { message.warning('请先勾选物联网平台子设备，生成绑定草稿'); return; }
     const res = validateBindingDraft(draft, { metricsByKey: state.entities.metricsByKey });
     if (!res.ok) { message.error(`校验未通过：${res.errors.join('；')}`); return; }
-    const r = actions.saveBinding(deviceId, `绑定草稿 v${draft.version}：${draftItems.length} 个来源 / 自动接入 ${discoveredMetrics} 项指标`);
+    const r = actions.saveBinding(deviceId, `绑定草稿 v${draft.version}：${draftItems.length} 个来源 / 自动接入 ${discoveredMetrics} 项指标 / 监控 ${monitoredMetrics} 项`);
     if (r.ok) {
-      message.success(`${r.message}；如需曲线监控，请到「监控指标配置」Tab 勾选指标`);
+      message.success(monitoredMetrics > 0
+        ? `${r.message}；启用后开始接入存储，${monitoredMetrics} 项监控指标进入曲线呈现`
+        : `${r.message}；未勾选监控指标——数据仍全量存储，可随时在行内「监控指标」中勾选，或到设备台账「数据指标历史」查看`);
       onClose();
     } else {
       message.error(r.message);
     }
   };
 
+  // 第 3 步：草稿监控勾选（作用于草稿，保存时随草稿整体落库）
+  const toggleDraftMetric = (item, metricCode) => actions.setDraftMetricMonitored(deviceId, item, metricCode);
+  const toggleDraftAll = (item, on) => {
+    (item.metrics || []).forEach((m) => {
+      if (!!m.monitored !== on) actions.setDraftMetricMonitored(deviceId, item, m.metricCode);
+    });
+  };
+
   const footer = [
     <Button key="cancel" onClick={onClose}>取消</Button>,
     ...(step > 0 ? [<Button key="prev" icon={<ArrowLeft size={14} />} onClick={goPrev}>上一步</Button>] : []),
     ...(step === 0
-      ? [<Button key="next" type="primary" disabled={!deviceId} onClick={goNext}>下一步：选择 IoT 设备 <ArrowRight size={14} style={{ verticalAlign: '-2px' }} /></Button>]
-      : [<Button key="save" type="primary" icon={<Save size={14} />} disabled={!draftItems.length} onClick={doSave}>保存（生成待生效版本）</Button>]),
+      ? [<Button key="next" type="primary" disabled={!deviceId} onClick={goNext}>下一步：选择物联网平台子设备 <ArrowRight size={14} style={{ verticalAlign: '-2px' }} /></Button>]
+      : step === 1
+        ? [<Button key="next2" type="primary" disabled={!draftItems.length} onClick={goNext}>下一步：选择监控指标 <ArrowRight size={14} style={{ verticalAlign: '-2px' }} /></Button>]
+        : [<Button key="save" type="primary" icon={<Save size={14} />} disabled={!draftItems.length} onClick={doSave}>保存（生成待生效版本）</Button>]),
   ];
 
   return (
@@ -134,18 +153,18 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
       footer={footer}
     >
       <Steps
-        size="small" current={step} style={{ marginBottom: 16, maxWidth: 560 }}
-        items={[{ title: '选择设备' }, { title: '选择 IoT 设备' }]}
+        size="small" current={step} style={{ marginBottom: 16, maxWidth: 660 }}
+        items={[{ title: '选择主设备' }, { title: '选择 IoT 子设备' }, { title: '选择监控指标（可选）' }]}
       />
       <Alert
         type="info" showIcon style={{ marginBottom: 12 }}
-        message="绑定即接入：绑定保存并启用后，系统获取这些 IoT 来源上报的全部数据指标并存储；是否纳入曲线监控，在「监控指标配置」Tab 中按需勾选（可以不选）。草稿仅保存在页面状态中，保存后生成新版本「待生效」，需再点「启用」才真正开始接入。"
+        message="绑定即接入：绑定保存并启用后，系统获取子设备上报的全部数据指标并存储；第 3 步按需勾选纳入曲线监控的指标（可以全不选，未勾选指标可在设备台账「数据指标历史」查看，也可保存后在行内「监控指标」中随时补选）。草稿仅保存在页面状态中，保存后生成新版本「待生效」，需再点「启用」才真正开始接入。"
       />
 
       {step === 0 && (
         <>
           <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 6 }}>
-            第 1 步 · 选择设备管理系统的设备（点击行选中；已绑定设备不能重复绑定，仅可换绑）
+            第 1 步 · 选择主设备（设备管理系统台账设备；点击行选中；已绑定设备不能重复绑定，仅可换绑）
           </Typography.Paragraph>
           <Space size={8} wrap style={{ marginBottom: 8 }}>
             <Input
@@ -207,8 +226,8 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
           />
           <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '8px 0 0' }}>
             {deviceId
-              ? <>已选 <b>{selectedDevice?.deviceId} · {selectedDevice?.name}</b>；点击「下一步」勾选 IoT 来源设备。</>
-              : '尚未选择设备：点击列表中一行选中设备（仅未绑定设备可选）。'}
+              ? <>已选主设备 <b>{selectedDevice?.deviceId} · {selectedDevice?.name}</b>；点击「下一步」选择物联网平台子设备。</>
+              : '尚未选择主设备：点击列表中一行选中设备（仅未绑定设备可选）。'}
           </Typography.Paragraph>
         </>
       )}
@@ -216,7 +235,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
       {step === 1 && (
         <>
           <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 6 }}>
-            第 2 步 · 勾选 IoT 来源设备（不分主/子设备，来源间平级；可多选）。勾选即自动发现该来源上报的全部指标，无需逐项挑选。
+            第 2 步 · 勾选物联网平台子设备（来源；可多选，来源间平级）。勾选即自动发现该子设备上报的全部指标，无需逐项挑选。
           </Typography.Paragraph>
           <Input
             allowClear size="small" style={{ width: 260, marginBottom: 8 }}
@@ -262,7 +281,52 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
             })}
           </div>
           <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }}>
-            已选 <b>{draftItems.length}</b> 个 IoT 来源设备，自动发现 <b>{discoveredMetrics}</b> 项指标；点击「保存」生成待生效版本，启用后开始全量接入存储。
+            已选 <b>{draftItems.length}</b> 个物联网平台子设备，自动发现 <b>{discoveredMetrics}</b> 项指标；点击「下一步」选择监控指标（可不选）。
+          </Typography.Paragraph>
+        </>
+      )}
+
+      {step === 2 && (
+        <>
+          <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 6 }}>
+            第 3 步 · 选择监控指标（可选）：勾选 = 纳入曲线 / 实时监测呈现；<b>可以全部不勾选</b>——不选则无可视化监控指标，
+            但子设备上报的数据指标仍全量接入存储，随时可在设备台账「数据指标历史」中查看，或保存后在行内「监控指标」中补选。
+          </Typography.Paragraph>
+          {draftItems.map((item) => {
+            const monitoredOfItem = (item.metrics || []).filter((m) => m.monitored).length;
+            return (
+              <Card
+                key={item.iotDeviceId}
+                size="small"
+                style={{ marginBottom: 8 }}
+                title={(
+                  <Space size={6} wrap>
+                    <span>{item.iotDeviceCode} · {item.sensorType && item.sensorType !== '--' ? item.sensorType : '来源设备'}</span>
+                  </Space>
+                )}
+                extra={(
+                  <Space size={6}>
+                    <span style={{ fontSize: 12, color: '#8a97a3' }}>监控中 {monitoredOfItem} / {(item.metrics || []).length} 项</span>
+                    <Button size="text" type="text" style={{ fontSize: 12, padding: '0 4px' }} onClick={() => toggleDraftAll(item, true)}>全选</Button>
+                    <Button size="text" type="text" style={{ fontSize: 12, padding: '0 4px' }} onClick={() => toggleDraftAll(item, false)}>清空</Button>
+                  </Space>
+                )}
+              >
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 4 }}>
+                  {(item.metrics || []).map((m) => {
+                    const def = state.entities.metricsByKey[m.metricCode];
+                    return (
+                      <Checkbox key={m.metricCode} checked={!!m.monitored} onChange={() => toggleDraftMetric(item, m.metricCode)}>
+                        <span>{def?.name || m.metricCode}（{m.metricCode} · {m.metricVersion}）</span>
+                      </Checkbox>
+                    );
+                  })}
+                </div>
+              </Card>
+            );
+          })}
+          <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }}>
+            共接入 <b>{discoveredMetrics}</b> 项指标，已勾选监控 <b>{monitoredMetrics}</b> 项（可以不选）；点击「保存」生成待生效版本，监控勾选随绑定一起落库。
           </Typography.Paragraph>
         </>
       )}
@@ -312,7 +376,8 @@ function DisableBindingModal({ deviceId, deviceName, version, open, onClose }) {
   );
 }
 
-// ---------- 监控指标配置弹窗（Tab 2）：按来源分组勾选监控指标，勾选即时生效（不产生新版本） ----------
+// ---------- 监控指标弹窗（行内操作）：按来源分组勾选监控指标，勾选即时生效（不产生新版本）。
+// 用于已保存绑定的事后调整；绑定向导第 3 步已覆盖创建期勾选 ----------
 function MonitorConfigModal({ deviceId, deviceName, open, onClose }) {
   const state = useDemoState();
   const actions = useDemoActions();
@@ -378,7 +443,7 @@ function MonitorConfigModal({ deviceId, deviceName, open, onClose }) {
         message="该设备的全部接入指标已在持续存储；勾选 = 纳入监控（曲线 / 实时监测呈现），不勾选 = 仅存储不做监控，可随时在设备台账「数据指标历史」中查看。勾选即时生效，不产生新绑定版本。"
       />
       {!binding ? (
-        <div style={{ color: '#8a97a3', fontSize: 12 }}>该设备尚未创建绑定：请先在「设备绑定管理」Tab 完成绑定。</div>
+        <div style={{ color: '#8a97a3', fontSize: 12 }}>该设备尚未创建绑定：请先完成设备绑定。</div>
       ) : (
         items.map((item) => {
           const monitoredOfItem = (item.metrics || []).filter((m) => m.monitored).length;
@@ -446,7 +511,6 @@ export default function BindingOverviewPage() {
   const [disableTarget, setDisableTarget] = useState(null); // { deviceId, deviceName, version }
   const [applyTarget, setApplyTarget] = useState(null);     // null=关闭；字符串=预选模板 id（''=不预选）
   const [monitorTarget, setMonitorTarget] = useState(null); // { deviceId, deviceName }
-  const [activeTab, setActiveTab] = useState('binding');
 
   const rows = useMemo(() => selectAllDevices(state).map((d) => {
     const binding = state.entities.bindingsByDeviceId[d.deviceId] || null;
@@ -462,7 +526,6 @@ export default function BindingOverviewPage() {
   const activeCount = rows.filter((r) => r.status === '已启用').length;
   const unconfiguredCount = rows.filter((r) => r.status === '未配置').length;
   const interruptedCount = rows.filter((r) => r.health.status === '数据中断').length;
-  const monitoredDeviceCount = rows.filter((r) => (r.metricMonitored ?? 0) > 0).length;
 
   const enable = (r) => {
     const res = actions.enableBinding(r.device.deviceId);
@@ -478,9 +541,9 @@ export default function BindingOverviewPage() {
     if (status === '已启用') {
       return (
         <Space size={4}>
-          <Button size="small" icon={<Activity size={13} />} onClick={() => { setActiveTab('monitor'); setMonitorTarget({ deviceId: device.deviceId, deviceName: device.name }); }}>监控指标</Button>
+          <Button size="small" icon={<Activity size={13} />} onClick={() => setMonitorTarget({ deviceId: device.deviceId, deviceName: device.name })}>监控指标</Button>
           <Button size="small" icon={<PauseCircle size={13} />} onClick={() => setDisableTarget({ deviceId: device.deviceId, deviceName: device.name, version: binding?.version ?? '--' })}>停用</Button>
-          <Tooltip title="换绑说明：直接打开绑定草稿，修改来源后保存，将生成新版本（旧版本留痕不覆盖）；监控勾选按来源+指标自动继承；新版本「待生效」→「启用」后完成换绑。">
+          <Tooltip title="换绑说明：直接打开绑定草稿，修改来源与监控指标后保存，将生成新版本（旧版本留痕不覆盖）；监控勾选按来源+指标自动继承；新版本「待生效」→「启用」后完成换绑。">
             <Button size="small" type="text" icon={<Settings2 size={13} />}>换绑</Button>
           </Tooltip>
         </Space>
@@ -502,7 +565,7 @@ export default function BindingOverviewPage() {
     return <Button size="small" onClick={() => setDraftTarget({ deviceId: device.deviceId, deviceName: device.name })}>继续编辑</Button>;
   };
 
-  // ===== Tab 1：设备绑定管理 =====
+  // ===== 主视图：设备绑定列表（原双 Tab 已合并为单页） =====
   const bindingTab = (
     <>
       <Row gutter={12} style={{ marginBottom: 12 }}>
@@ -552,10 +615,6 @@ export default function BindingOverviewPage() {
             },
             { title: '健康状态', width: 100, render: (_, r) => <StatusTag value={r.health.status || '--'} /> },
             {
-              title: '绑定版本', width: 90,
-              render: (_, r) => (r.draft ? <span>草稿 v{r.draft.version}</span> : (r.binding ? `v${r.binding.version}` : '--')),
-            },
-            {
               title: '来源数 / 接入指标', width: 140,
               render: (_, r) => {
                 if (r.metricTotal === null) return '--';
@@ -569,15 +628,11 @@ export default function BindingOverviewPage() {
                 if (r.metricMonitored === null) return '--';
                 return r.metricMonitored > 0
                   ? <Tag color="blue">{r.metricMonitored} 项</Tag>
-                  : <Tooltip title="未勾选监控指标：数据仍全量存储，可在「监控指标配置」Tab 勾选后进入曲线监测"><Tag style={{ cursor: 'help' }}>0 项</Tag></Tooltip>;
+                  : <Tooltip title="未勾选监控指标：无曲线 / 实时监测呈现，数据仍全量存储；可在行内「监控指标」中勾选"><Tag style={{ cursor: 'help' }}>0 项</Tag></Tooltip>;
               },
             },
             { title: '拉取周期', width: 90, render: (_, r) => (r.binding ? `${r.binding.pullCycleSec} 秒` : '--') },
             { title: '最近拉取', width: 150, render: (_, r) => (r.binding?.lastPullTime || '--') },
-            {
-              title: '待补偿', width: 90,
-              render: (_, r) => (r.binding?.pendingCompensation ? <span style={{ color: '#d46b08' }}>{r.binding.pendingCompensation} 个</span> : '0 个'),
-            },
             { title: '操作', width: 230, fixed: 'right', render: (_, r) => renderActions(r) },
           ]}
           expandable={{
@@ -614,66 +669,10 @@ export default function BindingOverviewPage() {
           }}
         />
         <div style={{ color: '#5d6b78', fontSize: 12, marginTop: 8 }}>
-          绑定即接入：绑定启用后系统获取来源上报的全部数据指标并存储（指标自动发现，无需人工勾选）；未纳入监控的指标在设备台账「数据指标历史」中可查。
-          换绑说明：已启用设备可点击「换绑」打开绑定草稿，修改来源后保存将生成新版本 binding-&#123;deviceId&#125;-NN（旧版本留痕不覆盖，监控勾选按来源+指标自动继承），新版本状态「待生效」，点「启用」后完成换绑。
-          校验规则：至少 1 个启用的 IoT 来源设备、同一绑定内来源编码不重复；来源不分主/子设备（来源间平级），来源编码被其它设备占用仅提示、不限制绑定。
-          监控指标（曲线呈现）在 <a onClick={() => setActiveTab('monitor')}>监控指标配置</a> 中按需勾选；接入任务健康度在本页总览与设备台账联网配置中查看。
-        </div>
-      </Card>
-    </>
-  );
-
-  // ===== Tab 2：监控指标配置 =====
-  const monitorRows = rows.filter((r) => ['待生效', '已启用'].includes(r.status) && !r.draft);
-  const monitorTab = (
-    <>
-      <Alert
-        type="info" showIcon icon={<MonitorCheck size={14} />} style={{ marginBottom: 12 }}
-        message="已绑定设备的全部接入指标均在持续存储；此处勾选纳入监控（曲线 / 实时监测呈现）的指标，可以全部不勾选（仅存数据不做监控）。勾选即时生效、不产生新绑定版本；未勾选指标可随时在设备台账「数据指标历史」中查看。"
-      />
-      <Card
-        size="small" style={{ marginBottom: 12 }}
-        title={`监控指标配置列表（${monitorRows.length} 台已绑定设备，其中 ${monitoredDeviceCount} 台已配置监控指标）`}
-        extra={(
-          <Space size={8}>
-            <Button size="small" icon={<LayoutTemplate size={13} />} onClick={() => setApplyTarget('')}>模板应用到设备</Button>
-            <Button size="small" type="primary" ghost onClick={() => navigate('/binding-templates')}>监控指标模板管理</Button>
-          </Space>
-        )}
-      >
-        <Table
-          rowKey={(r) => r.device.deviceId}
-          size="small"
-          dataSource={monitorRows}
-          pagination={false}
-          columns={[
-            { title: '设备编号', width: 110, render: (_, r) => r.device.deviceId },
-            { title: '设备名称', width: 150, render: (_, r) => r.device.name },
-            { title: '绑定状态', width: 100, render: (_, r) => <StatusTag value={r.status} /> },
-            {
-              title: '接入指标', width: 100,
-              render: (_, r) => `${r.metricTotal ?? '--'} 项`,
-            },
-            {
-              title: '监控中指标', width: 110,
-              render: (_, r) => ((r.metricMonitored ?? 0) > 0
-                ? <Tag color="blue">{r.metricMonitored} 项</Tag>
-                : <Tag>未配置（仅存储）</Tag>),
-            },
-            { title: '健康状态', width: 100, render: (_, r) => <StatusTag value={r.health.status || '--'} /> },
-            {
-              title: '操作', width: 150,
-              render: (_, r) => (
-                <Button type="primary" ghost size="small" icon={<Activity size={13} />} onClick={() => setMonitorTarget({ deviceId: r.device.deviceId, deviceName: r.device.name })}>
-                  配置监控指标
-                </Button>
-              ),
-            },
-          ]}
-        />
-        <div style={{ color: '#5d6b78', fontSize: 12, marginTop: 8 }}>
-          口径说明：设备绑定（Tab 1）决定「接入哪些设备、存储哪些数据」；本页决定「哪些指标进入曲线监控」——两者独立。
-          同型号设备批量配置：在一台设备上勾选好后「存为模板」，再通过「模板应用到设备」批量下发（自动创建绑定并预置监控勾选）。
+          绑定即接入：绑定启用后系统获取物联网平台子设备上报的全部数据指标并存储（指标自动发现）；是否纳入曲线监控在向导第 3 步按需勾选（可以不选），未纳入监控的指标在设备台账「数据指标历史」中可查，保存后也可通过行内「监控指标」随时补选或调整。
+          换绑说明：已启用设备可点击「换绑」打开绑定草稿，修改来源与监控指标后保存将生成新版本（旧版本留痕不覆盖，监控勾选按来源+指标自动继承），新版本状态「待生效」，点「启用」后完成换绑。
+          校验规则：至少 1 个启用的物联网平台子设备、同一绑定内子设备编码不重复；子设备编码被其它设备占用仅提示、不限制绑定。
+          接入任务健康度在本页总览与设备台账联网配置中查看。
         </div>
       </Card>
     </>
@@ -683,16 +682,9 @@ export default function BindingOverviewPage() {
     <>
       <PageHeader
         title="物联网接入配置"
-        subtitle="第 1 步 设备绑定管理：绑定 IoT 来源设备，绑定即全量接入并存储上报数据 → 第 2 步 监控指标配置：按需勾选纳入曲线监控的指标（可不选）。协议/网关/点位由物联网平台管理，本页不维护"
+        subtitle="绑定向导三步走：① 选择主设备 → ② 选择物联网平台子设备（绑定即全量接入存储）→ ③ 选择监控指标（可选，不选则无可视化监控指标、数据仍全量存储可查）。协议/网关/点位由物联网平台管理，本页不维护"
       />
-      <Tabs
-        activeKey={activeTab}
-        onChange={setActiveTab}
-        items={[
-          { key: 'binding', label: '设备绑定管理', children: bindingTab },
-          { key: 'monitor', label: '监控指标配置', children: monitorTab },
-        ]}
-      />
+      {bindingTab}
 
       <BindingDraftModal
         deviceId={draftTarget?.deviceId}

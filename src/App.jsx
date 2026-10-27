@@ -224,8 +224,8 @@ export default function App() {
     const found = menus.find(m => m.children && m.children.some(c => (c.children || []).some(g => g.key === selectedKey) || c.key === selectedKey));
     return found ? [found.key] : [];
   }, [selectedKey]);
-  // 需求细则：按当前路由取本页规则说明（/monitor-overview 复用工作台细则）
-  const spec = specForPath(location.pathname === '/monitor-overview' ? '/' : location.pathname);
+  // 需求细则：按当前路由取本页规则说明
+  const spec = specForPath(location.pathname);
 
   // 监测大屏：打开「装备智能运营中枢」双屏版（运营总览 / 设备监测 顶部 Tab 切换），
   // 独立单文件页面（public/ 下，构建后位于 dist/index.html 同级）；

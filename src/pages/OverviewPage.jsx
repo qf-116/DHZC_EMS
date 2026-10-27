@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Card, Table, Select, Button, Space } from 'antd';
 import { useNavigate } from 'react-router-dom';
-import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
+import { Area, AreaChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import PageHeader from '../components/PageHeader.jsx';
 import MetricTile from '../components/MetricTile.jsx';
 import StatusTag from '../components/StatusTag.jsx';
@@ -111,9 +111,11 @@ export default function OverviewPage() {
                 <XAxis dataKey="hour" tick={{ fontSize: 11 }} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                 <Tooltip />
-                <Area dataKey="一般" stackId="a" stroke="#f59e0b" fill="#fde68a" />
-                <Area dataKey="重要" stackId="a" stroke="#ea580c" fill="#fdba74" />
-                <Area dataKey="紧急" stackId="a" stroke="#dc2626" fill="#fca5a5" />
+                <Legend wrapperStyle={{ fontSize: 12 }} iconSize={10} />
+                {/* 报警级别为有序尺度：单色红由浅到深编码严重度（与工作台报警趋势同一色板） */}
+                <Area dataKey="一般" name="一般" stackId="a" stroke="#fca5a5" fill="#fca5a5" fillOpacity={0.85} />
+                <Area dataKey="重要" name="重要" stackId="a" stroke="#ef4444" fill="#ef4444" fillOpacity={0.85} />
+                <Area dataKey="紧急" name="紧急" stackId="a" stroke="#991b1b" fill="#991b1b" fillOpacity={0.85} />
               </AreaChart>
             </ResponsiveContainer>
           )}

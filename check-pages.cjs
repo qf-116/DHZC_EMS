@@ -27,14 +27,16 @@ const routes = [
   '/repair-orders/execute', '/repair-orders/detail', '/repair-knowledge',
   '/spare-parts-stock', '/spare-parts-inbound', '/spare-parts-inbound/detail',
   '/spare-parts-outbound', '/spare-parts-outbound/detail',
-  '/binding-overview', '/platform-metrics',
+  '/binding-overview', '/binding-templates',
+  // 2026-10-27 下线页面旧路由（重定向）：平台指标清单 / 报警规则版本 / 通知策略 / 数据质量报表
+  '/platform-metrics', '/alarm-rule-versions', '/notification-policy', '/report/quality',
   '/net-config', '/device-capability', '/metric-dictionary', '/point-mapping', '/data-quality', '/data-gap-dead-letter',
   '/program-compare', '/program-handle-record',
   '/monitor-overview', '/realtime', '/device/DEV-001', '/device/DEV-005',
   '/oee-realtime', '/oee-history', '/oee-history/detail/DEV-001', '/oee-speed-config', '/planned-downtime', '/screen/device',
-  '/alarm-center', '/alarm-rules', '/alarm-rule-templates', '/alarm-rule-versions', '/notification-policy',
+  '/alarm-center', '/alarm-rules', '/alarm-rule-templates',
   '/report/runtime', '/report/status', '/report/production', '/report/mttr', '/report/comprehensive',
-  '/report/alarm', '/report/quality', '/report/program',
+  '/report/alarm', '/report/program',
   '/report/inspection', '/report/patrol', '/report/maintenance', '/report/repair', '/report/sparepart',
 ];
 

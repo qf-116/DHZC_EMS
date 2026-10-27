@@ -2,7 +2,6 @@ import React from 'react';
 import { Modal, Steps, Select, Table, Tag, Space, Button, InputNumber, Alert, Statistic, Radio, App } from 'antd';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import { groupBatchTargets } from '../domain/alarmRule.js';
-import { notificationRows } from '../data/demoData.js';
 
 // 批量新建报警规则（M3-M4）：选择同类指标目标 → 统一配置 → 逐目标预览 → 只生成草稿。
 // 分组键 = 指标 + 数据类型 + 单位 + 量程 + 设备型号（§10.3）；已有规则默认跳过，不覆盖。
@@ -34,7 +33,6 @@ export default function RuleBatchModal({ open, onClose, targets, onCommitted }) 
     deadband: 5,
     recoveryValue: null,
     stabilizeSec: 30,
-    policyCode: 'NP-IMPORTANT',
   });
   const [preview, setPreview] = React.useState(null);
   const [committing, setCommitting] = React.useState(false);
@@ -42,7 +40,7 @@ export default function RuleBatchModal({ open, onClose, targets, onCommitted }) 
 
   const reset = () => {
     setStep(0); setMetricCode(null); setSelectedKeys([]); setPreview(null); setBatchResult(null); setCommitting(false);
-    setCfg({ severity: '重要', mode: 'upper', threshold: null, durationSec: 60, thresholdMode: 'deadband', deadband: 5, recoveryValue: null, stabilizeSec: 30, policyCode: 'NP-IMPORTANT' });
+    setCfg({ severity: '重要', mode: 'upper', threshold: null, durationSec: 60, thresholdMode: 'deadband', deadband: 5, recoveryValue: null, stabilizeSec: 30 });
   };
   const close = () => { onClose(); };
 
@@ -81,7 +79,6 @@ export default function RuleBatchModal({ open, onClose, targets, onCommitted }) 
       stabilize: { durationSec: cfg.stabilizeSec, qualityRequired: 'GOOD', invalidDataPolicy: 'hold', rebreachPolicy: 'resetTimer' },
       notifyOnRecover: true,
     },
-    notificationConfig: buildNotification(cfg.policyCode),
     targets: selectedTargets,
   });
 
@@ -190,9 +187,6 @@ export default function RuleBatchModal({ open, onClose, targets, onCommitted }) 
           <Space wrap>
             <span>报警等级</span>
             <Select value={cfg.severity} onChange={(v) => setCfg({ ...cfg, severity: v })} style={{ width: 100 }} options={['紧急', '重要', '一般', '提示'].map((v) => ({ value: v, label: v }))} />
-            <span>通知策略（固定模板）</span>
-            <Select value={cfg.policyCode} onChange={(v) => setCfg({ ...cfg, policyCode: v })} style={{ width: 280 }}
-              options={notificationRows.filter((n) => n.status === '启用').map((n) => ({ value: n.code, label: `${n.code} ${n.name}` }))} />
           </Space>
           <Space wrap>
             <span>恢复阈值</span>
@@ -250,19 +244,4 @@ export default function RuleBatchModal({ open, onClose, targets, onCommitted }) 
       )}
     </Modal>
   );
-}
-
-function buildNotification(policyCode) {
-  const n = notificationRows.find((x) => x.code === policyCode) || notificationRows[1];
-  return {
-    policyCode: n.code,
-    overridden: false,
-    channels: n.channels.split(' / '),
-    receivers: n.receivers.split('、'),
-    first: n.first,
-    interval: n.interval,
-    escalation: n.escalation,
-    silent: n.silent === '无' ? '' : n.silent,
-    retries: n.retries,
-  };
 }

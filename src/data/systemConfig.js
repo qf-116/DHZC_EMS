@@ -29,7 +29,7 @@ export const sysRoles = [
   { roleId: 'R002', code: 'DEVICE_ADMIN', name: '设备管理员', dataScope: '本部门及以下', status: '已启用', userCount: 1, remark: '台账/报警规则/维修派工/备件管理', menuKeys: ['menu:workbench', 'menu:device-ledger', 'menu:doc-library', 'menu:base-type-config', 'menu:alarm-center', 'menu:alarm-rules', 'menu:repair-pending', 'menu:repair-reports', 'menu:repair-orders', 'menu:spare-parts-stock', 'menu:report-runtime', 'menu:report:repair'], createTime: '2026-01-06 09:30:00' },
   { roleId: 'R003', code: 'REPAIR_ENG', name: '维修工程师', dataScope: '本部门', status: '已启用', userCount: 2, remark: '接单/执行/验收，只读台账', menuKeys: ['menu:workbench', 'menu:repair-orders', 'menu:repair-knowledge', 'menu:spare-parts-outbound'], createTime: '2026-01-08 10:30:00' },
   { roleId: 'R004', code: 'INSPECTOR', name: '点检保养专员', dataScope: '本部门及以下', status: '已启用', userCount: 3, remark: '点检/保养/巡检执行与记录', menuKeys: ['menu:workbench', 'menu:inspection-tasks', 'menu:maintenance-tasks', 'menu:patrol-tasks', 'menu:repair-reports'], createTime: '2026-01-10 14:20:00' },
-  { roleId: 'R005', code: 'ANALYST', name: '报表分析员', dataScope: '全部数据权限', status: '已启用', userCount: 2, remark: '报表中心全部报表只读 + 导出', menuKeys: ['menu:workbench', 'menu:report-runtime', 'menu:report:production', 'menu:report:mttr', 'menu:report:comprehensive', 'menu:report:alarm', 'menu:report:quality', 'menu:report:sparepart'], createTime: '2026-02-01 11:00:00' },
+  { roleId: 'R005', code: 'ANALYST', name: '报表分析员', dataScope: '全部数据权限', status: '已启用', userCount: 2, remark: '报表中心全部报表只读 + 导出', menuKeys: ['menu:workbench', 'menu:report-runtime', 'menu:report:production', 'menu:report:mttr', 'menu:report:comprehensive', 'menu:report:alarm', 'menu:report:sparepart'], createTime: '2026-02-01 11:00:00' },
   { roleId: 'R006', code: 'VIEWER', name: '只读访客', dataScope: '仅本人数据', status: '已启用', userCount: 2, remark: '监测总览/实时监控只读，无操作权限', menuKeys: ['menu:workbench', 'menu:monitor-overview', 'menu:realtime'], createTime: '2026-03-15 15:05:00' },
 ];
 
@@ -54,7 +54,7 @@ export const sysOrgTree = [
 // dictType：字典类型；entries：字典项（label/value 均唯一）
 export const sysDictTypes = [
   { typeCode: 'device_status', typeName: '设备运行状态', remark: '运行监测/台账状态轴口径', status: '已启用', updateTime: '2026-09-10 10:12:00', updater: '李明' },
-  { typeCode: 'alarm_level', typeName: '报警级别', remark: '报警规则配置与通知策略共用', status: '已启用', updateTime: '2026-09-08 15:40:00', updater: '王建国' },
+  { typeCode: 'alarm_level', typeName: '报警级别', remark: '报警规则配置共用', status: '已启用', updateTime: '2026-09-08 15:40:00', updater: '王建国' },
   { typeCode: 'repair_source', typeName: '报修来源', remark: '报修单 source 字段枚举', status: '已启用', updateTime: '2026-08-30 09:20:00', updater: '王建国' },
   { typeCode: 'user_status', typeName: '用户状态', remark: '基础配置·用户管理', status: '已启用', updateTime: '2026-09-14 11:05:00', updater: '吴敏' },
   { typeCode: 'data_scope', typeName: '数据权限范围', remark: '基础配置·角色数据范围', status: '已启用', updateTime: '2026-09-14 11:08:00', updater: '吴敏' },
@@ -168,7 +168,6 @@ export const sysPermissionTree = [
   ] },
   { title: '数据接入', key: 'group:data', children: [
     { title: '物联网接入配置', key: 'menu:binding-overview' },
-    { title: '平台指标清单', key: 'menu:platform-metrics' },
     { title: '程序参数比对', key: 'menu:program-compare' },
   ] },
   { title: '运行监测', key: 'group:monitor', children: [
@@ -180,7 +179,6 @@ export const sysPermissionTree = [
   { title: '报警中心', key: 'group:alarm', children: [
     { title: '报警中心', key: 'menu:alarm-center' },
     { title: '报警规则配置', key: 'menu:alarm-rules' },
-    { title: '通知策略配置', key: 'menu:notification-policy' },
   ] },
   { title: '报表中心', key: 'group:report', children: [
     { title: '运行 / 产量 / MTTR·MTBF / 综合', key: 'menu:report-runtime' },

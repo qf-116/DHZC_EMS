@@ -3,7 +3,6 @@ import { Card, Table, Tag, Button, Space, Select, App, Modal, Form, Input, Input
 
 import { Plus, AppWindow, Edit3, Trash2 } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
-import { notificationRows } from '../data/demoData.js';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import { resolveRuleTargets, conditionTextOf, recoveryTextOf } from '../domain/alarmRule.js';
 
@@ -54,7 +53,6 @@ export default function RuleTemplatePage() {
         deadband: record.recoveryConfig?.condition?.deadband ?? 5,
         remind: record.suppressionConfig?.remindIntervalMin ?? 5,
         storm: record.stormConfig?.maxEvents ?? 3,
-        policy: record.notificationConfig?.policyCode || 'NP-IMPORTANT',
         remark: record.remark,
         status: record.status || '启用',
       });
@@ -101,18 +99,6 @@ export default function RuleTemplatePage() {
           stabilize: { durationSec: 30, qualityRequired: 'GOOD', invalidDataPolicy: 'hold', rebreachPolicy: 'resetTimer' },
           notifyOnRecover: true,
         };
-    const tpl = notificationRows.find((n) => n.code === v.policy) || notificationRows[1];
-    const notificationConfig = {
-      policyCode: tpl.code,
-      overridden: false,
-      channels: tpl.channels.split(' / '),
-      receivers: tpl.receivers.split('、'),
-      first: tpl.first,
-      interval: tpl.interval,
-      escalation: tpl.escalation,
-      silent: tpl.silent === '无' ? '' : tpl.silent,
-      retries: tpl.retries,
-    };
     const res = actions.saveRuleTemplate({
       templateId: editing?.templateId,
       name: v.name,
@@ -122,7 +108,6 @@ export default function RuleTemplatePage() {
       remark: v.remark || '',
       triggerConfig,
       recoveryConfig,
-      notificationConfig,
       suppressionConfig: { mergeActiveEvent: true, countRepeatedTrigger: true, remindEnabled: true, remindIntervalMin: v.remind, maxRemindCount: null, createNewAfterClose: true },
       stormConfig: { enabled: true, windowMin: 60, maxEvents: v.storm, scope: 'sameRule', overflowAction: 'merge' },
       silenceConfig: { source: 'template', enabled: false, windows: [] },
@@ -181,7 +166,6 @@ export default function RuleTemplatePage() {
           severity: '重要',
           triggerConfig: tc,
           recoveryConfig: rc,
-          notificationConfig: applyRow.notificationConfig,
           suppressionConfig: applyRow.suppressionConfig,
           stormConfig: applyRow.stormConfig,
           silenceConfig: applyRow.silenceConfig,
@@ -228,7 +212,6 @@ export default function RuleTemplatePage() {
     { title: '恢复条件（迟滞）', width: 240, render: (_, r) => recoveryTextOf(r.recoveryConfig, r.triggerConfig) },
     { title: '重复提醒', width: 90, render: (_, r) => `${r.suppressionConfig?.remindIntervalMin ?? '--'} 分钟/次` },
     { title: '风暴限流', width: 90, render: (_, r) => `≤ ${r.stormConfig?.maxEvents ?? '--'} 条/小时` },
-    { title: '通知策略', width: 120, render: (_, r) => r.notificationConfig?.policyCode || '--' },
     { title: '引用规则数', key: 'refs', width: 100, render: (_, r) => {
       const n = refsOf(r.templateId);
       return n > 0 ? <Tooltip title={`已按该模板生成 ${n} 条规则；模板更新不回写已发布规则`}>{n} 条</Tooltip> : '--';
@@ -291,7 +274,7 @@ export default function RuleTemplatePage() {
         destroyOnHidden
       >
         <div style={{ maxHeight: '60vh', overflowY: 'auto', paddingRight: 8 }}>
-          <Form form={form} layout="vertical" initialValues={{ mode: 'upper', duration: 60, deadband: 5, remind: 5, storm: 3, policy: 'NP-IMPORTANT', status: '启用' }}>
+          <Form form={form} layout="vertical" initialValues={{ mode: 'upper', duration: 60, deadband: 5, remind: 5, storm: 3, status: '启用' }}>
             <Form.Item label="模板名称" name="name" rules={[{ required: true, message: '请输入模板名称' }]}>
               <Input placeholder="如：温度类越上限通用模板" />
             </Form.Item>
@@ -341,9 +324,6 @@ export default function RuleTemplatePage() {
             <Space wrap>
               <Form.Item label="重复提醒间隔（分钟）" name="remind" rules={[{ required: true }]}><InputNumber min={1} /></Form.Item>
               <Form.Item label="风暴限流（条/小时）" name="storm" rules={[{ required: true }]}><InputNumber min={1} /></Form.Item>
-              <Form.Item label="通知策略" name="policy" rules={[{ required: true, message: '请选择通知策略' }]}>
-                <Select style={{ width: 240 }} options={notificationRows.map((n) => ({ value: n.code, label: `${n.code} ${n.name}` }))} />
-              </Form.Item>
               <Form.Item label="状态" name="status">
                 <Select style={{ width: 100 }} options={[{ value: '启用', label: '启用' }, { value: '停用', label: '停用' }]} />
               </Form.Item>
@@ -366,7 +346,7 @@ export default function RuleTemplatePage() {
         {applyRow && (
           <>
             <div style={{ fontSize: 12, color: '#5d6b78', lineHeight: 1.8, marginBottom: 8 }}>
-              触发：{conditionTextOf(applyRow.triggerConfig)} · 恢复：{recoveryTextOf(applyRow.recoveryConfig, applyRow.triggerConfig)} · 通知策略 {applyRow.notificationConfig?.policyCode || '--'}
+              触发：{conditionTextOf(applyRow.triggerConfig)} · 恢复：{recoveryTextOf(applyRow.recoveryConfig, applyRow.triggerConfig)}
               <br />适用指标：{(applyRow.applicableMetricCodes || []).join('、') || '未限定（按指标说明人工匹配）'}
             </div>
             <Select

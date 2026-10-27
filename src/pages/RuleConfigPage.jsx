@@ -1,9 +1,8 @@
 import React from 'react';
-import { Card, Table, Tag, Button, Space, Select, App, Input, InputNumber, Switch, Alert, Modal, Statistic, Tooltip, Cascader, Checkbox, Radio } from 'antd';
+import { Card, Table, Tag, Button, Space, Select, App, Input, InputNumber, Switch, Alert, Modal, Statistic, Tooltip, Cascader, Radio } from 'antd';
 import { Plus, TestTube2, Zap, Info, Copy, Layers } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader.jsx';
-import { metricAlarmTemplates, ruleTemplates, notificationRows } from '../data/demoData.js';
+import { metricAlarmTemplates, ruleTemplates } from '../data/demoData.js';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import {
   resolveRuleTargets, createEmptyRuleForm, ruleToForm, formToRule, switchRuleFormType,
@@ -28,13 +27,6 @@ const InfoTip = ({ text }) => (
   </Tooltip>
 );
 
-const PolicyField = ({ label, children }) => (
-  <div>
-    <div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>{label}</div>
-    {children}
-  </div>
-);
-
 const RULE_TYPE_LABEL = { threshold: '阈值规则', state: '状态规则', quality: '质量规则', combo: '组合规则' };
 
 // 静默窗口展示文本
@@ -42,7 +34,6 @@ const silenceText = (windows) => (windows || []).map((w) => `${w.start}-${w.end}
 
 export default function RuleConfigPage() {
   const { message, modal } = App.useApp();
-  const navigate = useNavigate();
   const state = useDemoState();
   const actions = useDemoActions();
   const E = state.entities;
@@ -100,31 +91,7 @@ export default function RuleConfigPage() {
     [currentTarget]
   );
 
-  // 通知策略 = 模板 + 临时调整（仅本规则生效，不回写策略本体）
-  const peopleOptions = ['李明', '王强', '赵艳', '陈晨', '张伟', '王建国', '吴敏'].map((v) => ({ value: v, label: v }));
-  const policyTplOf = (code) => notificationRows.find((n) => n.code === code) || notificationRows[1];
-  const draftFromTpl = (n) => ({
-    channels: n.channels.split(' / '),
-    receivers: n.receivers.split('、'),
-    first: n.first,
-    interval: n.interval,
-    escalation: n.escalation,
-    silent: n.silent === '无' ? '' : n.silent,
-    retries: n.retries,
-  });
-  const [policyCode, setPolicyCode] = React.useState('NP-IMPORTANT');
-  const [policyDraft, setPolicyDraft] = React.useState(() => draftFromTpl(policyTplOf('NP-IMPORTANT')));
-  const changePolicy = (code) => {
-    setPolicyCode(code);
-    setPolicyDraft(draftFromTpl(policyTplOf(code)));
-    message.info('已按所选策略模板重新带出通知配置，可临时调整（仅本规则生效）');
-  };
-  const resetPolicy = () => {
-    setPolicyDraft(draftFromTpl(policyTplOf(policyCode)));
-    message.success('已恢复为策略模板默认内容');
-  };
-  const curTpl = policyTplOf(policyCode);
-  const policyModified = JSON.stringify(policyDraft) !== JSON.stringify(draftFromTpl(curTpl));
+  // 2026-10-27 范围调整：报警规则不再配置通知策略，规则保存不含 notificationConfig（历史种子规则保留原快照）
 
   const patch = (p) => setForm((f) => ({ ...f, ...p }));
   const patchTrigger = (p) => setForm((f) => ({ ...f, triggerConfig: { ...f.triggerConfig, ...p } }));
@@ -148,8 +115,6 @@ export default function RuleConfigPage() {
     setEditing(null);
     setImportedTpl(null);
     setForm(createEmptyRuleForm());
-    const pc = 'NP-IMPORTANT';
-    setPolicyCode(pc); setPolicyDraft(draftFromTpl(policyTplOf(pc)));
     setOpen(true);
   };
   const openEdit = (r) => {
@@ -158,10 +123,6 @@ export default function RuleConfigPage() {
     // 待发布草稿优先回填；legacy 规则经 adapter 解析，解析不出则保持默认并只读展示
     const src = r.draftConfig || r;
     setForm(ruleToForm(src));
-    const nc = src.notificationConfig;
-    const pc = nc?.policyCode || r.policyCode || 'NP-IMPORTANT';
-    setPolicyCode(pc);
-    setPolicyDraft(nc ? { channels: nc.channels || ['站内'], receivers: nc.receivers || [], first: nc.first || '立即', interval: nc.interval || '5 分钟', escalation: nc.escalation || '无', silent: nc.silent || '', retries: nc.retries ?? 1 } : draftFromTpl(policyTplOf(pc)));
     setOpen(true);
   };
   const [testForm, setTestForm] = React.useState(null);
@@ -217,12 +178,7 @@ export default function RuleConfigPage() {
       templateId: t.templateId,
       templateVersion: null,
     }));
-    const nc = t.notificationConfig;
-    if (nc?.policyCode) {
-      setPolicyCode(nc.policyCode);
-      setPolicyDraft({ channels: nc.channels || ['站内'], receivers: nc.receivers || [], first: nc.first || '立即', interval: nc.interval || '5 分钟', escalation: nc.escalation || '无', silent: nc.silent || '', retries: nc.retries ?? 1 });
-    }
-    message.success(`已从模板「${t.name}」导入参数（触发/恢复/通知/治理），请继续选择目标（个别目标可微调）`);
+    message.success(`已从模板「${t.name}」导入参数（触发/恢复/治理），请继续选择目标（个别目标可微调）`);
   };
   // 存为模板（P2 模板持久化）：写入 DemoStore 模板实体，不包含设备目标
   const submitSaveTemplate = () => {
@@ -237,7 +193,6 @@ export default function RuleConfigPage() {
       remark: `由规则 ${form.code || '（新建）'} 配置沉淀于 ${state.meta.demoDay}`,
       triggerConfig: rule.triggerConfig,
       recoveryConfig: rule.recoveryConfig,
-      notificationConfig: rule.notificationConfig,
       suppressionConfig: rule.suppressionConfig,
       stormConfig: rule.stormConfig,
       silenceConfig: rule.silenceConfig,
@@ -250,24 +205,7 @@ export default function RuleConfigPage() {
   };
 
   // 客户端预校验（与 reducer 同一领域函数）：阻断错误红色展示，发布前必须清零
-  const buildRule = () => {
-    const rule = formToRule(form, { code: form.code || nextRuleCode() });
-    // 通知策略 = 模板 + 临时调整，随规则完整落库（M0 契约：不得只保存 policyCode）
-    rule.notificationConfig = {
-      policyCode,
-      policyName: curTpl.name,
-      overridden: policyModified,
-      channels: [...policyDraft.channels],
-      receivers: [...policyDraft.receivers],
-      first: policyDraft.first,
-      interval: policyDraft.interval,
-      escalation: policyDraft.escalation,
-      silent: policyDraft.silent,
-      retries: policyDraft.retries,
-    };
-    rule.policyCode = policyCode;
-    return rule;
-  };
+  const buildRule = () => formToRule(form, { code: form.code || nextRuleCode() });
   const nextRuleCode = () => `R-NEW-${String(Object.keys(E.alarmRulesById).length + 1).padStart(3, '0')}`;
   const validation = React.useMemo(() => {
     if (!open || legacyLocked) return { errors: [], warnings: [] };
@@ -275,7 +213,7 @@ export default function RuleConfigPage() {
       devicesById: E.devicesById, bindingsByDeviceId: E.bindingsByDeviceId, metricsByKey: E.metricsByKey, alarmRulesById: E.alarmRulesById,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form, open, legacyLocked, policyDraft, policyCode]);
+  }, [form, open, legacyLocked]);
 
   const saveRule = ({ publish = false } = {}) => {
     const rule = buildRule();
@@ -376,16 +314,6 @@ export default function RuleConfigPage() {
   const submitBatchEdit = () => {
     const patch = {};
     Object.entries(beForm).forEach(([k, v]) => { if (v !== null && v !== undefined && v !== '') patch[k] = v; });
-    if (patch.policyCode) {
-      const n = notificationRows.find((x) => x.code === patch.policyCode) || notificationRows[1];
-      patch.notificationConfig = {
-        policyCode: n.code, overridden: false,
-        channels: n.channels.split(' / '), receivers: n.receivers.split('、'),
-        first: n.first, interval: n.interval, escalation: n.escalation,
-        silent: n.silent === '无' ? '' : n.silent, retries: n.retries,
-      };
-      delete patch.policyCode;
-    }
     if (Object.keys(patch).length === 0) { message.warning('请至少填写一个要修改的字段'); return; }
     const res = actions.batchEditRules(selectedRowKeys, patch);
     if (!res.ok) { message.error(res.message); return; }
@@ -487,14 +415,12 @@ export default function RuleConfigPage() {
               </span>
             ) },
             { title: '等级', dataIndex: 'severity', width: 70, render: (v) => v === '紧急' ? <Tag color="error">{v}</Tag> : v === '重要' ? <Tag color="warning">{v}</Tag> : <Tag color="gold">{v || '--'}</Tag> },
-            { title: '通知策略', dataIndex: 'policyCode', width: 120, render: (v, r) => v || r.notificationConfig?.policyCode || '--' },
             { title: '版本', dataIndex: 'versionText', width: 130 },
             { title: '状态', dataIndex: 'status', width: 80, render: (v) => <Tag color={v === '已发布' ? 'success' : v === '草稿' ? 'processing' : 'default'}>{v}</Tag> },
             { title: '操作', width: 150, fixed: 'right', render: (_, r) => (
               <div className="list-actions">
                 <a onClick={() => openEdit(r)}>{r.draftConfig ? '编辑草稿' : '编辑'}</a>
                 <a onClick={() => openTest(r)}>测试</a>
-                <a onClick={() => navigate('/alarm-rule-versions')}>版本</a>
                 {r.status === '已发布' && <a style={{ color: '#d97706' }} onClick={() => confirmStop(r)}>停用</a>}
                 {r.status === '草稿' && <a style={{ color: '#00b8d4' }} onClick={() => { openEdit(r); }}>发布</a>}
               </div>
@@ -574,7 +500,7 @@ export default function RuleConfigPage() {
             <Space wrap>
               {!editing && (
                 <Select
-                  allowClear placeholder="从模板导入（触发/恢复/通知/治理参数）" style={{ width: 280 }}
+                  allowClear placeholder="从模板导入（触发/恢复/治理参数）" style={{ width: 280 }}
                   value={importedTpl?.templateId || undefined}
                   onChange={(v) => (v ? applyRuleTemplate(v) : setImportedTpl(null))}
                   options={Object.values(state.entities.ruleTemplatesById || {}).filter((t) => t.status === '启用').map((t) => ({ value: t.templateId, label: `${t.name}` }))}
@@ -902,19 +828,19 @@ export default function RuleConfigPage() {
 
             <Card
               size="small"
-              title={<>⑤ 静默时段（模板默认 + 规则级覆盖）<InfoTip text="静默时段内满足触发条件只记录不通知。规则级静默覆盖通知策略中的静默设置：启用后以本规则配置为准，未启用则沿用策略模板；计划停机静默始终联动「计划停机配置」。最终生效口径随版本快照保存。" /></>}
+              title={<>⑤ 静默时段（规则级）<InfoTip text="静默时段内满足触发条件只记录不通知。启用规则级静默后以本规则配置的时段为准；计划停机静默始终联动「计划停机配置」。最终生效口径随版本快照保存。" /></>}
             >
               <Space direction="vertical" size={8} style={{ width: '100%' }}>
                 <Space wrap>
                   <Switch
                     checked={form.silenceConfig.enabled} disabled={legacyLocked}
-                    checkedChildren="本规则覆盖策略静默" unCheckedChildren="沿用策略模板静默"
+                    checkedChildren="本规则静默已启用" unCheckedChildren="未启用规则级静默"
                     onChange={(v) => patch({ silenceConfig: { ...form.silenceConfig, enabled: v, source: v ? 'override' : 'template' } })}
                   />
                   <Switch disabled checkedChildren="计划停机期间静默" checked />
                 </Space>
                 <div style={hint}>
-                  模板默认：{policyDraft.silent || '不静默'} ／ 本规则覆盖：{form.silenceConfig.enabled ? silenceText(form.silenceConfig.windows) : '未启用'} ／ 最终生效：{form.silenceConfig.enabled ? (silenceText(form.silenceConfig.windows) || '不静默') : (policyDraft.silent || '不静默')}
+                  本规则静默：{form.silenceConfig.enabled ? (silenceText(form.silenceConfig.windows) || '未配置时段') : '未启用'} ／ 计划停机期间始终静默
                 </div>
                 {form.silenceConfig.enabled && (
                   <>
@@ -930,77 +856,6 @@ export default function RuleConfigPage() {
                     <Button type="dashed" block disabled={legacyLocked} onClick={() => patch({ silenceConfig: { ...form.silenceConfig, windows: [...form.silenceConfig.windows, { start: '22:00', end: '07:00' }] } })}>+ 添加静默时段</Button>
                   </>
                 )}
-              </Space>
-            </Card>
-
-            <Card
-              size="small"
-              title={<>⑥ 通知策略（模板 + 临时调整）<InfoTip text="策略在这里作为模板使用：选择策略后自动带出其内容（渠道 / 接收人 / 通知节奏 / 升级 / 静默 / 重试），可针对本规则临时调整；调整仅本规则生效，不回写策略本体。发布版本快照记录调整后的最终通知口径。" /></>}
-            >
-              <Space direction="vertical" size={8} style={{ width: '100%' }}>
-                <Space wrap>
-                  <span>策略模板</span>
-                  <Select
-                    value={policyCode}
-                    disabled={legacyLocked}
-                    onChange={changePolicy}
-                    style={{ width: 320 }}
-                    options={notificationRows.filter((n) => n.status === '启用').map((n) => ({ value: n.code, label: `${n.code} ${n.name}（${n.level}）` }))}
-                  />
-                  {policyModified && <Tag color="orange" style={{ marginInlineEnd: 0 }}>已临时调整</Tag>}
-                  {policyModified && <a onClick={resetPolicy}>恢复模板默认</a>}
-                  <a onClick={() => navigate('/notification-policy')}>查看 / 新增策略</a>
-                </Space>
-                <Alert
-                  type={policyModified ? 'warning' : 'info'}
-                  showIcon
-                  message={policyModified
-                    ? <>已按策略「<b>{curTpl.code} {curTpl.name}</b>」带出并做了临时调整：调整仅对本规则生效，策略本体不受影响。</>
-                    : <>已按策略「<b>{curTpl.code} {curTpl.name}</b>」带出默认通知配置，可针对本规则临时调整，调整仅本规则生效。</>}
-                />
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: '10px 16px' }}>
-                  <PolicyField label="通知渠道（站内为兜底必发）">
-                    <Checkbox.Group
-                      value={policyDraft.channels}
-                      disabled={legacyLocked}
-                      onChange={(vals) => setPolicyDraft({ ...policyDraft, channels: vals.includes('站内') ? vals : [...vals, '站内'] })}
-                      options={[
-                        { label: '站内（必发）', value: '站内', disabled: true },
-                        { label: '短信', value: '短信' },
-                        { label: '企业微信', value: '企业微信' },
-                      ]}
-                    />
-                  </PolicyField>
-                  <PolicyField label="接收人">
-                    <Select
-                      mode="multiple"
-                      allowClear
-                      value={policyDraft.receivers}
-                      disabled={legacyLocked}
-                      onChange={(vals) => setPolicyDraft({ ...policyDraft, receivers: vals })}
-                      options={peopleOptions}
-                      maxTagCount="responsive"
-                      style={{ width: '100%' }}
-                      placeholder="选择接收人"
-                    />
-                  </PolicyField>
-                  <PolicyField label="首次通知（触发后多久发第一条）">
-                    <Select value={policyDraft.first} disabled={legacyLocked} onChange={(v) => setPolicyDraft({ ...policyDraft, first: v })} style={{ width: '100%' }} options={['立即', '1 分钟', '5 分钟'].map((v) => ({ value: v, label: v }))} />
-                  </PolicyField>
-                  <PolicyField label="重复通知间隔（未确认时每隔多久提醒）">
-                    <Select value={policyDraft.interval} disabled={legacyLocked} onChange={(v) => setPolicyDraft({ ...policyDraft, interval: v })} style={{ width: '100%' }} options={['5 分钟', '10 分钟', '30 分钟', '不重复'].map((v) => ({ value: v, label: v }))} />
-                  </PolicyField>
-                  <PolicyField label="升级节点（超时未确认逐级上报）">
-                    <Select value={policyDraft.escalation} disabled={legacyLocked} onChange={(v) => setPolicyDraft({ ...policyDraft, escalation: v })} style={{ width: '100%' }} options={['10 分钟 / 30 分钟', '30 分钟', '无'].map((v) => ({ value: v, label: v }))} />
-                  </PolicyField>
-                  <PolicyField label="最大重试（发送失败重试次数）">
-                    <InputNumber value={policyDraft.retries} disabled={legacyLocked} min={1} max={10} onChange={(v) => setPolicyDraft({ ...policyDraft, retries: v ?? 1 })} style={{ width: '100%' }} addonAfter="次" />
-                  </PolicyField>
-                  <PolicyField label="静默时段（时段内只记录不通知）">
-                    <Input value={policyDraft.silent} disabled={legacyLocked} onChange={(e) => setPolicyDraft({ ...policyDraft, silent: e.target.value })} style={{ width: '100%' }} placeholder="如 00:00-07:00，留空为不静默" />
-                  </PolicyField>
-                </div>
-                <div style={hint}>站内通知为兜底必发渠道；外部渠道不可作为唯一通知方式。保存 / 发布时以上调整将作为本规则的 notificationConfig 完整落库并进入版本快照。</div>
               </Space>
             </Card>
 
@@ -1088,11 +943,6 @@ export default function RuleConfigPage() {
               <InputNumber min={0} placeholder="不修改" value={beForm.stabilizeSec} onChange={(v) => setBeForm({ ...beForm, stabilizeSec: v })} />
             </div>
           </Space>
-          <div>
-            <div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>通知策略（整体替换为所选策略模板）</div>
-            <Select allowClear placeholder="不修改" style={{ width: 320 }} value={beForm.policyCode} onChange={(v) => setBeForm({ ...beForm, policyCode: v ?? null })}
-              options={notificationRows.filter((n) => n.status === '启用').map((n) => ({ value: n.code, label: `${n.code} ${n.name}（${n.level}）` }))} />
-          </div>
         </Space>
       </Modal>
 
@@ -1114,7 +964,7 @@ export default function RuleConfigPage() {
             <div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>适用指标说明</div>
             <Input value={saveTplScope} onChange={(e) => setSaveTplScope(e.target.value)} placeholder={currentTarget ? `如：${currentTarget.metric.name}类指标` : '如：温度类指标'} />
           </div>
-          <Alert type="info" showIcon message="模板保存触发 / 恢复 / 通知 / 治理参数（不含设备目标与指标绑定）；可在「报警规则模板」页维护，新增规则时导入或批量应用到设备。模板更新不回写已发布规则。" />
+          <Alert type="info" showIcon message="模板保存触发 / 恢复 / 治理参数（不含设备目标与指标绑定）；可在「报警规则模板」页维护，新增规则时导入或批量应用到设备。模板更新不回写已发布规则。" />
         </Space>
       </Modal>
 

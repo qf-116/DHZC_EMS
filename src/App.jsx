@@ -3,7 +3,7 @@ import { Routes, Route, Navigate, useLocation, useNavigate, useParams, useSearch
 import { Layout, Menu, Badge, Button, Drawer, Dropdown, Space } from 'antd';
 import {
   Activity, AlarmClock, BookOpen, ClipboardList, DatabaseZap, FileBarChart,
-  Gauge, LineChart, Settings2, Truck, Bell, CalendarClock,
+  Gauge, LineChart, Settings2, Truck, CalendarClock,
   LayoutDashboard, Boxes, Wrench, Package, ClipboardCheck, ArrowRightLeft, CirclePause, Archive,
   GaugeCircle, LogOut, Layers, LayoutTemplate,
   Users, ShieldCheck, Building2, BookMarked, ScrollText,
@@ -18,14 +18,13 @@ import DocLibraryPage from './pages/DocLibraryPage.jsx';
 import BaseTypeConfigPage from './pages/BaseTypeConfigPage.jsx';
 import BindingOverviewPage from './pages/BindingOverviewPage.jsx';
 import BindingTemplatesPage from './pages/BindingTemplatesPage.jsx';
-import PlatformMetricsPage from './pages/PlatformMetricsPage.jsx';
 import AlarmCenterPage from './pages/AlarmCenterPage.jsx';
 import RuleConfigPage from './pages/RuleConfigPage.jsx';
-import AlarmRuleVersionPage from './pages/AlarmRuleVersionPage.jsx';
-import NotificationPolicyPage from './pages/NotificationPolicyPage.jsx';
 import RuleTemplatePage from './pages/RuleTemplatePage.jsx';
 // V2.1：设备采集能力/指标字典/点位映射/数据质量/缺失死信/旧联网配置页面已下线，
-// 由 物联网接入配置（BindingOverviewPage）与 平台指标清单（PlatformMetricsPage）承接，旧路由做重定向。
+// 由 物联网接入配置（BindingOverviewPage）承接，旧路由做重定向。
+// 2026-10-27 标准版范围调整：平台指标清单 / 报警规则版本 / 通知策略配置 / 数据质量统计报表 下线，
+// 旧路由重定向；页面文件保留备用（同生命周期工作台口径），恢复时需同步还原菜单/路由/需求细则。
 import ProgramComparePage from './pages/ProgramComparePage.jsx';
 import ProgramHandleRecordPage from './pages/ProgramHandleRecordPage.jsx';
 // 点检 / 保养 / 巡检：范围外演示模块（应需求恢复），数据为只读演示种子，完整闭环由点巡保养业务模块承接
@@ -159,7 +158,6 @@ const menus = [
   { key: 'data', icon: <DatabaseZap size={15} />, label: '数据接入', children: [
     { key: '/binding-overview', icon: <DatabaseZap size={14} />, label: '物联网接入配置' },
     { key: '/binding-templates', icon: <LayoutTemplate size={14} />, label: '绑定模板管理' },
-    { key: '/platform-metrics', icon: <BookOpen size={14} />, label: '平台指标清单' },
     { key: '/program-compare', icon: <BookOpen size={14} />, label: '程序参数比对' },
     { key: '/program-handle-record', icon: <ClipboardList size={14} />, label: '比对处理记录' },
     // V2.1：协议/网关/点位/采集能力归 IoT 平台；旧「设备采集能力/指标字典/点位映射/接入质量/缺失死信」并入总览或重定向
@@ -179,8 +177,7 @@ const menus = [
     { key: '/alarm-center', icon: <AlarmClock size={14} />, label: '报警中心' },
     { key: '/alarm-rules', icon: <Settings2 size={14} />, label: '报警规则配置' },
     { key: '/alarm-rule-templates', icon: <Layers size={14} />, label: '报警规则模板' },
-    { key: '/alarm-rule-versions', icon: <ClipboardList size={14} />, label: '报警规则版本' },
-    { key: '/notification-policy', icon: <Bell size={14} />, label: '通知策略配置' },
+    // 2026-10-27 范围调整：报警规则版本 / 通知策略配置 下线，旧路由重定向
   ] },
   { key: 'report', icon: <FileBarChart size={15} />, label: '报表中心', children: [
     { key: '/report/runtime', icon: <FileBarChart size={14} />, label: '运行时长与设备状态统计' },
@@ -188,7 +185,6 @@ const menus = [
     { key: '/report/mttr', icon: <FileBarChart size={14} />, label: 'MTTR / MTBF 分析' },
     { key: '/report/comprehensive', icon: <FileBarChart size={14} />, label: '综合运行分析' },
     { key: '/report/alarm', icon: <FileBarChart size={14} />, label: '报警统计' },
-    { key: '/report/quality', icon: <FileBarChart size={14} />, label: '数据质量统计' },
     { key: '/report/program', icon: <FileBarChart size={14} />, label: '程序比对统计' },
     { key: '/report/repair', icon: <FileBarChart size={14} />, label: '维修统计' },
     { key: '/report/sparepart', icon: <FileBarChart size={14} />, label: '备件管理统计' },
@@ -342,8 +338,9 @@ export default function App() {
                   <Route path="/alarm-center" element={<AlarmCenterPage />} />
                   <Route path="/alarm-rules" element={<RuleConfigPage />} />
                   <Route path="/alarm-rule-templates" element={<RuleTemplatePage />} />
-                  <Route path="/alarm-rule-versions" element={<AlarmRuleVersionPage />} />
-                  <Route path="/notification-policy" element={<NotificationPolicyPage />} />
+                  {/* 2026-10-27 范围调整：报警规则版本 / 通知策略配置 下线，旧路由重定向 */}
+                  <Route path="/alarm-rule-versions" element={<Navigate to="/alarm-rules" replace />} />
+                  <Route path="/notification-policy" element={<Navigate to="/alarm-center" replace />} />
                   {/* 点检管理（演示模块）：新增/编辑为弹窗，详情/执行为独立页面 */}
                   <Route path="/inspection-items" element={<InspectionItemsPage />} />
                   <Route path="/inspection-standards" element={<InspectionStandardsPage />} />
@@ -394,10 +391,10 @@ export default function App() {
                   <Route path="/oee-history/detail" element={<OeeHistoryDetailPage />} />
                   <Route path="/oee-speed-config" element={<SpeedConfigPage />} />
                   <Route path="/planned-downtime" element={<PlannedDowntimePage />} />
-                  {/* 数据接入（V2.1：4 页 + 旧路由重定向） */}
+                  {/* 数据接入（V2.1：3 页 + 旧路由重定向；平台指标清单已下线） */}
                   <Route path="/binding-overview" element={<BindingOverviewPage />} />
                   <Route path="/binding-templates" element={<BindingTemplatesPage />} />
-                  <Route path="/platform-metrics" element={<PlatformMetricsPage />} />
+                  <Route path="/platform-metrics" element={<Navigate to="/binding-overview" replace />} />
                   <Route path="/program-compare" element={<ProgramComparePage />} />
                   <Route path="/program-handle-record" element={<ProgramHandleRecordPage />} />
                   {/* 旧页面迁移重定向（按 5.4 页面迁移清单） */}
@@ -406,7 +403,7 @@ export default function App() {
                   <Route path="/point-mapping" element={<Navigate to="/binding-overview" replace />} />
                   <Route path="/data-quality" element={<Navigate to="/binding-overview" replace />} />
                   <Route path="/data-gap-dead-letter" element={<Navigate to="/binding-overview" replace />} />
-                  <Route path="/metric-dictionary" element={<Navigate to="/platform-metrics" replace />} />
+                  <Route path="/metric-dictionary" element={<Navigate to="/binding-overview" replace />} />
                   {/* 报表中心 */}
                   <Route path="/report/runtime" element={<RunTimeReportPage />} />
                   <Route path="/report/status" element={<Navigate to="/report/runtime" replace />} />
@@ -414,7 +411,8 @@ export default function App() {
                   <Route path="/report/mttr" element={<MttrMtbfReportPage />} />
                   <Route path="/report/comprehensive" element={<ComprehensiveReportPage />} />
                   <Route path="/report/alarm" element={<AlarmReportPage />} />
-                  <Route path="/report/quality" element={<QualityReportPage />} />
+                  {/* 2026-10-27 范围调整：数据质量统计报表下线，旧路由重定向 */}
+                  <Route path="/report/quality" element={<Navigate to="/report/comprehensive" replace />} />
                   <Route path="/report/program" element={<ProgramCompareReportPage />} />
                   {/* 点检/巡检/保养执行统计（演示模块报表） */}
                   <Route path="/report/inspection" element={<InspectionReportPage />} />

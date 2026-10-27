@@ -523,7 +523,7 @@ export function validateRuleDraft(rule, ctx = {}) {
     if (!stillBound) errors.push(`指标 ${target.metricCode} 未在设备当前启用绑定中`);
     const metric = normalizeMetricMeta(metricsByKey[target.metricCode]);
     if (!metric) {
-      errors.push(`指标 ${target.metricCode} 不在平台指标清单中`);
+      errors.push(`指标 ${target.metricCode} 不在平台指标范围内`);
       return;
     }
     if (metric.syncStatus === '已失效') errors.push(`指标 ${metric.name} 已失效，不能参与报警规则`);
@@ -687,9 +687,9 @@ export function validateRuleDraft(rule, ctx = {}) {
   }
 
   // ---- 通知校验 ----
+  // 2026-10-27 范围调整：规则不再配置通知策略；notificationConfig 仅历史种子规则携带（有则继续校验完整性）
   function validateNotification(rule2, errs) {
     const nc = rule2?.notificationConfig;
-    if (!nc?.policyCode) errs.push('必须选择通知策略');
     if (nc && (!nc.receivers || nc.receivers.length === 0)) errs.push('通知接收人至少 1 人');
     if (nc && (!nc.channels || nc.channels.length === 0)) errs.push('通知渠道至少 1 个');
   }
@@ -710,7 +710,7 @@ export function validateRuleDraft(rule, ctx = {}) {
     }
     const silence = rule2?.silenceConfig;
     if (silence?.enabled && (silence.windows || []).length === 0) {
-      warns.push('已启用规则级静默但未配置静默时段，将沿用通知策略中的静默设置');
+      warns.push('已启用规则级静默但未配置静默时段，静默不会生效');
     }
   }
 

@@ -24,7 +24,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
         colorBgLayout: '#f4f7fb',
         borderRadius: 8,
         borderRadiusLG: 12,
-        fontSize: 13,
+        fontSize: 14,
         fontFamily: "-apple-system, 'Segoe UI', 'PingFang SC', 'HarmonyOS Sans SC', 'Microsoft YaHei', Arial, sans-serif",
         boxShadow: '0 6px 24px rgba(15, 34, 65, 0.10)',
         boxShadowSecondary: '0 2px 8px rgba(15, 34, 65, 0.08)',
@@ -32,6 +32,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
       components: {
         Layout: {
           headerBg: '#ffffff',
+          headerHeight: 60,
           siderBg: '#0b1526',
           bodyBg: '#f4f7fb',
         },
@@ -46,17 +47,19 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           darkItemSelectedColor: '#ffffff',
         },
         Card: {
-          boxShadowTertiary: '0 1px 2px rgba(15, 34, 65, 0.04), 0 3px 14px rgba(15, 34, 65, 0.05)',
+          boxShadowTertiary: '0 1px 2px rgba(15, 34, 65, 0.05), 0 4px 16px rgba(15, 34, 65, 0.06)',
         },
         Table: {
           headerBg: '#f7faff',
           headerSplitColor: 'transparent',
           rowHoverBg: '#f0f6ff',
-          headerBorderRadius: 10,
+          headerBorderRadius: 12,
+          cellPaddingBlock: 13,
+          cellPaddingInline: 16,
         },
         Button: {
           fontWeight: 500,
-          primaryShadow: '0 2px 10px rgba(22, 104, 220, 0.32)',
+          primaryShadow: '0 1px 2px rgba(15, 34, 65, 0.06), 0 4px 12px rgba(22, 104, 220, 0.22)',
         },
         Tag: {
           borderRadiusSM: 999,

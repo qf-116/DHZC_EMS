@@ -2,7 +2,7 @@ import React, { useMemo } from 'react';
 import { Card, Button, Space } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import {
-  Activity, AlarmClock, Package, Wifi, Wrench, Gauge,
+  Activity, AlarmClock, Gauge, ListChecks,
 } from 'lucide-react';
 import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -13,22 +13,19 @@ import EmptyState from '../components/EmptyState.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
 import { useDemoState } from '../state/DemoStore.jsx';
 import {
-  selectWorkbench, selectAllDevices, selectDevice, selectRealtime, selectHealth,
+  selectWorkbench, selectAllDevices, selectDevice, selectRealtime,
   selectOeeRealtimeRows,
 } from '../state/selectors.js';
+import { inspectionTasks, patrolTasks, maintenanceTasks } from '../data/standardData.js';
 
-// 工作台（2026-10-27 重构）：经营概览仪表盘 —— 只呈现全局数据统计与图表分析，
+// 工作台（2026-10-27 重构，2026-10-29 图表调整）：经营概览仪表盘 —— 只呈现全局数据统计与图表分析，
 // 不再承载待办 / 异常明细列表（明细到各模块列表页查看，卡片右上角提供跳转入口）。
-// 所有统计均由 DemoStore 事实派生（selectWorkbench / selectOeeRealtimeRows / realtime / health），
-// 不使用页面自造数据；停用 / 报废设备不参与统计口径（与监测总览一致）。
+// 图表四块：报警趋势 / 设备运行状态 / 实时 OEE 对比 / 点检·巡检·保养·维修任务执行。
+// 所有统计均由 DemoStore 事实与演示种子派生，不使用页面自造数据；
+// 停用 / 报废设备不参与统计口径（与监测总览一致）。
 
 // 状态色板（已过色盲与明度校验；灰 = 中性「无数据 / 参考」属有意中性，配图例文字二次编码）
 const RUN_STATUS_COLORS = { 运行: '#16a34a', 待机: '#0ea5e9', 故障: '#dc2626', 无数据: '#94a3b8' };
-const COMM_COLORS = { 正常: '#16a34a', 延迟: '#0ea5e9', 部分中断: '#d97706', 数据中断: '#b91c1c' };
-const REPAIR_COLORS = {
-  待派工: '#d97706', 已派工: '#0ea5e9', 维修中: '#6366f1', 挂起: '#94a3b8',
-  待验收: '#ec4899', 已完成: '#16a34a', 已取消: '#cbd5e1',
-};
 // 报警级别为有序尺度（一般 → 紧急）：单色红、由浅到深编码严重度（顺序尺度 → 顺序色板）
 const SEVERITY_RAMP = [
   { key: '一般', fill: '#fca5a5' },
@@ -36,6 +33,20 @@ const SEVERITY_RAMP = [
   { key: '紧急', fill: '#991b1b' },
 ];
 const OEE_BAR_COLOR = '#1668dc';
+// 任务执行四状态（点检 / 巡检 / 保养 / 维修统一归并口径）
+const TASK_STATUS_META = [
+  { key: '已完成', fill: '#16a34a' },
+  { key: '进行中', fill: '#0ea5e9' },
+  { key: '待开始', fill: '#94a3b8' },
+  { key: '已逾期', fill: '#dc2626' },
+];
+// 种子任务状态 → 四状态归并（已关闭视为已完成，逾期完成计入已完成）
+function bucketTaskStatus(status) {
+  if (['已完成', '逾期完成', '已关闭'].includes(status)) return '已完成';
+  if (status === '已逾期') return '已逾期';
+  if (status === '进行中') return '进行中';
+  return '待开始';
+}
 
 // 环形分布图（状态类）：2px 白色分隔 + 图例带数量（数量即图上直接标注，不依赖颜色alone）
 function StatusDonut({ data, unit, height = 210 }) {
@@ -123,45 +134,27 @@ export default function WorkbenchPage() {
     })
     .sort((a, b) => b.oee - a.oee), [oeeComputable, state]);
 
-  // ④ 设备通信健康分布（监测中设备）
-  const commCounts = useMemo(() => {
-    const counts = {};
-    monitored.forEach((d) => {
-      const s = selectHealth(state, d.deviceId).status || '未知';
-      counts[s] = (counts[s] || 0) + 1;
-    });
-    return counts;
-  }, [state, monitored]);
-  const commDonut = countToDonut(commCounts, COMM_COLORS, ['正常', '延迟', '部分中断', '数据中断']);
-
-  // ⑤ 维修工单状态分布（当前在案工单，按流程序取非 0 状态）
-  const repairCounts = useMemo(() => {
-    const counts = {};
+  // ④ 任务执行数据：点检 / 巡检 / 保养（演示种子）+ 维修工单（DemoStore），
+  //    统一归并为 已完成 / 进行中 / 待开始 / 已逾期 四状态堆叠
+  const taskChart = useMemo(() => {
+    const seedStat = (tasks) => {
+      const c = { 已完成: 0, 进行中: 0, 待开始: 0, 已逾期: 0 };
+      tasks.forEach((t) => { c[bucketTaskStatus(t.status)] += 1; });
+      return c;
+    };
+    const repairStat = { 已完成: 0, 进行中: 0, 待开始: 0, 已逾期: 0 };
     Object.values(state.entities.repairOrdersById).forEach((o) => {
-      counts[o.status] = (counts[o.status] || 0) + 1;
+      if (o.status === '已完成') repairStat.已完成 += 1;
+      else if (['已派工', '维修中', '挂起', '待验收'].includes(o.status)) repairStat.进行中 += 1;
+      else if (o.status === '待派工') repairStat.待开始 += 1;
     });
-    return counts;
+    return [
+      { name: '点检任务', ...seedStat(inspectionTasks) },
+      { name: '巡检任务', ...seedStat(patrolTasks) },
+      { name: '保养任务', ...seedStat(maintenanceTasks) },
+      { name: '维修工单', ...repairStat },
+    ];
   }, [state]);
-  const repairDonut = countToDonut(
-    repairCounts, REPAIR_COLORS,
-    ['待派工', '已派工', '维修中', '挂起', '待验收', '已完成', '已取消'],
-  );
-
-  // ⑥ 备件库存水位（低于安全库存 Top5：现存 vs 安全库存，按缺口降序）
-  // 注：selectWorkbench 的 lowStock 为原始库存行，备件档案在此按 spareCode 关联
-  const stockChart = useMemo(() => wb.lowStock
-    .map((r) => {
-      const spare = state.entities.sparesByCode[r.spareCode];
-      const safe = spare?.safe ?? null;
-      return {
-        name: `${spare?.name || r.spareCode}（${r.warehouseId || '--'}）`,
-        现存: r.onHand,
-        安全库存: safe,
-        gap: safe != null ? safe - r.onHand : -1,
-      };
-    })
-    .sort((a, b) => b.gap - a.gap)
-    .slice(0, 5), [wb.lowStock, state]);
 
   return (
     <>
@@ -206,7 +199,7 @@ export default function WorkbenchPage() {
                 {SEVERITY_RAMP.map((s) => (
                   <Bar
                     key={s.key} dataKey={s.key} stackId="sev" fill={s.fill}
-                    barSize={26} stroke="#fff" strokeWidth={1}
+                    barSize={26} stroke="#fff" strokeWidth={1} isAnimationActive={false}
                   />
                 ))}
               </BarChart>
@@ -244,7 +237,7 @@ export default function WorkbenchPage() {
                 <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 10 }} unit="%" />
                 <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 11 }} />
                 <Tooltip formatter={(v) => [`${v}%`, 'OEE']} separator="" />
-                <Bar dataKey="oee" fill={OEE_BAR_COLOR} barSize={14} radius={[0, 4, 4, 0]} />
+                <Bar dataKey="oee" fill={OEE_BAR_COLOR} barSize={14} radius={[0, 4, 4, 0]} isAnimationActive={false} />
               </BarChart>
             </ResponsiveContainer>
           )}
@@ -252,44 +245,21 @@ export default function WorkbenchPage() {
 
         <Card
           size="small"
-          title={<Space><Wifi size={15} /> 通信健康分布</Space>}
-          extra={<Button type="link" size="small" onClick={() => navigate('/binding-overview')}>接入配置</Button>}
-        >
-          <StatusDonut data={commDonut} unit="台" />
-        </Card>
-
-        <Card
-          size="small"
-          title={<Space><Wrench size={15} /> 维修工单状态</Space>}
+          title={<Space><ListChecks size={15} /> 任务执行（点检 / 巡检 / 保养 / 维修）</Space>}
           extra={<Button type="link" size="small" onClick={() => navigate('/repair-orders')}>维修任务</Button>}
         >
-          <StatusDonut data={repairDonut} unit="单" />
-        </Card>
-
-        <Card
-          size="small" style={{ gridColumn: 'span 2' }}
-          title={<Space><Package size={15} /> 低库存备件水位（缺口 Top5）</Space>}
-          extra={<Button type="link" size="small" onClick={() => navigate('/spare-parts-stock')}>备件台账</Button>}
-        >
-          {stockChart.length === 0 ? (
-            <EmptyState
-              description="所有备件库存均高于安全库存"
-              reason="库存低于安全库存的备件会出现在此处"
-              next="查看备件台账" onNext={() => navigate('/spare-parts-stock')}
-            />
-          ) : (
-            <ResponsiveContainer width="100%" height={210}>
-              <BarChart data={stockChart} layout="vertical" margin={{ top: 6, right: 24, left: 8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#e5e8ea" horizontal={false} />
-                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} />
-                <YAxis type="category" dataKey="name" width={150} tick={{ fontSize: 10 }} />
-                <Tooltip separator="" />
-                <Legend wrapperStyle={{ fontSize: 12 }} iconSize={10} />
-                <Bar dataKey="安全库存" fill="#94a3b8" barSize={10} radius={[0, 3, 3, 0]} />
-                <Bar dataKey="现存" fill="#0ea5e9" barSize={10} radius={[0, 3, 3, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          )}
+          <ResponsiveContainer width="100%" height={210}>
+            <BarChart data={taskChart} margin={{ top: 6, right: 12, left: -22, bottom: 0 }}>
+              <CartesianGrid strokeDasharray="3 3" stroke="#e5e8ea" vertical={false} />
+              <XAxis dataKey="name" tick={{ fontSize: 11 }} interval={0} />
+              <YAxis allowDecimals={false} tick={{ fontSize: 10 }} />
+              <Tooltip />
+              <Legend wrapperStyle={{ fontSize: 12 }} iconSize={10} />
+              {TASK_STATUS_META.map((s) => (
+                <Bar key={s.key} dataKey={s.key} stackId="task" fill={s.fill} barSize={26} stroke="#fff" strokeWidth={1} isAnimationActive={false} />
+              ))}
+            </BarChart>
+          </ResponsiveContainer>
         </Card>
       </div>
     </>

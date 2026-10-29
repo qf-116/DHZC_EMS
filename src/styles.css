@@ -247,8 +247,9 @@ body {
 .ant-card .ant-card-head-title { font-weight: 600; }
 
 /* ================= 指标块 ================= */
-/* 自适应铺满一行：无论 4/5/6 块指标都占满整行，不留右侧空白 */
-.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(196px, 1fr)); gap: 16px; }
+/* 自适应铺满一行：无论 4/5/6 块指标都占满整行，不留右侧空白。
+   最小列宽 160px：保证 1366 宽笔记本（侧栏 + 留白后内容约 1090px）6 块指标仍为一行 */
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
 .metric-tile {
   --tile: var(--brand);
   position: relative;
@@ -603,7 +604,6 @@ body {
 
 /* ================= 响应式 ================= */
 @media (max-width: 1200px) {
-  .metric-grid { grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); }
   .chart-card-grid { grid-template-columns: 1fr; }
   .detail-grid { grid-template-columns: 1fr; }
   .trend-facet { grid-template-columns: 1fr; }

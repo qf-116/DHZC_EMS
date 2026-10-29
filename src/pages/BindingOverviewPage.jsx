@@ -37,15 +37,44 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
   const [devBound, setDevBound] = useState('all');            // 第 1 步查询条件：是否已绑定
   const [devType, setDevType] = useState('all');              // 第 1 步查询条件：设备类型
   const [sourceKw, setSourceKw] = useState('');               // 来源列表搜索（设备多时缓解弹窗拥挤）
+  const [sourceProduct, setSourceProduct] = useState('all');  // 来源列表查询条件：产品名称
 
   const allDevices = useMemo(() => selectAllDevices(state), [state]);
   const draft = deviceId ? selectBindingDraft(state, deviceId) : null;
   const sourceDevicesAll = Object.values(state.entities.sourceDevicesById);
   const sourceDevices = useMemo(() => {
     const k = sourceKw.trim().toLowerCase();
-    if (!k) return sourceDevicesAll;
-    return sourceDevicesAll.filter((s) => `${s.iotDeviceCode} ${s.name}`.toLowerCase().includes(k));
-  }, [sourceDevicesAll, sourceKw]);
+    return sourceDevicesAll
+      .filter((s) => (sourceProduct === 'all' ? true : s.product === sourceProduct))
+      .filter((s) => (!k ? true : `${s.iotDeviceCode} ${s.name}`.toLowerCase().includes(k)));
+  }, [sourceDevicesAll, sourceKw, sourceProduct]);
+  const sourceProducts = useMemo(
+    () => [...new Set(sourceDevicesAll.map((s) => s.product).filter(Boolean))],
+    [sourceDevicesAll],
+  );
+
+  // 勾选来源（表格行选 / 多选）：新增走 binding/addSource（自动发现指标），移除走 binding/removeSource
+  const toggleSourcesByIds = (ids) => {
+    ids.forEach((id) => {
+      const s = sourceDevicesAll.find((x) => x.iotDeviceId === id);
+      if (!s) return;
+      if (draftItems.some((i) => i.iotDeviceId === id)) {
+        actions.removeBindingSource(deviceId, id);
+      } else {
+        actions.addBindingSource(deviceId, {
+          iotDeviceId: s.iotDeviceId,
+          iotDeviceCode: s.iotDeviceCode,
+          name: s.name,
+          sensorType: s.name,
+          metrics: [],
+        });
+      }
+    });
+  };
+  const toggleSources = (keys) => toggleSourcesByIds(
+    keys.filter((id) => !draftItems.some((i) => i.iotDeviceId === id))
+      .concat(draftItems.map((i) => i.iotDeviceId).filter((id) => !keys.includes(id))),
+  );
   const currentVersion = state.entities.bindingsByDeviceId[deviceId]?.version || 0;
 
   // 每次打开重置向导进度：预选了设备（换绑/编辑草稿）直接进第 2 步，否则从第 1 步选设备开始
@@ -54,6 +83,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
       setStep(presetDeviceId ? 1 : 0);
       setDeviceId(presetDeviceId || null);
       setSourceKw('');
+      setSourceProduct('all');
       setDevKw('');
       setDevBound('all');
       setDevType('all');
@@ -225,50 +255,65 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
 
       {step === 1 && (
         <>
-          <Input
-            allowClear size="small" style={{ width: 260, marginBottom: 8 }}
-            placeholder="搜索来源编码 / 名称" value={sourceKw} onChange={(e) => setSourceKw(e.target.value)}
-          />
-          <div style={{ border: '1px solid #eef1f4', borderRadius: 6, padding: '8px 12px', marginBottom: 12, maxHeight: 320, overflow: 'auto' }}>
-            {sourceDevices.map((s) => {
-              const item = draftItems.find((i) => i.iotDeviceId === s.iotDeviceId);
-              const checked = !!item;
-              const occupied = occupiedCodes.has(s.iotDeviceCode);
-              return (
-                <div key={s.iotDeviceId} style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '4px 0' }}>
-                  <Checkbox
-                    checked={checked}
-                    onChange={(e) => {
-                      if (e.target.checked) {
-                        actions.addBindingSource(deviceId, {
-                          iotDeviceId: s.iotDeviceId,
-                          iotDeviceCode: s.iotDeviceCode,
-                          name: s.name,
-                          sensorType: s.name,
-                          metrics: [],
-                        });
-                      } else {
-                        actions.removeBindingSource(deviceId, s.iotDeviceId);
-                      }
-                    }}
-                  >
-                    {s.iotDeviceCode} · {s.name}
-                  </Checkbox>
-                  {checked && (
+          <Space size={8} wrap style={{ marginBottom: 8 }}>
+            <Input
+              allowClear size="small" style={{ width: 220 }}
+              placeholder="搜索来源编码 / 名称" value={sourceKw} onChange={(e) => setSourceKw(e.target.value)}
+            />
+            <Select
+              size="small" style={{ width: 170 }} value={sourceProduct}
+              onChange={setSourceProduct}
+              options={[{ value: 'all', label: '产品名称：全部' }, ...sourceProducts.map((t) => ({ value: t, label: t }))]}
+            />
+            <Button size="small" onClick={() => { setSourceKw(''); setSourceProduct('all'); }}>重置</Button>
+          </Space>
+          <Table
+            rowKey="iotDeviceId" size="small"
+            dataSource={sourceDevices}
+            pagination={sourceDevices.length > 8 ? { pageSize: 8, size: 'small' } : false}
+            rowSelection={{
+              selectedRowKeys: draftItems.map((i) => i.iotDeviceId),
+              onChange: toggleSources,
+              columnWidth: 40,
+            }}
+            onRow={(s) => ({
+              // 点击行切换勾选；点击勾选框列本身不重复触发（由 rowSelection 处理）
+              onClick: (e) => {
+                if (e.target.closest('.ant-table-selection-column')) return;
+                toggleSourcesByIds([s.iotDeviceId]);
+              },
+              style: { cursor: 'pointer' },
+            })}
+            columns={[
+              { title: '来源编码', dataIndex: 'iotDeviceCode', width: 120 },
+              { title: '来源名称', dataIndex: 'name', width: 170 },
+              { title: '产品名称', dataIndex: 'product', width: 150, render: (v) => v || '--' },
+              { title: '类型', dataIndex: 'kind', width: 90 },
+              {
+                title: '接入指标', width: 110,
+                render: (_, s) => {
+                  const item = draftItems.find((i) => i.iotDeviceId === s.iotDeviceId);
+                  if (!item) return <span style={{ color: '#b6c2cc' }}>--</span>;
+                  return (
                     <Tooltip title="指标自动发现：保存启用后将全量接入并存储这些指标">
-                      <Tag color="cyan" style={{ cursor: 'help' }}>将接入 {(item.metrics || []).length} 项指标</Tag>
+                      <Tag color="cyan" style={{ cursor: 'help' }}>将接入 {(item.metrics || []).length} 项</Tag>
                     </Tooltip>
-                  )}
-                  {occupied && (
+                  );
+                },
+              },
+              {
+                title: '占用状态', width: 140,
+                render: (_, s) => (occupiedCodes.has(s.iotDeviceCode)
+                  ? (
                     <Tooltip title="仅提示：该编码已被其它设备绑定，不影响本次绑定（业务允许多台设备绑定同一来源）">
                       <Tag color="warning" style={{ cursor: 'help' }}>已被其它设备占用</Tag>
                     </Tooltip>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-          <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }}>
+                  )
+                  : <span style={{ color: '#b6c2cc' }}>--</span>),
+              },
+            ]}
+          />
+          <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '8px 0 0' }}>
             已选 <b>{draftItems.length}</b> 个来源 · 自动发现 <b>{discoveredMetrics}</b> 项指标
           </Typography.Paragraph>
         </>

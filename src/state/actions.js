@@ -194,6 +194,10 @@ export function createDemoActions(state, dispatch) {
       act('binding/addSource', { deviceId, source });
       return { ok: true, message: `已将 ${source.iotDeviceCode} 加入绑定草稿（未保存）`, refs: { deviceId } };
     },
+    discardDraft(deviceId) {
+      act('binding/discardDraft', { deviceId });
+      return { ok: true, message: '已放弃未保存的绑定草稿', refs: { deviceId } };
+    },
     removeBindingSource(deviceId, iotDeviceId) {
       act('binding/removeSource', { deviceId, iotDeviceId });
       return { ok: true, message: '已从绑定草稿移除（未保存）', refs: { deviceId } };

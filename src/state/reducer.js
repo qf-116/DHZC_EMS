@@ -360,6 +360,14 @@ export function reducer(state, action) {
       const next = { ...state, ui: { ...state.ui, bindingDraftsByDeviceId: setIn(drafts, key, { ...draft, items: [...draft.items, item] }) } };
       return finish(next, action, true, `已将 ${item.iotDeviceCode} 加入绑定草稿（自动发现 ${autoMetrics.length} 项指标，保存后全量接入存储）`, { deviceId: payload.deviceId }, false, at);
     }
+    case 'binding/discardDraft': {
+      // 放弃未保存草稿（2026-10-29：页面不做草稿功能，向导关闭即丢弃，列表不出现「草稿/继续编辑」）
+      const key = `draft-${payload.deviceId}`;
+      const drafts = state.ui.bindingDraftsByDeviceId || {};
+      if (!drafts[key]) return finish(state, action, true, '没有未保存的绑定草稿', {}, false, at);
+      const next = { ...state, ui: { ...state.ui, bindingDraftsByDeviceId: { ...drafts, [key]: undefined } } };
+      return finish(next, action, true, '已放弃未保存的绑定草稿', { deviceId: payload.deviceId }, false, at);
+    }
     case 'binding/removeSource': {
       const key = `draft-${payload.deviceId}`;
       const drafts = state.ui.bindingDraftsByDeviceId || {};

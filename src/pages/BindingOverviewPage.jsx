@@ -154,6 +154,13 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
 
   const goPrev = () => setStep(step - 1);
 
+  // 关闭即放弃未保存草稿（2026-10-29：本页不做草稿功能，列表不再出现「草稿/继续编辑」）；
+  // 保存成功关闭时草稿已被 saveBinding 消费，此处丢弃为无害空操作
+  const handleClose = () => {
+    if (deviceId) actions.discardDraft(deviceId);
+    onClose();
+  };
+
   // 保存：reducer 内部先校验（至少 1 个启用来源 / 同一绑定内来源编码不重复），通过后生成新版本；
   // 监控指标勾选随草稿整体落库（可以全部不勾选）
   const doSave = () => {
@@ -165,7 +172,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
       message.success(monitoredMetrics > 0
         ? `${r.message}；启用后开始接入存储，${monitoredMetrics} 项监控指标进入曲线呈现`
         : `${r.message}；未勾选监控指标——数据仍全量存储，可随时在行内「监控指标」中勾选，或到设备台账「数据指标历史」查看`);
-      onClose();
+      handleClose();
     } else {
       message.error(r.message);
     }
@@ -180,7 +187,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
   };
 
   const footer = [
-    <Button key="cancel" onClick={onClose}>取消</Button>,
+    <Button key="cancel" onClick={handleClose}>取消</Button>,
     // 预选设备进入（换绑 / 编辑草稿 / 重新绑定）时主设备已固定，「上一步」无意义，隐藏
     ...(step > 0 && !presetDeviceId ? [<Button key="prev" icon={<ArrowLeft size={14} />} onClick={goPrev}>上一步</Button>] : []),
     ...(step === 0
@@ -200,7 +207,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
       )}
       width={1000}
       open={open}
-      onCancel={onClose}
+      onCancel={handleClose}
       footer={footer}
     >
       <Steps
@@ -690,8 +697,8 @@ export default function BindingOverviewPage() {
       // 状态机约束：已停用 → 草稿（重新绑定保存后「待生效」→「启用」），不能直接启用
       return <Button size="small" icon={<Plus size={13} />} onClick={() => setDraftTarget({ deviceId: device.deviceId, deviceName: device.name })}>重新绑定</Button>;
     }
-    // 草稿 / 校验中 / 换绑中：继续编辑草稿
-    return <Button size="small" onClick={() => setDraftTarget({ deviceId: device.deviceId, deviceName: device.name })}>继续编辑</Button>;
+    // 草稿 / 校验中 / 换绑中：草稿不持久（向导关闭即放弃），列表不出现这些状态的行内编辑入口
+    return null;
   };
 
   // ===== 主视图：设备绑定列表（规范结构：查询条件 → 工具栏（左上）→ 列表） =====
@@ -714,9 +721,9 @@ export default function BindingOverviewPage() {
 
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
-          <Button type="primary" size="small" icon={<Plus size={13} />} onClick={() => setDraftTarget({})}>新建绑定</Button>
-          <Button size="small" icon={<LayoutTemplate size={13} />} onClick={() => setApplyTarget('')}>模板快速接入</Button>
-          <Button size="small" icon={<Settings2 size={13} />} onClick={() => navigate('/binding-templates')}>监控指标模板管理</Button>
+          <Button type="primary" icon={<Plus size={14} />} onClick={() => setDraftTarget({})}>新建绑定</Button>
+          <Button icon={<LayoutTemplate size={14} />} onClick={() => setApplyTarget('')}>模板快速接入</Button>
+          <Button icon={<Settings2 size={14} />} onClick={() => navigate('/binding-templates')}>监控指标模板管理</Button>
         </Space>
         <Table
           rowKey={(r) => r.device.deviceId}

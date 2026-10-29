@@ -376,50 +376,66 @@ function DisableBindingModal({ deviceId, deviceName, version, open, onClose }) {
   );
 }
 
-// ---------- 监控指标弹窗（行内操作）：按来源分组勾选监控指标，勾选即时生效（不产生新版本）。
-// 用于已保存绑定的事后调整；绑定向导第 3 步已覆盖创建期勾选 ----------
+// ---------- 监控指标弹窗（行内操作）：按来源分组勾选监控指标。
+// 2026-10-29 交互统一：勾选先暂存在弹窗本地状态，点击「确认」后统一生效（不产生新版本）；
+// 已保存绑定的事后调整入口（绑定向导第 3 步覆盖创建期勾选）。「存为模板」操作已移除 ----------
 function MonitorConfigModal({ deviceId, deviceName, open, onClose }) {
   const state = useDemoState();
   const actions = useDemoActions();
   const { message } = App.useApp();
-  const [tplNameOpen, setTplNameOpen] = useState(false);
-  const [tplName, setTplName] = useState('');
+  // 本地暂存：key = `${iotDeviceId}:${metricCode}` → 是否监控（打开时从绑定当前值初始化）
+  const [draftFlags, setDraftFlags] = useState({});
 
   const binding = state.entities.bindingsByDeviceId[deviceId];
   const items = (binding?.items || []).filter((i) => i.enabled);
   const totalCount = items.reduce((s, i) => s + (i.metrics || []).length, 0);
-  const monitoredCount = items.reduce((s, i) => s + (i.metrics || []).filter((m) => m.monitored).length, 0);
+  const draftMonitoredCount = items.reduce(
+    (s, i) => s + (i.metrics || []).filter((m) => draftFlags[`${i.iotDeviceId}:${m.metricCode}`]).length, 0,
+  );
+  // 与当前生效值的差异数（用于确认按钮提示与空变更拦截）
+  const changedCount = items.reduce((s, i) => s + (i.metrics || []).filter(
+    (m) => !!draftFlags[`${i.iotDeviceId}:${m.metricCode}`] !== !!m.monitored,
+  ).length, 0);
 
   useEffect(() => {
-    if (open) { setTplNameOpen(false); setTplName(deviceName ? `${deviceName}监控模板` : ''); }
-  }, [open, deviceName]);
+    if (open) {
+      const flags = {};
+      items.forEach((i) => (i.metrics || []).forEach((m) => {
+        flags[`${i.iotDeviceId}:${m.metricCode}`] = !!m.monitored;
+      }));
+      setDraftFlags(flags);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, deviceId]);
 
-  const toggle = (item, metric) => actions.setMetricMonitored(deviceId, item, metric.metricCode);
+  const toggle = (item, metric) => {
+    const key = `${item.iotDeviceId}:${metric.metricCode}`;
+    setDraftFlags((f) => ({ ...f, [key]: !f[key] }));
+  };
 
   const toggleAll = (item, on) => {
-    (item.metrics || []).forEach((m) => {
-      if (!!m.monitored !== on) actions.setMetricMonitored(deviceId, item, m.metricCode);
+    setDraftFlags((f) => {
+      const next = { ...f };
+      (item.metrics || []).forEach((m) => { next[`${item.iotDeviceId}:${m.metricCode}`] = on; });
+      return next;
     });
   };
 
-  // 存为模板：固化「来源结构 + 监控指标口径」，供批量应用到同型号设备（绑定+监控一次到位）
-  const doSaveTemplate = () => {
-    const name = tplName.trim();
-    if (!name) { message.warning('请填写模板名称'); return; }
-    if (!items.length) { message.warning('当前绑定没有启用的来源，无法保存为模板'); return; }
-    if (!monitoredCount) { message.warning('尚未勾选任何监控指标：请至少勾选 1 项后再存为模板'); return; }
-    const template = {
-      templateId: `bt-${Date.now()}`,
-      name,
-      sourceName: `${deviceName || deviceId}（${deviceId}）`,
-      items: items.map((i) => ({
-        sensorType: i.sensorType && i.sensorType !== '--' ? i.sensorType : '来源设备',
-        metrics: (i.metrics || []).map((m) => ({ metricCode: m.metricCode, metricVersion: m.metricVersion, monitored: !!m.monitored })),
-      })),
-    };
-    const r = actions.saveBindingTemplate(template);
-    r.ok ? message.success(r.message) : message.error(r.message);
-    setTplNameOpen(false);
+  // 确认：把与生效值的全部差异逐项写入（binding/setMonitored，即时生效、不产生新版本）
+  const doConfirm = () => {
+    if (!changedCount) { message.info('监控指标未变更'); onClose(); return; }
+    let applied = 0;
+    let failed = 0;
+    items.forEach((i) => (i.metrics || []).forEach((m) => {
+      if (!!draftFlags[`${i.iotDeviceId}:${m.metricCode}`] !== !!m.monitored) {
+        const r = actions.setMetricMonitored(deviceId, i, m.metricCode);
+        if (r && r.ok === false) failed += 1;
+        else applied += 1;
+      }
+    }));
+    if (failed) { message.error(`${failed} 项变更未生效，请重试`); return; }
+    message.success(`监控指标配置已确认生效（更新 ${applied} 项，监控中 ${draftMonitoredCount} / 接入 ${totalCount} 项）`);
+    onClose();
   };
 
   return (
@@ -427,26 +443,30 @@ function MonitorConfigModal({ deviceId, deviceName, open, onClose }) {
       title={(
         <Space size={8}>
           <span>监控指标配置 · {deviceName}（{deviceId}）</span>
-          <Tag color="blue">监控中 {monitoredCount} / 接入 {totalCount} 项</Tag>
+          <Tag color={changedCount ? 'orange' : 'blue'}>
+            {changedCount ? `未确认变更 ${changedCount} 项` : `监控中 ${draftMonitoredCount} / 接入 ${totalCount} 项`}
+          </Tag>
         </Space>
       )}
       width={860}
       open={open}
       onCancel={onClose}
       footer={[
-        <Button key="close" onClick={onClose}>关闭</Button>,
-        <Button key="tpl" type="primary" ghost icon={<LayoutTemplate size={14} />} disabled={!monitoredCount} onClick={() => setTplNameOpen(true)}>存为模板</Button>,
+        <Button key="cancel" onClick={onClose}>取消</Button>,
+        <Button key="confirm" type="primary" icon={<Save size={14} />} onClick={doConfirm}>
+          确认{changedCount ? `（${changedCount} 项变更）` : ''}
+        </Button>,
       ]}
     >
       <Alert
         type="info" showIcon style={{ marginBottom: 12 }}
-        message="该设备的全部接入指标已在持续存储；勾选 = 纳入监控（曲线 / 实时监测呈现），不勾选 = 仅存储不做监控，可随时在设备台账「数据指标历史」中查看。勾选即时生效，不产生新绑定版本。"
+        message="该设备的全部接入指标已在持续存储；勾选 = 纳入监控（曲线 / 实时监测呈现），不勾选 = 仅存储不做监控，可随时在设备台账「数据指标历史」中查看。勾选后请点击「确认」统一生效（不产生新绑定版本），直接取消则不保存本次修改。"
       />
       {!binding ? (
         <div style={{ color: '#8a97a3', fontSize: 12 }}>该设备尚未创建绑定：请先完成设备绑定。</div>
       ) : (
         items.map((item) => {
-          const monitoredOfItem = (item.metrics || []).filter((m) => m.monitored).length;
+          const monitoredOfItem = (item.metrics || []).filter((m) => draftFlags[`${item.iotDeviceId}:${m.metricCode}`]).length;
           return (
             <Card
               key={item.iotDeviceId}
@@ -469,7 +489,11 @@ function MonitorConfigModal({ deviceId, deviceName, open, onClose }) {
                 {(item.metrics || []).map((m) => {
                   const def = state.entities.metricsByKey[m.metricCode];
                   return (
-                    <Checkbox key={m.metricCode} checked={!!m.monitored} onChange={() => toggle(item, m)}>
+                    <Checkbox
+                      key={m.metricCode}
+                      checked={!!draftFlags[`${item.iotDeviceId}:${m.metricCode}`]}
+                      onChange={() => toggle(item, m)}
+                    >
                       <span>{def?.name || m.metricCode}（{m.metricCode} · {m.metricVersion}）</span>
                     </Checkbox>
                   );
@@ -479,20 +503,6 @@ function MonitorConfigModal({ deviceId, deviceName, open, onClose }) {
           );
         })
       )}
-      <Modal
-        title="保存为监控指标模板"
-        width={460}
-        open={tplNameOpen}
-        destroyOnClose
-        onCancel={() => setTplNameOpen(false)}
-        onOk={doSaveTemplate}
-        okText="保存模板" cancelText="取消"
-      >
-        <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
-          模板记录来源结构与监控指标口径（不记录具体 IoT 编码）：应用到设备时自动创建绑定并按模板预置监控勾选，同一模板可应用到任意多台同型号设备。模板的新建 / 编辑 / 删除也可在「监控指标模板管理」页维护。
-        </Typography.Paragraph>
-        <Input placeholder="模板名称（如：CNC 加工中心标准监控模板）" value={tplName} onChange={(e) => setTplName(e.target.value)} />
-      </Modal>
     </Modal>
   );
 }
@@ -515,28 +525,24 @@ export default function BindingOverviewPage() {
   const rows = useMemo(() => selectAllDevices(state).map((d) => {
     const binding = state.entities.bindingsByDeviceId[d.deviceId] || null;
     const draft = selectBindingDraft(state, d.deviceId);
-    const health = state.entities.healthByDeviceId[d.deviceId] || {};
     const status = draft ? draft.configStatus : (binding?.configStatus || '未配置');
     const current = draft || binding;
     const metricTotal = current?.items?.reduce((s, i) => s + (i.metrics || []).length, 0) ?? null;
     const metricMonitored = current?.items?.reduce((s, i) => s + (i.metrics || []).filter((m) => m.monitored).length, 0) ?? null;
-    return { device: d, binding, draft, health, status, metricTotal, metricMonitored };
+    return { device: d, binding, draft, status, metricTotal, metricMonitored };
   }), [state]);
 
-  // 查询条件（实时筛选；规范 §4：关键词 → 下拉 → 重置）
+  // 查询条件（实时筛选；规范 §4：关键词 → 下拉 → 重置；2026-10-29 去掉健康状态条件与列）
   const [kw, setKw] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [healthFilter, setHealthFilter] = useState('all');
   const statusOptions = useMemo(() => [...new Set(rows.map((r) => r.status))], [rows]);
-  const healthOptions = useMemo(() => [...new Set(rows.map((r) => r.health.status).filter(Boolean))], [rows]);
   const filteredRows = useMemo(() => rows.filter((r) => {
     const k = kw.trim().toLowerCase();
     if (k && !`${r.device.deviceId} ${r.device.name} ${r.device.assetCode || ''}`.toLowerCase().includes(k)) return false;
     if (statusFilter !== 'all' && r.status !== statusFilter) return false;
-    if (healthFilter !== 'all' && (r.health.status || '--') !== healthFilter) return false;
     return true;
-  }), [rows, kw, statusFilter, healthFilter]);
-  const resetFilters = () => { setKw(''); setStatusFilter('all'); setHealthFilter('all'); };
+  }), [rows, kw, statusFilter]);
+  const resetFilters = () => { setKw(''); setStatusFilter('all'); };
 
   const enable = (r) => {
     const res = actions.enableBinding(r.device.deviceId);
@@ -555,7 +561,7 @@ export default function BindingOverviewPage() {
           <Button size="small" icon={<Activity size={13} />} onClick={() => setMonitorTarget({ deviceId: device.deviceId, deviceName: device.name })}>监控指标</Button>
           <Button size="small" icon={<PauseCircle size={13} />} onClick={() => setDisableTarget({ deviceId: device.deviceId, deviceName: device.name, version: binding?.version ?? '--' })}>停用</Button>
           <Tooltip title="换绑说明：直接打开绑定草稿，修改来源与监控指标后保存，将生成新版本（旧版本留痕不覆盖）；监控勾选按来源+指标自动继承；新版本「待生效」→「启用」后完成换绑。">
-            <Button size="small" type="text" icon={<Settings2 size={13} />}>换绑</Button>
+            <Button size="small" type="text" icon={<Settings2 size={13} />} onClick={() => setDraftTarget({ deviceId: device.deviceId, deviceName: device.name })}>换绑</Button>
           </Tooltip>
         </Space>
       );
@@ -590,11 +596,6 @@ export default function BindingOverviewPage() {
             onChange={setStatusFilter}
             options={[{ value: 'all', label: '配置状态：全部' }, ...statusOptions.map((s) => ({ value: s, label: s }))]}
           />
-          <Select
-            style={{ width: 140 }} value={healthFilter}
-            onChange={setHealthFilter}
-            options={[{ value: 'all', label: '健康状态：全部' }, ...healthOptions.map((s) => ({ value: s, label: s }))]}
-          />
           <Button onClick={resetFilters}>重置</Button>
         </Space>
       </Card>
@@ -622,9 +623,8 @@ export default function BindingOverviewPage() {
                 />
               ),
             },
-            { title: '健康状态', width: 100, render: (_, r) => <StatusTag value={r.health.status || '--'} /> },
             {
-              title: '来源数 / 接入指标', width: 140,
+              title: '来源设备数 / 接入指标', width: 150,
               render: (_, r) => {
                 if (r.metricTotal === null) return '--';
                 const items = (r.draft || r.binding)?.items || [];

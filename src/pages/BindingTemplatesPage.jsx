@@ -8,79 +8,66 @@
 
 import React, { useMemo, useState } from 'react';
 import {
-  App, Alert, AutoComplete, Button, Card, Checkbox, Empty, Input, Modal, Space, Table, Tag, Typography,
+  App, Alert, Button, Card, Empty, Input, Modal, Select, Space, Table, Tag, Typography,
 } from 'antd';
 import { LayoutTemplate, Plus, Trash2, Edit3, Copy } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import ApplyTemplateModal from '../components/ApplyTemplateModal.jsx';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
+import { iotProducts } from '../data/demo/bindings.js';
 
 let itemSeq = 0;
 const nextUid = () => `tpl-item-${Date.now()}-${++itemSeq}`;
 
-// 常用传感器类型建议（AutoComplete 可自由输入）
-const SENSOR_TYPE_SUGGESTIONS = ['振动传感器', '温度传感器', '气压传感器', '电流传感器', '位移传感器'];
-
 // ---------- 模板编辑弹窗（新建 / 编辑 / 复制新建 共用） ----------
+// 2026-10-29 交互重构：模板按「物联网平台产品 + 该产品物模型指标」定义，
+// 列表形式逐行添加产品，选产品后才出现该产品的指标多选（不再默认铺开全部指标）。
 function TemplateEditorModal({ template, open, onClose }) {
   const state = useDemoState();
   const actions = useDemoActions();
   const { message } = App.useApp();
-  // 编辑草稿：纯 UI 局部状态（模板不挂在具体设备上，不进绑定草稿 store）
   const [name, setName] = useState('');
-  const [items, setItems] = useState([]);
-  const [openKey, setOpenKey] = useState(''); // 初次打开时回填表单
+  const [items, setItems] = useState([]);      // [{ uid, product, metrics: [{metricCode, metricVersion}] }]
+  const [openKey, setOpenKey] = useState('');
 
-  const metrics = useMemo(
+  const metricDefs = useMemo(
     () => Object.values(state.entities.metricsByKey).filter((m) => m.syncStatus !== '已失效'),
     [state],
   );
+  const metricNameOf = (code) => metricDefs.find((m) => m.metricCode === code)?.name || code;
+  const productMetricsOf = (product) => iotProducts.find((p) => p.product === product)?.metrics || [];
+  const metricOptionsOf = (product) => (productMetricsOf(product).length
+    ? productMetricsOf(product).map((m) => ({
+      value: m.metricCode,
+      label: `${metricNameOf(m.metricCode)}（${m.metricCode} · ${m.metricVersion}）`,
+    }))
+    // 兼容历史模板的产品（不在当前产品目录）：退回全量指标可选
+    : metricDefs.map((m) => ({ value: m.metricCode, label: `${m.name}（${m.metricCode} · ${m.metricVersion}）` })));
 
-  // 每次打开按目标模板初始化编辑草稿
+  // 每次打开按目标模板初始化编辑草稿（兼容旧模型 sensorType → product）
   if (open && openKey !== `${open}-${template?.templateId || 'new'}`) {
     setOpenKey(`${open}-${template?.templateId || 'new'}`);
     setName(template ? `${template.name}${template.templateId ? '' : ' 副本'}` : '');
-    setItems(template
-      ? (template.items || []).map((i) => ({
-        uid: nextUid(),
-        sensorType: (i.sensorType && i.sensorType !== '--' ? i.sensorType : '') || (i.kind && i.kind !== '主设备' ? i.kind : '') || '',
-        metrics: (i.metrics || []).map((m) => ({ metricCode: m.metricCode, metricVersion: m.metricVersion, monitored: !!m.monitored })),
-      }))
-      : []);
+    setItems((template?.items || []).map((i) => ({
+      uid: nextUid(),
+      product: i.product || (i.sensorType && i.sensorType !== '--' ? i.sensorType : '') || '',
+      metrics: (i.metrics || []).filter((m) => m.monitored).map((m) => ({ metricCode: m.metricCode, metricVersion: m.metricVersion })),
+    })));
   }
   if (!open && openKey) setOpenKey('');
 
-  const addItem = () => {
-    setItems((prev) => [...prev, {
-      uid: nextUid(),
-      sensorType: '',
-      metrics: [],
-    }]);
-  };
-
-  const patchItem = (uid, patch) => {
-    setItems((prev) => prev.map((i) => (i.uid === uid ? { ...i, ...patch } : i)));
-  };
-
+  const addItem = () => setItems((prev) => [...prev, { uid: nextUid(), product: '', metrics: [] }]);
+  const patchItem = (uid, patch) => setItems((prev) => prev.map((i) => (i.uid === uid ? { ...i, ...patch } : i)));
   const removeItem = (uid) => setItems((prev) => prev.filter((i) => i.uid !== uid));
-
-  const toggleMetric = (uid, m) => {
-    setItems((prev) => prev.map((i) => {
-      if (i.uid !== uid) return i;
-      const list = [...(i.metrics || [])];
-      const idx = list.findIndex((x) => x.metricCode === m.metricCode);
-      if (idx >= 0) list[idx] = { ...list[idx], monitored: !list[idx].monitored };
-      else list.push({ metricCode: m.metricCode, metricVersion: m.metricVersion, monitored: true });
-      return { ...i, metrics: list };
-    }));
-  };
 
   const problems = [];
   if (!name.trim()) problems.push('请填写模板名称');
-  if (items.length === 0) problems.push('至少添加 1 个来源结构');
+  if (items.length === 0) problems.push('至少添加 1 个产品');
+  const dupProducts = items.map((i) => i.product).filter((p, idx, arr) => p && arr.indexOf(p) !== idx);
   items.forEach((i, idx) => {
-    if (!(i.sensorType || '').trim()) problems.push(`来源 ${idx + 1}：请填写来源类型`);
-    if ((i.metrics || []).filter((m) => m.monitored).length === 0) problems.push(`来源 ${idx + 1}：至少勾选 1 项监控指标`);
+    if (!(i.product || '').trim()) problems.push(`产品 ${idx + 1}：请选择物联网平台产品`);
+    else if (dupProducts.includes(i.product)) problems.push(`产品 ${idx + 1}：产品「${i.product}」重复，请合并到一行`);
+    if ((i.metrics || []).length === 0) problems.push(`产品 ${idx + 1}：请至少选择 1 项监控指标`);
   });
 
   const doSave = () => {
@@ -90,8 +77,9 @@ function TemplateEditorModal({ template, open, onClose }) {
       name: name.trim(),
       sourceName: template?.sourceName || '监控指标模板管理页创建',
       items: items.map((i) => ({
-        sensorType: i.sensorType.trim(),
-        metrics: (i.metrics || []).map((m) => ({ metricCode: m.metricCode, metricVersion: m.metricVersion, monitored: !!m.monitored })),
+        product: i.product,
+        sensorType: i.product, // 兼容旧展示口径
+        metrics: (i.metrics || []).map((m) => ({ metricCode: m.metricCode, metricVersion: m.metricVersion, monitored: true })),
       })),
     };
     const r = actions.saveBindingTemplate(payload);
@@ -101,7 +89,7 @@ function TemplateEditorModal({ template, open, onClose }) {
   return (
     <Modal
       title={template?.templateId ? `编辑监控指标模板 · ${template.name}` : '新建监控指标模板'}
-      width={860}
+      width={820}
       open={open}
       onCancel={onClose}
       onOk={doSave}
@@ -110,7 +98,7 @@ function TemplateEditorModal({ template, open, onClose }) {
     >
       <Alert
         type="info" showIcon style={{ marginBottom: 12 }}
-        message="模板记录来源结构（N 个平级来源设备，不分主/子）与指标口径，不记录具体 IoT 编码——批量应用时由物联网平台按设备自动分配专属来源编码（演示模拟），同一模板可应用到任意多台设备。"
+        message="模板按「物联网平台产品 + 该产品的监控指标」定义；应用到设备时按产品自动创建来源并预置监控勾选。"
       />
       <div style={{ marginBottom: 10 }}>
         <div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>模板名称 <span style={{ color: '#cf1322' }}>*</span></div>
@@ -119,58 +107,61 @@ function TemplateEditorModal({ template, open, onClose }) {
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          来源结构（来源设备平级、不分主/子；每个来源至少勾选 1 项监控指标）
+          产品与监控指标（每行选择 1 个产品及其要纳入监控的指标，可添加多行）
         </Typography.Text>
-        <Space size={8}>
-          <Button size="small" type="primary" ghost icon={<Plus size={13} />} onClick={addItem}>添加来源设备</Button>
-        </Space>
+        <Button size="small" type="primary" ghost icon={<Plus size={13} />} onClick={addItem}>添加产品</Button>
       </div>
 
-      {items.length === 0 && (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未添加来源结构：请点击右上角「添加来源设备」" />
-      )}
-      {items.map((item, idx) => {
-        const selCount = (item.metrics || []).filter((m) => m.monitored).length;
-        const err = selCount === 0 || !(item.sensorType || '').trim();
-        return (
-          <Card
-            key={item.uid} size="small" style={{ marginBottom: 8, borderColor: err ? '#ffa39e' : undefined }}
-            title={(
-              <Space size={8} wrap>
-                <span>来源 {idx + 1}</span>
-                <AutoComplete
-                  size="small" style={{ width: 180 }}
-                  placeholder="来源类型（如：主控制器 / 振动传感器）"
-                  value={item.sensorType}
-                  options={SENSOR_TYPE_SUGGESTIONS.map((s) => ({ value: s }))}
-                  onChange={(v) => patchItem(item.uid, { sensorType: v })}
+      {items.length === 0 ? (
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未添加产品：请点击右上角「添加产品」" />
+      ) : (
+        <Table
+          rowKey="uid" size="small"
+          dataSource={items}
+          pagination={false}
+          columns={[
+            { title: '#', width: 40, render: (_, __, idx) => idx + 1 },
+            {
+              title: '物联网平台产品', width: 220,
+              render: (_, i) => (
+                <Select
+                  size="small" style={{ width: '100%' }} placeholder="请选择产品"
+                  value={i.product || undefined}
+                  onChange={(v) => patchItem(i.uid, { product: v, metrics: [] })}
+                  options={iotProducts.map((p) => ({ value: p.product, label: `${p.product}（${p.metrics.length} 项指标）` }))}
                 />
-              </Space>
-            )}
-            extra={(
-              <Space size={8}>
-                <span style={{ fontSize: 12, color: selCount ? '#8a97a3' : '#cf1322' }}>监控 {selCount} 项指标</span>
-                <Button size="small" type="text" danger icon={<Trash2 size={13} />} onClick={() => removeItem(item.uid)}>移除</Button>
-              </Space>
-            )}
-          >
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 4 }}>
-              {metrics.map((m) => {
-                const sel = (item.metrics || []).find((x) => x.metricCode === m.metricCode);
-                return (
-                  <Checkbox key={m.metricCode} checked={!!sel?.monitored} onChange={() => toggleMetric(item.uid, m)}>
-                    <span>{m.name}（{m.metricCode} · {m.metricVersion}）</span>
-                  </Checkbox>
-                );
-              })}
-            </div>
-          </Card>
-        );
-      })}
+              ),
+            },
+            {
+              title: '监控指标（该产品物模型）',
+              render: (_, i) => (
+                <Select
+                  size="small" mode="multiple" style={{ width: '100%' }}
+                  placeholder={i.product ? '请选择要监控的指标' : '先选择产品'}
+                  disabled={!i.product}
+                  value={(i.metrics || []).map((m) => m.metricCode)}
+                  onChange={(codes) => patchItem(i.uid, {
+                    metrics: codes.map((c) => {
+                      const def = productMetricsOf(i.product).find((m) => m.metricCode === c);
+                      return { metricCode: c, metricVersion: def?.metricVersion || metricDefs.find((m) => m.metricCode === c)?.metricVersion || 'v1.0' };
+                    }),
+                  })}
+                  options={metricOptionsOf(i.product)}
+                  maxTagCount="responsive"
+                />
+              ),
+            },
+            {
+              title: '操作', width: 70,
+              render: (_, i) => <Button size="small" type="text" danger icon={<Trash2 size={13} />} onClick={() => removeItem(i.uid)}>移除</Button>,
+            },
+          ]}
+        />
+      )}
 
       {problems.length > 0 && (
         <Alert
-          type="warning" showIcon style={{ marginTop: 4 }}
+          type="warning" showIcon style={{ marginTop: 10 }}
           message={(
             <ul style={{ margin: 0, paddingLeft: 18 }}>
               {problems.map((p) => <li key={p}>{p}</li>)}
@@ -225,7 +216,7 @@ export default function BindingTemplatesPage() {
       />
       <Alert
         type="info" showIcon style={{ marginBottom: 12 }}
-        message="模板记录「来源结构 + 监控指标口径」，不记录具体 IoT 编码：应用到设备时自动创建绑定（绑定即全量接入存储）并按模板预置监控勾选；由物联网平台按每台设备自动分配专属来源编码（演示模拟），全局唯一、不与已占用编码冲突；应用后可在物联网接入配置中逐台启用。"
+        message="模板按「产品 + 监控指标」定义，应用到设备时自动创建绑定（绑定即全量接入存储）并按模板预置监控勾选；来源编码由物联网平台按设备分配（演示模拟）。"
       />
       <Card size="small" title={<Space size={6}><LayoutTemplate size={14} />监控指标模板（{templates.length}）</Space>}>
         <Space wrap style={{ marginBottom: 12 }}>
@@ -249,10 +240,10 @@ export default function BindingTemplatesPage() {
             columns={[
               { title: '模板名称', dataIndex: 'name', width: 240, render: (v) => <b>{v}</b> },
               {
-                title: '来源结构', width: 240,
+                title: '产品结构', width: 260,
                 render: (_, t) => t.items.map((i, idx) => (
                   <Tag key={idx}>
-                    {i.sensorType && i.sensorType !== '--' ? i.sensorType : '来源设备'}×{(i.metrics || []).filter((m) => m.monitored).length}
+                    {i.product || (i.sensorType && i.sensorType !== '--' ? i.sensorType : '来源设备')}×{(i.metrics || []).filter((m) => m.monitored).length}
                   </Tag>
                 )),
               },

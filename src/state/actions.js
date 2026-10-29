@@ -243,8 +243,8 @@ export function createDemoActions(state, dispatch) {
           const tplMonitored = new Set((t.metrics || []).filter((m) => m.monitored).map((m) => m.metricCode));
           return {
             iotDeviceId: `iot-auto-${bindingId}-${seq}`, iotDeviceCode: `IOT-2${100 + seq}`,
-            name: `${device?.name || deviceId} ${t.sensorType || '来源设备'}`,
-            sensorType: t.sensorType || '来源设备',
+            name: `${device?.name || deviceId} ${t.product || t.sensorType || '来源设备'}`,
+            sensorType: t.product || t.sensorType || '来源设备',
             enabled: true,
             // 指标自动发现：全量接入存储；监控勾选取模板口径（同编码指标）
             metrics: platformMetrics.map((def) => ({

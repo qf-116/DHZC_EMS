@@ -79,6 +79,20 @@ export const bindingVersions = [
 ];
 
 // IoT 来源设备（只读；主设备 + 子传感器）
+// 物联网平台产品目录（2026-10-29）：产品关联物模型指标，监控指标模板按「产品 + 指标」定义
+export const iotProducts = [
+  {
+    product: '工业智能网关 GW200',
+    metrics: [
+      sel('M.spindle_temp', 'v1.2'), sel('M.coolant_temp', 'v1.2'), sel('M.spindle_speed', 'v1.1'), sel('M.feed_rate', 'v1.1'),
+      sel('S.machine_state', 'v1.3'), sel('S.alarm_code', 'v1.3'), sel('M.air_pressure', 'v1.0'), sel('M.motor_current', 'v1.1'),
+      sel('M.oil_pressure', 'v1.0'), sel('M.weld_current', 'v1.0'), sel('M.axis_load', 'v1.0'),
+    ],
+  },
+  { product: '振动传感器 VB12', metrics: [sel('M.vib_amplitude', 'v2.0'), sel('M.bearing_temp', 'v1.0')] },
+  { product: '温度传感器 TP08', metrics: [sel('M.bearing_temp', 'v1.0')] },
+];
+
 export const sourceDevices = [
   { iotDeviceId: 'iot-main-001', iotDeviceCode: 'IOT-D-10001', name: 'CNC-01 主控制器', kind: '主设备', product: '工业智能网关 GW200' },
   { iotDeviceId: 'iot-s-20011', iotDeviceCode: 'IOT-S-20011', name: 'CNC-01 振动传感器', kind: '子传感器', product: '振动传感器 VB12' },

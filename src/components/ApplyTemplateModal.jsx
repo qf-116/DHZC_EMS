@@ -79,7 +79,7 @@ export default function ApplyTemplateModal({ open, initialTemplateId, onClose })
       </Checkbox>
       {template && (
         <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginTop: 10, marginBottom: 0 }}>
-          模板结构：{template.items.map((i) => `1 ${i.sensorType || '来源设备'}×监控 ${(i.metrics || []).filter((m) => m.monitored).length} 项`).join(' + ')}，共监控 {metricCount} 项指标（接入指标在绑定生效后按来源自动发现，可能多于模板勾选数）。
+          模板结构：{template.items.map((i) => `1 ${i.product || i.sensorType || '来源设备'}×监控 ${(i.metrics || []).filter((m) => m.monitored).length} 项`).join(' + ')}，共监控 {metricCount} 项指标。
         </Typography.Paragraph>
       )}
     </Modal>

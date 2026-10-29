@@ -77,7 +77,9 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
   );
   const currentVersion = state.entities.bindingsByDeviceId[deviceId]?.version || 0;
 
-  // 每次打开重置向导进度：预选了设备（换绑/编辑草稿）直接进第 2 步，否则从第 1 步选设备开始
+  // 每次打开重置向导进度：预选了设备（换绑/编辑草稿）直接进第 2 步，否则从第 1 步选设备开始。
+  // 换绑/编辑类打开时（已有绑定）：把当前绑定启用的来源带入草稿（binding/addSource 自动继承监控勾选），
+  // 来源列表即以「已勾选」状态呈现，用户在此基础上增减后保存生成新版本。
   useEffect(() => {
     if (open) {
       setStep(presetDeviceId ? 1 : 0);
@@ -87,7 +89,25 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
       setDevKw('');
       setDevBound('all');
       setDevType('all');
+      if (presetDeviceId) {
+        const existingDraft = (state.ui.bindingDraftsByDeviceId || {})[`draft-${presetDeviceId}`];
+        if (!existingDraft) {
+          const binding = state.entities.bindingsByDeviceId[presetDeviceId];
+          (binding?.items || [])
+            .filter((i) => i.enabled)
+            .forEach((i) => {
+              actions.addBindingSource(presetDeviceId, {
+                iotDeviceId: i.iotDeviceId,
+                iotDeviceCode: i.iotDeviceCode,
+                name: i.name,
+                sensorType: i.sensorType || i.name,
+                metrics: [],
+              });
+            });
+        }
+      }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, presetDeviceId]);
 
   // 仅提示用：其它设备已启用绑定占用的 IoT 来源编码（不作为校验限制，允许重复绑定）
@@ -161,7 +181,8 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
 
   const footer = [
     <Button key="cancel" onClick={onClose}>取消</Button>,
-    ...(step > 0 ? [<Button key="prev" icon={<ArrowLeft size={14} />} onClick={goPrev}>上一步</Button>] : []),
+    // 预选设备进入（换绑 / 编辑草稿 / 重新绑定）时主设备已固定，「上一步」无意义，隐藏
+    ...(step > 0 && !presetDeviceId ? [<Button key="prev" icon={<ArrowLeft size={14} />} onClick={goPrev}>上一步</Button>] : []),
     ...(step === 0
       ? [<Button key="next" type="primary" disabled={!deviceId} onClick={goNext}>下一步：选择物联网平台子设备 <ArrowRight size={14} style={{ verticalAlign: '-2px' }} /></Button>]
       : step === 1

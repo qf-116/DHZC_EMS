@@ -12,6 +12,7 @@ import {
 } from 'antd';
 import { LayoutTemplate, Plus, Trash2, Edit3, Copy } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
+import EmptyState from '../components/EmptyState.jsx';
 import ApplyTemplateModal from '../components/ApplyTemplateModal.jsx';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import { iotProducts } from '../data/demo/bindings.js';
@@ -184,6 +185,24 @@ export default function BindingTemplatesPage() {
 
   const templates = state.ui.bindingTemplates || [];
 
+  // 查询条件（规范 §4：关键词 → 下拉 → 重置，实时筛选；选项从数据推导）
+  const [kw, setKw] = useState('');
+  const [productFilter, setProductFilter] = useState('all');
+  const productOptions = useMemo(
+    () => [...new Set(templates.flatMap((t) => (t.items || []).map((i) => i.product || (i.sensorType && i.sensorType !== '--' ? i.sensorType : '')).filter(Boolean)))],
+    [templates],
+  );
+  const filteredTemplates = useMemo(() => templates.filter((t) => {
+    const k = kw.trim().toLowerCase();
+    if (k) {
+      const hay = [t.name, ...(t.items || []).map((i) => i.product || i.sensorType || ''), ...(t.items || []).flatMap((i) => (i.metrics || []).map((m) => m.metricCode))]
+        .join(' ').toLowerCase();
+      if (!hay.includes(k)) return false;
+    }
+    if (productFilter !== 'all' && !(t.items || []).some((i) => (i.product || i.sensorType) === productFilter)) return false;
+    return true;
+  }), [templates, kw, productFilter]);
+
   const renderActions = (t) => (
     <Space size={4}>
       <Button type="link" size="small" icon={<LayoutTemplate size={13} />} onClick={() => setApplyTarget(t.templateId)}>应用到设备</Button>
@@ -210,15 +229,24 @@ export default function BindingTemplatesPage() {
 
   return (
     <>
-      <PageHeader
-        title="监控指标模板管理"
-        subtitle="监控指标模板的新建 / 编辑 / 删除与应用：一次完成「设备绑定接入 + 监控指标勾选」两步，批量应用到同型号设备"
-      />
-      <Alert
-        type="info" showIcon style={{ marginBottom: 12 }}
-        message="模板按「产品 + 监控指标」定义，应用到设备时自动创建绑定（绑定即全量接入存储）并按模板预置监控勾选；来源编码由物联网平台按设备分配（演示模拟）。"
-      />
-      <Card size="small" title={<Space size={6}><LayoutTemplate size={14} />监控指标模板（{templates.length}）</Space>}>
+      <PageHeader title="监控指标模板管理" />
+      {/* 查询条件卡（规范 §4：关键词 → 下拉 → 重置，实时筛选） */}
+      <Card size="small" style={{ marginBottom: 12 }}>
+        <Space wrap size={8}>
+          <Input.Search
+            allowClear placeholder="搜索模板名称 / 产品 / 指标编码" style={{ width: 240 }}
+            value={kw} onChange={(e) => setKw(e.target.value)}
+          />
+          <Select
+            style={{ width: 170 }} value={productFilter}
+            onChange={setProductFilter}
+            options={[{ value: 'all', label: '产品：全部' }, ...productOptions.map((s2) => ({ value: s2, label: s2 }))]}
+          />
+          <Button onClick={() => { setKw(''); setProductFilter('all'); }}>重置</Button>
+        </Space>
+      </Card>
+
+      <Card size="small" title={<Space size={6}><LayoutTemplate size={14} />监控指标模板（{filteredTemplates.length}）</Space>}>
         <Space wrap style={{ marginBottom: 12 }}>
           <Button type="primary" icon={<Plus size={14} />} onClick={() => setEditorTarget({})}>
             新建模板
@@ -229,14 +257,20 @@ export default function BindingTemplatesPage() {
             image={Empty.PRESENTED_IMAGE_SIMPLE}
             description={(
               <span style={{ fontSize: 12 }}>
-                暂无模板：点击右上角「新建模板」从零创建；或在物联网接入配置「监控指标配置」中勾选好后「存为模板」。
+                暂无模板：点击「新建模板」创建。
               </span>
             )}
+          />
+        ) : filteredTemplates.length === 0 ? (
+          <EmptyState
+            description="没有符合条件的模板"
+            reason="当前关键词或产品筛选下无匹配模板"
+            next="重置筛选条件" onNext={() => { setKw(''); setProductFilter('all'); }}
           />
         ) : (
           <Table
             rowKey="templateId" size="small" pagination={false}
-            dataSource={templates}
+            dataSource={filteredTemplates}
             columns={[
               { title: '模板名称', dataIndex: 'name', width: 240, render: (v) => <b>{v}</b> },
               {

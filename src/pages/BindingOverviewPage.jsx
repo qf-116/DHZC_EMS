@@ -557,6 +557,67 @@ function MonitorConfigModal({ deviceId, deviceName, open, onClose }) {
   );
 }
 
+// ---------- 绑定明细弹窗（列表点击查看）：来源设备明细 / 接入指标明细 / 监控指标明细 ----------
+function BindingDetailModal({ type, deviceId, deviceName, open, onClose }) {
+  const state = useDemoState();
+  const binding = state.entities.bindingsByDeviceId[deviceId];
+  const draft = selectBindingDraft(state, deviceId);
+  const items = (draft || binding)?.items || [];
+  const meta = {
+    sources: { title: '来源设备明细' },
+    metrics: { title: '接入指标明细' },
+    monitored: { title: '监控指标明细' },
+  }[type] || { title: '明细' };
+  // 绑定条目可能未存来源名称：从来源设备档案反查兜底
+  const sourceNameOf = (i) => i.name
+    || state.entities.sourceDevicesById[i.iotDeviceId]?.name
+    || '--';
+  const flatMetrics = items.flatMap((i) => (i.metrics || []).map((m) => ({
+    iotDeviceId: i.iotDeviceId,
+    source: `${i.iotDeviceCode} · ${sourceNameOf(i)}`,
+    ...m,
+  })));
+  const metricRows = type === 'monitored' ? flatMetrics.filter((m) => m.monitored) : flatMetrics;
+
+  return (
+    <Modal
+      title={`${meta.title} · ${deviceName || '--'}（${deviceId || '--'}）`}
+      width={720}
+      open={open}
+      onCancel={onClose}
+      footer={<Button onClick={onClose}>关闭</Button>}
+    >
+      {type === 'sources' ? (
+        <Table
+          rowKey="iotDeviceId" size="small"
+          dataSource={items}
+          pagination={items.length > 10 ? { pageSize: 10, size: 'small' } : false}
+          columns={[
+            { title: '来源编码', dataIndex: 'iotDeviceCode', width: 120 },
+            { title: '来源名称', dataIndex: 'name', width: 170, render: (_, i) => sourceNameOf(i) },
+            { title: '类型', dataIndex: 'sensorType', width: 120, render: (v) => (v && v !== '--' ? v : '来源设备') },
+            { title: '指标数', width: 70, render: (_, i) => (i.metrics || []).length },
+            { title: '状态', width: 80, render: (_, i) => (i.enabled ? <Tag color="green">启用</Tag> : <Tag>停用</Tag>) },
+          ]}
+        />
+      ) : (
+        <Table
+          rowKey={(m) => `${m.iotDeviceId}:${m.metricCode}`} size="small"
+          dataSource={metricRows}
+          pagination={metricRows.length > 10 ? { pageSize: 10, size: 'small' } : false}
+          columns={[
+            { title: '所属来源', dataIndex: 'source', width: 200 },
+            { title: '指标名称', width: 130, render: (_, m) => state.entities.metricsByKey[m.metricCode]?.name || m.metricCode },
+            { title: '指标编码', dataIndex: 'metricCode', width: 150 },
+            { title: '版本', dataIndex: 'metricVersion', width: 70 },
+            { title: '监控状态', width: 90, render: (_, m) => (m.monitored ? <Tag color="blue">监控中</Tag> : <Tag>仅存储</Tag>) },
+          ]}
+        />
+      )}
+    </Modal>
+  );
+}
+
 // 模板批量应用弹窗已抽为共享组件（components/ApplyTemplateModal.jsx），供本页两个 Tab 与「监控指标模板管理」页共用。
 
 // ---------- 主页面 ----------
@@ -571,6 +632,7 @@ export default function BindingOverviewPage() {
   const [disableTarget, setDisableTarget] = useState(null); // { deviceId, deviceName, version }
   const [applyTarget, setApplyTarget] = useState(null);     // null=关闭；字符串=预选模板 id（''=不预选）
   const [monitorTarget, setMonitorTarget] = useState(null); // { deviceId, deviceName }
+  const [detailTarget, setDetailTarget] = useState(null);   // { type: sources|metrics|monitored, deviceId, deviceName }
 
   const rows = useMemo(() => selectAllDevices(state).map((d) => {
     const binding = state.entities.bindingsByDeviceId[d.deviceId] || null;
@@ -674,20 +736,38 @@ export default function BindingOverviewPage() {
               ),
             },
             {
-              title: '来源设备数 / 接入指标', width: 150,
+              title: '来源设备数', width: 100,
               render: (_, r) => {
                 if (r.metricTotal === null) return '--';
-                const items = (r.draft || r.binding)?.items || [];
-                return `${items.filter((i) => i.enabled).length} / ${r.metricTotal} 项`;
+                const count = ((r.draft || r.binding)?.items || []).filter((i) => i.enabled).length;
+                return (
+                  <Button type="link" size="small" style={{ padding: 0, height: 'auto' }} onClick={() => setDetailTarget({ type: 'sources', deviceId: r.device.deviceId, deviceName: r.device.name })}>
+                    {count} 个
+                  </Button>
+                );
               },
             },
             {
-              title: '监控指标', width: 100,
+              title: '接入指标', width: 90,
+              render: (_, r) => {
+                if (r.metricTotal === null) return '--';
+                return (
+                  <Button type="link" size="small" style={{ padding: 0, height: 'auto' }} onClick={() => setDetailTarget({ type: 'metrics', deviceId: r.device.deviceId, deviceName: r.device.name })}>
+                    {r.metricTotal} 项
+                  </Button>
+                );
+              },
+            },
+            {
+              title: '监控指标', width: 90,
               render: (_, r) => {
                 if (r.metricMonitored === null) return '--';
-                return r.metricMonitored > 0
-                  ? <Tag color="blue">{r.metricMonitored} 项</Tag>
-                  : <Tooltip title="未勾选监控指标：无曲线 / 实时监测呈现，数据仍全量存储；可在行内「监控指标」中勾选"><Tag style={{ cursor: 'help' }}>0 项</Tag></Tooltip>;
+                if (r.metricMonitored === 0) return <Tag>0 项</Tag>;
+                return (
+                  <Button type="link" size="small" style={{ padding: 0, height: 'auto' }} onClick={() => setDetailTarget({ type: 'monitored', deviceId: r.device.deviceId, deviceName: r.device.name })}>
+                    {r.metricMonitored} 项
+                  </Button>
+                );
               },
             },
             { title: '拉取周期', width: 90, render: (_, r) => (r.binding ? `${r.binding.pullCycleSec} 秒` : '--') },
@@ -754,6 +834,13 @@ export default function BindingOverviewPage() {
         deviceName={monitorTarget?.deviceName}
         open={!!monitorTarget}
         onClose={() => setMonitorTarget(null)}
+      />
+      <BindingDetailModal
+        type={detailTarget?.type}
+        deviceId={detailTarget?.deviceId}
+        deviceName={detailTarget?.deviceName}
+        open={!!detailTarget}
+        onClose={() => setDetailTarget(null)}
       />
       <ApplyTemplateModal
         open={applyTarget !== null}

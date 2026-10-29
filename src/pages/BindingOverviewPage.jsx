@@ -156,16 +156,9 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
         size="small" current={step} style={{ marginBottom: 16, maxWidth: 660 }}
         items={[{ title: '选择主设备' }, { title: '选择 IoT 子设备' }, { title: '选择监控指标（可选）' }]}
       />
-      <Alert
-        type="info" showIcon style={{ marginBottom: 12 }}
-        message="绑定即接入：绑定保存并启用后，系统获取子设备上报的全部数据指标并存储；第 3 步按需勾选纳入曲线监控的指标（可以全不选，未勾选指标可在设备台账「数据指标历史」查看，也可保存后在行内「监控指标」中随时补选）。草稿仅保存在页面状态中，保存后生成新版本「待生效」，需再点「启用」才真正开始接入。"
-      />
 
       {step === 0 && (
         <>
-          <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 6 }}>
-            第 1 步 · 选择主设备（设备管理系统台账设备；点击行选中；已绑定设备不能重复绑定，仅可换绑）
-          </Typography.Paragraph>
           <Space size={8} wrap style={{ marginBottom: 8 }}>
             <Input
               allowClear size="small" style={{ width: 220 }}
@@ -225,18 +218,13 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
             ]}
           />
           <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '8px 0 0' }}>
-            {deviceId
-              ? <>已选主设备 <b>{selectedDevice?.deviceId} · {selectedDevice?.name}</b>；点击「下一步」选择物联网平台子设备。</>
-              : '尚未选择主设备：点击列表中一行选中设备（仅未绑定设备可选）。'}
+            {deviceId ? <>已选主设备：<b>{selectedDevice?.deviceId} · {selectedDevice?.name}</b></> : '尚未选择主设备'}
           </Typography.Paragraph>
         </>
       )}
 
       {step === 1 && (
         <>
-          <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 6 }}>
-            第 2 步 · 勾选物联网平台子设备（来源；可多选，来源间平级）。勾选即自动发现该子设备上报的全部指标，无需逐项挑选。
-          </Typography.Paragraph>
           <Input
             allowClear size="small" style={{ width: 260, marginBottom: 8 }}
             placeholder="搜索来源编码 / 名称" value={sourceKw} onChange={(e) => setSourceKw(e.target.value)}
@@ -281,17 +269,13 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
             })}
           </div>
           <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }}>
-            已选 <b>{draftItems.length}</b> 个物联网平台子设备，自动发现 <b>{discoveredMetrics}</b> 项指标；点击「下一步」选择监控指标（可不选）。
+            已选 <b>{draftItems.length}</b> 个来源 · 自动发现 <b>{discoveredMetrics}</b> 项指标
           </Typography.Paragraph>
         </>
       )}
 
       {step === 2 && (
         <>
-          <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 6 }}>
-            第 3 步 · 选择监控指标（可选）：勾选 = 纳入曲线 / 实时监测呈现；<b>可以全部不勾选</b>——不选则无可视化监控指标，
-            但子设备上报的数据指标仍全量接入存储，随时可在设备台账「数据指标历史」中查看，或保存后在行内「监控指标」中补选。
-          </Typography.Paragraph>
           {draftItems.map((item) => {
             const monitoredOfItem = (item.metrics || []).filter((m) => m.monitored).length;
             return (
@@ -326,7 +310,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
             );
           })}
           <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }}>
-            共接入 <b>{discoveredMetrics}</b> 项指标，已勾选监控 <b>{monitoredMetrics}</b> 项（可以不选）；点击「保存」生成待生效版本，监控勾选随绑定一起落库。
+            共接入 <b>{discoveredMetrics}</b> 项指标 · 已勾选监控 <b>{monitoredMetrics}</b> 项
           </Typography.Paragraph>
         </>
       )}

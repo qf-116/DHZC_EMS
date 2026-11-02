@@ -7,7 +7,7 @@
 //   保存时随草稿整体落库）；已保存绑定的勾选调整走行内「监控指标」（binding/setMonitored，即时生效）。
 // 状态轴：未配置 → 草稿 → 校验 → 待生效 → 已启用 → 已停用（domain/binding.js）。
 // 页面不展示绑定版本或待补偿字段；绑定关系与状态按当前配置展示。
-// DEV-008 故意未配置，用于演示「首次绑定」全流程（首绑后监控指标默认全部不勾选）。
+// 列表仅展示已创建的正式绑定；未配置设备通过「新建绑定」向导选择，不在列表中占位。
 // ============================================================
 
 import React, { useEffect, useMemo, useState } from 'react';
@@ -658,14 +658,14 @@ export default function BindingOverviewPage() {
   const [deleteTarget, setDeleteTarget] = useState(null);  // { deviceId, deviceName }
   const [detailTarget, setDetailTarget] = useState(null);   // { deviceId, deviceName }
 
-  const rows = useMemo(() => selectAllDevices(state).map((d) => {
+  // 列表只展示正式绑定，未配置设备不再作为列表占位行；新建绑定时在向导第 1 步选择主设备。
+  const rows = useMemo(() => selectAllDevices(state).flatMap((d) => {
     const binding = state.entities.bindingsByDeviceId[d.deviceId] || null;
-    const draft = selectBindingDraft(state, d.deviceId);
-    const status = draft ? draft.configStatus : (binding?.configStatus || '未配置');
-    const current = draft || binding;
-    const metricTotal = current?.items?.reduce((s, i) => s + (i.metrics || []).length, 0) ?? null;
-    const metricMonitored = current?.items?.reduce((s, i) => s + (i.metrics || []).filter((m) => m.monitored).length, 0) ?? null;
-    return { device: d, binding, draft, status, metricTotal, metricMonitored };
+    if (!binding) return [];
+    const status = binding.configStatus;
+    const metricTotal = binding.items?.reduce((s, i) => s + (i.metrics || []).length, 0) ?? 0;
+    const metricMonitored = binding.items?.reduce((s, i) => s + (i.metrics || []).filter((m) => m.monitored).length, 0) ?? 0;
+    return [{ device: d, binding, status, metricTotal, metricMonitored }];
   }), [state]);
 
   // 查询条件（实时筛选；规范 §4：关键词 → 下拉 → 重置；2026-10-29 去掉健康状态条件与列）
@@ -694,7 +694,6 @@ export default function BindingOverviewPage() {
     const edit = <Button {...blueButton} icon={<Pencil size={13} />} onClick={() => setDraftTarget({ deviceId: device.deviceId, deviceName: device.name })}>编辑</Button>;
     const detail = <Button {...blueButton} icon={<Eye size={13} />} onClick={() => setDetailTarget({ deviceId: device.deviceId, deviceName: device.name })}>详情</Button>;
     const remove = <Button {...blueButton} icon={<Trash2 size={13} />} onClick={() => setDeleteTarget({ deviceId: device.deviceId, deviceName: device.name })}>删除</Button>;
-    if (status === '未配置') return <Button {...blueButton} icon={<Plus size={13} />} onClick={() => setDraftTarget({})}>新建绑定</Button>;
     if (status === '已启用') return <Space size={2}>{detail}{edit}<Button {...blueButton} icon={<PauseCircle size={13} />} onClick={() => setDisableTarget({ deviceId: device.deviceId, deviceName: device.name })}>停用</Button>{remove}</Space>;
     if (status === '待生效') return <Space size={2}>{detail}<Button {...blueButton} icon={<Play size={13} />} onClick={() => enable(r)}>启用</Button>{edit}{remove}</Space>;
     if (status === '已停用') return <Space size={2}>{detail}{edit}{remove}</Space>;
@@ -728,17 +727,14 @@ export default function BindingOverviewPage() {
           columns={[
             { title: '设备编号', width: 100, render: (_, r) => r.device.deviceId },
             { title: '设备名称', width: 130, render: (_, r) => r.device.name },
-            { title: '来源设备数', width: 100, render: (_, r) => (r.metricTotal === null ? '--' : `${((r.draft || r.binding)?.items || []).filter((i) => i.enabled).length} 个`) },
-            { title: '接入指标', width: 90, render: (_, r) => (r.metricTotal === null ? '--' : `${r.metricTotal} 项`) },
-            { title: '监控指标', width: 90, render: (_, r) => (r.metricMonitored === null ? '--' : `${r.metricMonitored} 项`) },
+            { title: '来源设备数', width: 100, render: (_, r) => `${(r.binding?.items || []).filter((i) => i.enabled).length} 个` },
+            { title: '接入指标', width: 90, render: (_, r) => `${r.metricTotal} 项` },
+            { title: '监控指标', width: 90, render: (_, r) => `${r.metricMonitored} 项` },
             { title: '拉取周期', width: 90, render: (_, r) => (r.binding ? `${r.binding.pullCycleSec} 秒` : '--') },
             {
               title: '配置状态', width: 100,
               render: (_, r) => (
-                <StatusTag
-                  value={r.status}
-                  tip={r.draft ? '存在未保存的绑定草稿（保存后进入「待生效」）' : undefined}
-                />
+                <StatusTag value={r.status} />
               ),
             },
             { title: '创建时间', width: 150, render: (_, r) => (r.binding?.createdAt || r.binding?.effectiveFrom || '--') },

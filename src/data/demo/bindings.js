@@ -62,7 +62,7 @@ export const bindingsByDeviceId = {
       { iotDeviceId: 'iot-main-007', iotDeviceCode: 'IOT-D-10007', role: 'main', sensorType: '--', enabled: false, metrics: [sel('M.spindle_speed', 'v1.1', false), sel('M.oil_pressure', 'v1.0', false), sel('S.machine_state', 'v1.3', false)] },
     ],
   },
-  // DEV-008 无绑定：验证「空绑定必须能创建首个绑定」
+  // DEV-008 尚未创建绑定：未配置设备不在物联网接入配置列表中占位，通过「新建绑定」向导选择主设备。
 };
 
 // 绑定版本历史（换绑/停用留痕；bindingId: { deviceId, version, configStatus, effectiveFrom, effectiveTo, summary }）

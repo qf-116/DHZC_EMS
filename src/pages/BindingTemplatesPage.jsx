@@ -8,7 +8,7 @@
 
 import React, { useMemo, useState } from 'react';
 import {
-  App, Alert, Button, Card, Empty, Input, Modal, Select, Space, Table, Tag, Typography,
+  App, Button, Card, Checkbox, Empty, Input, Modal, Select, Space, Table, Tag,
 } from 'antd';
 import { LayoutTemplate, Plus, Trash2, Edit3, Copy } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
@@ -21,8 +21,7 @@ let itemSeq = 0;
 const nextUid = () => `tpl-item-${Date.now()}-${++itemSeq}`;
 
 // ---------- 模板编辑弹窗（新建 / 编辑 / 复制新建 共用） ----------
-// 2026-10-29 交互重构：模板按「物联网平台产品 + 该产品物模型指标」定义，
-// 列表形式逐行添加产品，选产品后才出现该产品的指标多选（不再默认铺开全部指标）。
+// 2026-11-02 交互调整：弹窗只保留模板名称和产品配置；点击「添加产品」后逐行选择产品，指标直接并列勾选，不再使用指标下拉框。
 function TemplateEditorModal({ template, open, onClose }) {
   const state = useDemoState();
   const actions = useDemoActions();
@@ -37,13 +36,10 @@ function TemplateEditorModal({ template, open, onClose }) {
   );
   const metricNameOf = (code) => metricDefs.find((m) => m.metricCode === code)?.name || code;
   const productMetricsOf = (product) => iotProducts.find((p) => p.product === product)?.metrics || [];
-  const metricOptionsOf = (product) => (productMetricsOf(product).length
-    ? productMetricsOf(product).map((m) => ({
-      value: m.metricCode,
-      label: `${metricNameOf(m.metricCode)}（${m.metricCode} · ${m.metricVersion}）`,
-    }))
+  const metricDefsOf = (product) => (productMetricsOf(product).length
+    ? productMetricsOf(product)
     // 兼容历史模板的产品（不在当前产品目录）：退回全量指标可选
-    : metricDefs.map((m) => ({ value: m.metricCode, label: `${m.name}（${m.metricCode} · ${m.metricVersion}）` })));
+    : metricDefs.map((m) => ({ metricCode: m.metricCode, metricVersion: m.metricVersion })));
 
   // 每次打开按目标模板初始化编辑草稿（兼容旧模型 sensorType → product）
   if (open && openKey !== `${open}-${template?.templateId || 'new'}`) {
@@ -60,6 +56,18 @@ function TemplateEditorModal({ template, open, onClose }) {
   const addItem = () => setItems((prev) => [...prev, { uid: nextUid(), product: '', metrics: [] }]);
   const patchItem = (uid, patch) => setItems((prev) => prev.map((i) => (i.uid === uid ? { ...i, ...patch } : i)));
   const removeItem = (uid) => setItems((prev) => prev.filter((i) => i.uid !== uid));
+
+  const toggleMetric = (uid, metric, checked) => {
+    setItems((prev) => prev.map((item) => {
+      if (item.uid !== uid) return item;
+      const current = item.metrics || [];
+      if (checked) {
+        if (current.some((m) => m.metricCode === metric.metricCode)) return item;
+        return { ...item, metrics: [...current, { metricCode: metric.metricCode, metricVersion: metric.metricVersion }] };
+      }
+      return { ...item, metrics: current.filter((m) => m.metricCode !== metric.metricCode) };
+    }));
+  };
 
   const problems = [];
   if (!name.trim()) problems.push('请填写模板名称');
@@ -89,32 +97,25 @@ function TemplateEditorModal({ template, open, onClose }) {
 
   return (
     <Modal
-      title={template?.templateId ? `编辑监控指标模板 · ${template.name}` : '新建监控指标模板'}
-      width={820}
+      title={template?.templateId ? `编辑绑定模板 · ${template.name}` : '新建绑定模板'}
+      width={1000}
       open={open}
       onCancel={onClose}
       onOk={doSave}
       okText="保存模板" cancelText="取消"
       okButtonProps={{ disabled: problems.length > 0 }}
     >
-      <Alert
-        type="info" showIcon style={{ marginBottom: 12 }}
-        message="模板按「物联网平台产品 + 该产品的监控指标」定义；应用到设备时按产品自动创建来源并预置监控勾选。"
-      />
-      <div style={{ marginBottom: 10 }}>
+      <div style={{ marginBottom: 14 }}>
         <div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>模板名称 <span style={{ color: '#cf1322' }}>*</span></div>
-        <Input style={{ width: 420 }} placeholder="如：CNC 加工中心标准监控模板" value={name} onChange={(e) => setName(e.target.value)} />
+        <Input style={{ width: 420 }} placeholder="请输入模板名称" value={name} onChange={(e) => setName(e.target.value)} />
       </div>
 
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-          产品与监控指标（每行选择 1 个产品及其要纳入监控的指标，可添加多行）
-        </Typography.Text>
-        <Button size="small" type="primary" ghost icon={<Plus size={13} />} onClick={addItem}>添加产品</Button>
+      <div style={{ marginBottom: 8 }}>
+        <Button type="primary" ghost icon={<Plus size={13} />} onClick={addItem}>添加产品</Button>
       </div>
 
       {items.length === 0 ? (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="尚未添加产品：请点击右上角「添加产品」" />
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={false} />
       ) : (
         <Table
           rowKey="uid" size="small"
@@ -123,51 +124,41 @@ function TemplateEditorModal({ template, open, onClose }) {
           columns={[
             { title: '#', width: 40, render: (_, __, idx) => idx + 1 },
             {
-              title: '物联网平台产品', width: 220,
+              title: '产品', width: 240,
               render: (_, i) => (
                 <Select
                   size="small" style={{ width: '100%' }} placeholder="请选择产品"
                   value={i.product || undefined}
                   onChange={(v) => patchItem(i.uid, { product: v, metrics: [] })}
-                  options={iotProducts.map((p) => ({ value: p.product, label: `${p.product}（${p.metrics.length} 项指标）` }))}
+                  options={iotProducts.map((p) => ({ value: p.product, label: p.product }))}
                 />
               ),
             },
             {
-              title: '监控指标（该产品物模型）',
-              render: (_, i) => (
-                <Select
-                  size="small" mode="multiple" style={{ width: '100%' }}
-                  placeholder={i.product ? '请选择要监控的指标' : '先选择产品'}
-                  disabled={!i.product}
-                  value={(i.metrics || []).map((m) => m.metricCode)}
-                  onChange={(codes) => patchItem(i.uid, {
-                    metrics: codes.map((c) => {
-                      const def = productMetricsOf(i.product).find((m) => m.metricCode === c);
-                      return { metricCode: c, metricVersion: def?.metricVersion || metricDefs.find((m) => m.metricCode === c)?.metricVersion || 'v1.0' };
-                    }),
-                  })}
-                  options={metricOptionsOf(i.product)}
-                  maxTagCount="responsive"
-                />
-              ),
+              title: '指标',
+              render: (_, i) => {
+                if (!i.product) return <span style={{ color: '#b6c2cc' }}>--</span>;
+                const selected = new Set((i.metrics || []).map((m) => m.metricCode));
+                return (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px 16px', padding: '2px 0' }}>
+                    {metricDefsOf(i.product).map((metric) => (
+                      <Checkbox
+                        key={metric.metricCode}
+                        checked={selected.has(metric.metricCode)}
+                        onChange={(e) => toggleMetric(i.uid, metric, e.target.checked)}
+                      >
+                        {metricNameOf(metric.metricCode)}（{metric.metricCode}）
+                      </Checkbox>
+                    ))}
+                  </div>
+                );
+              },
             },
             {
               title: '操作', width: 70,
               render: (_, i) => <Button size="small" type="text" danger icon={<Trash2 size={13} />} onClick={() => removeItem(i.uid)}>移除</Button>,
             },
           ]}
-        />
-      )}
-
-      {problems.length > 0 && (
-        <Alert
-          type="warning" showIcon style={{ marginTop: 10 }}
-          message={(
-            <ul style={{ margin: 0, paddingLeft: 18 }}>
-              {problems.map((p) => <li key={p}>{p}</li>)}
-            </ul>
-          )}
         />
       )}
     </Modal>

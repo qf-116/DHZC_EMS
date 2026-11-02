@@ -174,21 +174,21 @@ export function createDemoActions(state, dispatch) {
       const current = E.bindingsByDeviceId[deviceId];
       const version = (current?.version || 0) + 1;
       act('binding/save', { deviceId, summary }, `binding:${deviceId}:v${version}`);
-      return { ok: true, message: `绑定 v${version} 已保存，状态「待生效」；启用后生效`, refs: { deviceId, version } };
+      return { ok: true, message: '绑定已保存，状态「待生效」；启用后生效', refs: { deviceId, version } };
     },
     enableBinding(deviceId) {
       const b = E.bindingsByDeviceId[deviceId];
       if (!b) return fail('该设备尚未创建绑定');
       if (!['待生效', '换绑中'].includes(b.configStatus)) return fail(`当前状态「${b.configStatus}」不能启用`);
       act('binding/enable', { deviceId }, `binding-enable:${deviceId}:v${b.version}`);
-      return { ok: true, message: `绑定 v${b.version} 已启用，影响监测/报警/OEE/报表/大屏`, refs: { deviceId, bindingId: b.bindingId } };
+      return { ok: true, message: `绑定已启用，影响监测/报警/OEE/报表/大屏`, refs: { deviceId, bindingId: b.bindingId } };
     },
     disableBinding(deviceId, opts = {}) {
       const b = E.bindingsByDeviceId[deviceId];
       if (!b) return fail('该设备尚未创建绑定');
       if (b.configStatus !== '已启用') return fail(`当前状态「${b.configStatus}」不能停用`);
       act('binding/disable', { deviceId, reason: opts?.reason || '' }, `binding-disable:${deviceId}:v${b.version}`);
-      return { ok: true, message: `绑定 v${b.version} 已停用`, refs: { deviceId } };
+      return { ok: true, message: '绑定已停用', refs: { deviceId } };
     },
     addBindingSource(deviceId, source) {
       act('binding/addSource', { deviceId, source });

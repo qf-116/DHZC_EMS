@@ -2,7 +2,7 @@
 // 模板批量应用弹窗（共享组件：物联网接入配置两个 Tab / 监控指标模板管理页 共用入口）
 // 同型号设备的接入与监控口径通常一致：先「存为模板」，再批量应用到其它设备——
 // 应用时自动创建设备绑定（绑定即全量接入存储）并按模板预置监控指标勾选。
-// IoT 来源编码由物联网平台按设备自动分配（演示模拟），不与已占用编码冲突。
+// 应用模板创建或更新绑定（系统内部留痕），无需在界面展示绑定版本。
 // ============================================================
 
 import React, { useMemo, useState } from 'react';
@@ -75,7 +75,7 @@ export default function ApplyTemplateModal({ open, initialTemplateId, onClose })
         />
       </div>
       <Checkbox checked={autoEnable} onChange={(e) => setAutoEnable(e.target.checked)}>
-        应用后立即启用（已启用设备应用模板视为换绑，生成新版本并直接生效）
+        应用后立即启用（已启用设备应用模板视为换绑并直接生效）
       </Checkbox>
       {template && (
         <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginTop: 10, marginBottom: 0 }}>

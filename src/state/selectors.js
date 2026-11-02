@@ -50,7 +50,7 @@ export function selectBindingImpact(state, deviceId) {
     bindingId: binding?.bindingId || null,
     version: binding?.version || 0,
     domains: ['运行监测', '报警中心', 'OEE', '报表', '大屏'],
-    description: binding ? `绑定 v${binding.version} 影响该设备的实时监测、指标报警判定、OEE 计算与报表统计` : '设备未绑定，监测/OEE 不可用',
+    description: binding ? '绑定变更影响该设备的实时监测、指标报警判定、OEE 计算与报表统计' : '设备未绑定，监测/OEE 不可用',
   };
 }
 

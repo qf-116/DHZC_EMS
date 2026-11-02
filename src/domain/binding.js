@@ -42,6 +42,6 @@ export function bindingImpact(binding) {
   return {
     devices: 1,
     domains: ['数据接入', '运行监测', '报警中心', 'OEE', '报表', '大屏'],
-    description: `绑定版本 v${binding.version} 变更将影响该设备的实时监测、指标报警判定、OEE 计算与报表统计`,
+    description: '绑定变更将影响该设备的实时监测、指标报警判定、OEE 计算与报表统计',
   };
 }

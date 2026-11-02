@@ -6,7 +6,7 @@
 //   可在设备台账「数据指标历史」查看）。向导内监控勾选作用于草稿（binding/setDraftMonitored，
 //   保存时随草稿整体落库）；已保存绑定的勾选调整走行内「监控指标」（binding/setMonitored，即时生效）。
 // 状态轴：未配置 → 草稿 → 校验 → 待生效 → 已启用 → 已停用/换绑中（domain/binding.js）。
-// 绑定版本不再作为页面列展示（内部仍随保存递增留痕）；待补偿字段已移除。
+// 页面不展示绑定版本或待补偿字段；绑定关系与状态按当前配置展示。
 // DEV-008 故意未配置，用于演示「首次绑定」全流程（首绑后监控指标默认全部不勾选）。
 // ============================================================
 
@@ -75,11 +75,9 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
     keys.filter((id) => !draftItems.some((i) => i.iotDeviceId === id))
       .concat(draftItems.map((i) => i.iotDeviceId).filter((id) => !keys.includes(id))),
   );
-  const currentVersion = state.entities.bindingsByDeviceId[deviceId]?.version || 0;
-
   // 每次打开重置向导进度：预选了设备（换绑/编辑草稿）直接进第 2 步，否则从第 1 步选设备开始。
   // 换绑/编辑类打开时（已有绑定）：把当前绑定启用的来源带入草稿（binding/addSource 自动继承监控勾选），
-  // 来源列表即以「已勾选」状态呈现，用户在此基础上增减后保存生成新版本。
+  // 来源列表即以「已勾选」状态呈现，用户在此基础上增减后保存。
   useEffect(() => {
     if (open) {
       setStep(presetDeviceId ? 1 : 0);
@@ -161,13 +159,13 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
     onClose();
   };
 
-  // 保存：reducer 内部先校验（至少 1 个启用来源 / 同一绑定内来源编码不重复），通过后生成新版本；
+  // 保存：reducer 内部先校验（至少 1 个启用来源 / 同一绑定内来源编码不重复），通过后保存为待生效状态；
   // 监控指标勾选随草稿整体落库（可以全部不勾选）
   const doSave = () => {
     if (!draft) { message.warning('请先勾选物联网平台子设备，生成绑定草稿'); return; }
     const res = validateBindingDraft(draft, { metricsByKey: state.entities.metricsByKey });
     if (!res.ok) { message.error(`校验未通过：${res.errors.join('；')}`); return; }
-    const r = actions.saveBinding(deviceId, `绑定草稿 v${draft.version}：${draftItems.length} 个来源 / 自动接入 ${discoveredMetrics} 项指标 / 监控 ${monitoredMetrics} 项`);
+    const r = actions.saveBinding(deviceId, `绑定草稿：${draftItems.length} 个来源 / 自动接入 ${discoveredMetrics} 项指标 / 监控 ${monitoredMetrics} 项`);
     if (r.ok) {
       message.success(monitoredMetrics > 0
         ? `${r.message}；启用后开始接入存储，${monitoredMetrics} 项监控指标进入曲线呈现`
@@ -194,7 +192,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
       ? [<Button key="next" type="primary" disabled={!deviceId} onClick={goNext}>下一步：选择物联网平台子设备 <ArrowRight size={14} style={{ verticalAlign: '-2px' }} /></Button>]
       : step === 1
         ? [<Button key="next2" type="primary" disabled={!draftItems.length} onClick={goNext}>下一步：选择监控指标 <ArrowRight size={14} style={{ verticalAlign: '-2px' }} /></Button>]
-        : [<Button key="save" type="primary" icon={<Save size={14} />} disabled={!draftItems.length} onClick={doSave}>保存（生成待生效版本）</Button>]),
+        : [<Button key="save" type="primary" icon={<Save size={14} />} disabled={!draftItems.length} onClick={doSave}>保存并提交</Button>]),
   ];
 
   return (
@@ -202,7 +200,6 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
       title={(
         <Space size={8} wrap>
           <span>{selectedDevice ? `设备绑定 · ${selectedDevice.name}（${deviceId}）` : '新建设备绑定'}</span>
-          {selectedDevice && <Tag>新版本 v{currentVersion + 1}</Tag>}
         </Space>
       )}
       width={1000}
@@ -241,7 +238,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
               onClick: () => {
                 if (d.bound) {
                   const b = boundOf(d.deviceId);
-                  message.warning(`设备 ${d.name} 已绑定（v${b.version}，${b.configStatus}），不能重复绑定：请关闭弹窗后使用列表中的「换绑」`);
+                  message.warning(`设备 ${d.name} 已完成绑定（${b.configStatus}），不能重复绑定：请关闭弹窗后使用列表中的「换绑」`);
                   return;
                 }
                 setDeviceId(d.deviceId);
@@ -267,8 +264,8 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
                   const b = boundOf(d.deviceId);
                   if (!b) return <Tag color="green">未绑定</Tag>;
                   return (
-                    <Tooltip title={`已绑定（v${b.version}，${b.configStatus}）：不能重复绑定，仅可在列表中「换绑」`}>
-                      <Tag color="blue" style={{ cursor: 'help' }}>已绑定 v{b.version}</Tag>
+                    <Tooltip title={`已完成绑定（${b.configStatus}）：不能重复绑定，仅可在列表中「换绑」`}>
+                      <Tag color="blue" style={{ cursor: 'help' }}>已绑定</Tag>
                     </Tooltip>
                   );
                 },
@@ -392,7 +389,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
 }
 
 // ---------- 停用弹窗（填原因） ----------
-function DisableBindingModal({ deviceId, deviceName, version, open, onClose }) {
+function DisableBindingModal({ deviceId, deviceName, open, onClose }) {
   const actions = useDemoActions();
   const { message } = App.useApp();
   const [reason, setReason] = useState('');
@@ -411,7 +408,7 @@ function DisableBindingModal({ deviceId, deviceName, version, open, onClose }) {
 
   return (
     <Modal
-      title={`停用绑定 · ${deviceName}（${deviceId} · v${version}）`}
+      title={`停用绑定 · ${deviceName}（${deviceId}）`}
       width={520}
       open={open}
       onOk={doDisable}
@@ -517,7 +514,7 @@ function MonitorConfigModal({ deviceId, deviceName, open, onClose }) {
     >
       <Alert
         type="info" showIcon style={{ marginBottom: 12 }}
-        message="该设备的全部接入指标已在持续存储；勾选 = 纳入监控（曲线 / 实时监测呈现），不勾选 = 仅存储不做监控，可随时在设备台账「数据指标历史」中查看。勾选后请点击「确认」统一生效（不产生新绑定版本），直接取消则不保存本次修改。"
+        message="该设备的全部接入指标已在持续存储；勾选 = 纳入监控（曲线 / 实时监测呈现），不勾选 = 仅存储不做监控，可随时在设备台账「数据指标历史」中查看。勾选后请点击「确认」统一生效，直接取消则不保存本次修改。"
       />
       {!binding ? (
         <div style={{ color: '#8a97a3', fontSize: 12 }}>该设备尚未创建绑定：请先完成设备绑定。</div>
@@ -616,7 +613,7 @@ function BindingDetailModal({ type, deviceId, deviceName, open, onClose }) {
             { title: '所属来源', dataIndex: 'source', width: 200 },
             { title: '指标名称', width: 130, render: (_, m) => state.entities.metricsByKey[m.metricCode]?.name || m.metricCode },
             { title: '指标编码', dataIndex: 'metricCode', width: 150 },
-            { title: '版本', dataIndex: 'metricVersion', width: 70 },
+            { title: '指标版本', dataIndex: 'metricVersion', width: 70 },
             { title: '监控状态', width: 90, render: (_, m) => (m.monitored ? <Tag color="blue">监控中</Tag> : <Tag>仅存储</Tag>) },
           ]}
         />
@@ -636,7 +633,7 @@ export default function BindingOverviewPage() {
 
   // UI 局部状态：弹窗开关
   const [draftTarget, setDraftTarget] = useState(null);     // { deviceId, deviceName }
-  const [disableTarget, setDisableTarget] = useState(null); // { deviceId, deviceName, version }
+  const [disableTarget, setDisableTarget] = useState(null); // { deviceId, deviceName }
   const [applyTarget, setApplyTarget] = useState(null);     // null=关闭；字符串=预选模板 id（''=不预选）
   const [monitorTarget, setMonitorTarget] = useState(null); // { deviceId, deviceName }
   const [detailTarget, setDetailTarget] = useState(null);   // { type: sources|metrics|monitored, deviceId, deviceName }
@@ -678,8 +675,8 @@ export default function BindingOverviewPage() {
       return (
         <Space size={4}>
           <Button size="small" icon={<Activity size={13} />} onClick={() => setMonitorTarget({ deviceId: device.deviceId, deviceName: device.name })}>监控指标</Button>
-          <Button size="small" icon={<PauseCircle size={13} />} onClick={() => setDisableTarget({ deviceId: device.deviceId, deviceName: device.name, version: binding?.version ?? '--' })}>停用</Button>
-          <Tooltip title="换绑说明：直接打开绑定草稿，修改来源与监控指标后保存，将生成新版本（旧版本留痕不覆盖）；监控勾选按来源+指标自动继承；新版本「待生效」→「启用」后完成换绑。">
+          <Button size="small" icon={<PauseCircle size={13} />} onClick={() => setDisableTarget({ deviceId: device.deviceId, deviceName: device.name })}>停用</Button>
+          <Tooltip title="换绑说明：打开绑定向导，修改来源与监控指标后保存；监控勾选按来源+指标自动继承；保存后进入「待生效」，再点「启用」完成换绑。">
             <Button size="small" type="text" icon={<Settings2 size={13} />} onClick={() => setDraftTarget({ deviceId: device.deviceId, deviceName: device.name })}>换绑</Button>
           </Tooltip>
         </Space>
@@ -738,7 +735,7 @@ export default function BindingOverviewPage() {
               render: (_, r) => (
                 <StatusTag
                   value={r.status}
-                  tip={r.draft ? '存在未保存的绑定草稿（保存后生成新版本「待生效」）' : undefined}
+                  tip={r.draft ? '存在未保存的绑定草稿（保存后进入「待生效」）' : undefined}
                 />
               ),
             },
@@ -832,7 +829,6 @@ export default function BindingOverviewPage() {
       <DisableBindingModal
         deviceId={disableTarget?.deviceId}
         deviceName={disableTarget?.deviceName}
-        version={disableTarget?.version}
         open={!!disableTarget}
         onClose={() => setDisableTarget(null)}
       />

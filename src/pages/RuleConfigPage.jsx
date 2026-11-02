@@ -515,7 +515,7 @@ export default function RuleConfigPage() {
               {form.type === 'quality' ? '质量监控对象（选择设备，监控其数据链路质量，无需选择指标）' : '规则目标（设备 → 子设备 → 指标 级联，仅限当前启用绑定中的已勾选指标）'}
               <InfoTip text={form.type === 'quality'
                 ? '质量规则作用于设备的数据链路质量（订阅断开、拉取超时、BAD 质量码占比、采集延迟），不作用于指标数值，因此不出现指标级联与阈值/回差配置。'
-                : '级联来自正式设备绑定事实：① 系统设备（canonical 编号 DEV-*）→ ② 来源设备（主设备 / 传感器）→ ③ 已勾选指标。停用绑定与失效指标不进入可选范围；状态规则仅可选状态类 S.* 指标；目标以绑定版本固化，换绑后需确认规则仍有效。'} />
+                : '级联来自正式设备绑定事实：① 系统设备（canonical 编号 DEV-*）→ ② 来源设备（主设备 / 传感器）→ ③ 已勾选指标。停用绑定与失效指标不进入可选范围；状态规则仅可选状态类 S.* 指标；换绑后需确认规则仍有效。'} />
             </>}>
               <Space direction="vertical" style={{ width: '100%' }}>
                 {form.type === 'quality' ? (
@@ -543,7 +543,7 @@ export default function RuleConfigPage() {
                 )}
                 {currentTarget && form.type !== 'quality' && (
                   <div style={hint}>
-                    指标：{currentTarget.metric.name}（{currentTarget.metricCode} {currentTarget.metricVersion}）· 单位 {currentTarget.metric.unit || '--'} · {currentTarget.metric.enumValues ? `取值 ${currentTarget.metric.enumValues.join(' / ')}` : `量程 ${currentTarget.metric.range ? `${currentTarget.metric.range.min} ~ ${currentTarget.metric.range.max}` : '--'}`} · 绑定 {currentTarget.bindingId} v{currentTarget.bindingVersion}
+                    指标：{currentTarget.metric.name}（{currentTarget.metricCode} {currentTarget.metricVersion}）· 单位 {currentTarget.metric.unit || '--'} · {currentTarget.metric.enumValues ? `取值 ${currentTarget.metric.enumValues.join(' / ')}` : `量程 ${currentTarget.metric.range ? `${currentTarget.metric.range.min} ~ ${currentTarget.metric.range.max}` : '--'}`}
                   </div>
                 )}
                 {importedTpl && (

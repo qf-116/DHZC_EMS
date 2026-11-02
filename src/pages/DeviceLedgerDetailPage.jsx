@@ -202,7 +202,7 @@ export function DeviceLedgerDetailContent({ state, deviceId: suppliedDeviceId, e
             <Descriptions.Item label="设备ID">{device.deviceId}</Descriptions.Item>
             <Descriptions.Item label="监测编码">{device.monitorCode || '--'}</Descriptions.Item>
             <Descriptions.Item label="绑定状态">
-              <StatusTag value={binding?.configStatus || '未配置'} tip={binding ? `绑定 v${binding.version}` : '未创建绑定'} />
+              <StatusTag value={binding?.configStatus || '未配置'} tip={binding ? '已完成绑定' : '未创建绑定'} />
             </Descriptions.Item>
             <Descriptions.Item label="生命周期"><StatusTag value={device.lifecycleStatus} /></Descriptions.Item>
             <Descriptions.Item label="入账来源">
@@ -387,8 +387,6 @@ export function DeviceLedgerDetailContent({ state, deviceId: suppliedDeviceId, e
           <Card size="small" style={{ marginBottom: 12 }} title="绑定与拉取">
             <Descriptions size="small" bordered column={3} labelStyle={{ width: 120 }}>
               <Descriptions.Item label="监测编码">{device.monitorCode}</Descriptions.Item>
-              <Descriptions.Item label="绑定ID">{binding.bindingId}</Descriptions.Item>
-              <Descriptions.Item label="绑定版本">v{binding.version}</Descriptions.Item>
               <Descriptions.Item label="配置状态"><StatusTag value={binding.configStatus} /></Descriptions.Item>
               <Descriptions.Item label="通信健康"><StatusTag value={health?.status || null} /></Descriptions.Item>
               <Descriptions.Item label="最后样本">{health?.lastSampleAt || '--'}</Descriptions.Item>
@@ -466,7 +464,7 @@ export function DeviceLedgerDetailContent({ state, deviceId: suppliedDeviceId, e
               message={`OEE 不可计算：${(oee.blockers || []).join('；') || '该窗口无生产数据'}`}
             />
           )}
-          <Card size="small" title={`实时指标样本（绑定 v${binding.version}）`}>
+          <Card size="small" title="实时指标样本">
             <Table
               rowKey={r => `${r.iotDeviceCode}|${r.metricCode}`}
               size="small" pagination={false}

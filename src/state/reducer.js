@@ -455,7 +455,7 @@ export function reducer(state, action) {
         next = setE(next, 'bindingsByDeviceId', b.deviceId, newBinding);
         next = setE(next, 'bindingVersionsById', b.bindingId, { bindingId: b.bindingId, deviceId: b.deviceId, version: b.version, configStatus: b.configStatus, effectiveFrom: newBinding.effectiveFrom, effectiveTo: null, summary: b.summary });
         next = { ...next, ui: { ...next.ui, bindingDraftsByDeviceId: { ...next.ui.bindingDraftsByDeviceId, [`draft-${b.deviceId}`]: undefined } } };
-        next = addHistory(next, at, 'binding', b.bindingId, `应用绑定模板「${templateName}」→ v${b.version}（${b.configStatus}）`, { deviceId: b.deviceId });
+        next = addHistory(next, at, 'binding', b.bindingId, `应用绑定模板「${templateName}」（${b.configStatus}）`, { deviceId: b.deviceId });
       });
       return finish(next, action, true, `模板「${templateName}」已应用到 ${bindings.length} 台设备（${autoEnable ? '已启用' : '待生效'}）`, { deviceIds: bindings.map(b => b.deviceId) }, false, at);
     }
@@ -480,8 +480,8 @@ export function reducer(state, action) {
       const versionRecord = { bindingId, deviceId: payload.deviceId, version, configStatus: '待生效', effectiveFrom: null, effectiveTo: null, summary: payload.summary || '保存绑定草稿' };
       next = setE(next, 'bindingVersionsById', bindingId, versionRecord);
       next = { ...next, ui: { ...next.ui, bindingDraftsByDeviceId: { ...next.ui.bindingDraftsByDeviceId, [key]: undefined } } };
-      next = addHistory(next, at, 'binding', bindingId, `保存绑定草稿 v${version}，待生效`, { deviceId: payload.deviceId });
-      return finish(next, action, true, `绑定 v${version} 已保存，状态「待生效」；启用后生效，影响监测/报警/OEE/报表`, { bindingId, version, deviceId: payload.deviceId }, false, at);
+      next = addHistory(next, at, 'binding', bindingId, '保存绑定草稿，待生效', { deviceId: payload.deviceId });
+      return finish(next, action, true, '绑定已保存，状态「待生效」；启用后生效，影响监测/报警/OEE/报表', { bindingId, version, deviceId: payload.deviceId }, false, at);
     }
     case 'binding/enable': {
       const b = E.bindingsByDeviceId[payload.deviceId];
@@ -493,8 +493,8 @@ export function reducer(state, action) {
       let next = setE(state, 'bindingsByDeviceId', payload.deviceId, updated);
       const vkey = Object.keys(E.bindingVersionsById).find(k => E.bindingVersionsById[k].bindingId === b.bindingId);
       if (vkey) next = setE(next, 'bindingVersionsById', vkey, { ...E.bindingVersionsById[vkey], configStatus: '已启用', effectiveFrom: at });
-      next = addHistory(next, at, 'binding', b.bindingId, `绑定启用（v${b.version}），生效时间 ${at}`, { deviceId: payload.deviceId });
-      return finish(next, action, true, `绑定 v${b.version} 已启用（生效 ${at}），影响范围：运行监测、报警、OEE、报表、大屏`, { bindingId: b.bindingId, deviceId: payload.deviceId }, false, at);
+      next = addHistory(next, at, 'binding', b.bindingId, `绑定已启用，生效时间 ${at}`, { deviceId: payload.deviceId });
+      return finish(next, action, true, `绑定已启用（生效 ${at}），影响范围：运行监测、报警、OEE、报表、大屏`, { bindingId: b.bindingId, deviceId: payload.deviceId }, false, at);
     }
     case 'binding/disable': {
       const b = E.bindingsByDeviceId[payload.deviceId];
@@ -502,8 +502,8 @@ export function reducer(state, action) {
       if (!canTransitionBinding(b.configStatus, '已停用')) return reject(state, action, `当前状态「${b.configStatus}」不能停用`);
       const updated = { ...b, configStatus: '已停用', effectiveTo: at };
       let next = setE(state, 'bindingsByDeviceId', payload.deviceId, updated);
-      next = addHistory(next, at, 'binding', b.bindingId, `绑定停用（v${b.version}）${payload.reason ? `：${payload.reason}` : ''}`, { deviceId: payload.deviceId });
-      return finish(next, action, true, `绑定 v${b.version} 已停用；失效指标不再参与报警与 OEE`, { bindingId: b.bindingId }, false, at);
+      next = addHistory(next, at, 'binding', b.bindingId, `绑定已停用${payload.reason ? `：${payload.reason}` : ''}`, { deviceId: payload.deviceId });
+      return finish(next, action, true, '绑定已停用；失效指标不再参与报警与 OEE', { bindingId: b.bindingId }, false, at);
     }
 
     // ================= 实时 Provider =================

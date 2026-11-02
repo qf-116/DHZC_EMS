@@ -177,7 +177,7 @@ export default function AlarmCenterPage() {
     { title: '报警名称', dataIndex: 'name', width: 170 },
     { title: '规则', dataIndex: 'rule', width: 120, render: (v, r) => {
       const ruleName = state.entities.alarmRulesById[v]?.name;
-      return <Tooltip title={`触发规则 ${v}${ruleName ? ` · ${ruleName}` : ''} · 版本 ${r.ruleVersion || '--'} · 绑定 v${r.bindingVersion ?? '--'}`}>{v}</Tooltip>;
+      return <Tooltip title={`触发规则 ${v}${ruleName ? ` · ${ruleName}` : ''} · 规则版本 ${r.ruleVersion || '--'}`}>{v}</Tooltip>;
     } },
     { title: '级别', dataIndex: 'severity', width: 75, render: v => <Tag color={SEVERITY_COLOR[v] || 'default'}>{v || '--'}</Tag> },
     { title: '触发值', dataIndex: 'trigger', width: 120, render: v => v || '--' },
@@ -416,7 +416,7 @@ export default function AlarmCenterPage() {
                   ['报警编号', detailAlarm.id],
                   ['设备', `${state.entities.devicesById[detailAlarm.deviceId]?.name || detailAlarm.deviceName || '--'}（${detailAlarm.deviceId || '--'}）`],
                   ['报警名称', detailAlarm.name || '--'],
-                  ['触发规则', `${detailAlarm.rule || '--'} · ${detailAlarm.ruleVersion || '--'} · 绑定 v${detailAlarm.bindingVersion ?? '--'}`],
+                  ['触发规则', `${detailAlarm.rule || '--'} · ${detailAlarm.ruleVersion || '--'}`],
                   ['去重键', detailAlarm.dedupeKey || '--'],
                   ['等级 / 状态', `${detailAlarm.severity || '--'} · ${detailAlarm.status || '--'}`],
                   ['指标', detailAlarm.metric || '--'],

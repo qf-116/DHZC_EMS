@@ -211,10 +211,10 @@ export default function RuleConfigPage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [form, open, legacyLocked]);
 
-  const saveRule = ({ publish = false } = {}) => {
+  const saveRule = () => {
     setSubmitAttempted(true);
     const rule = buildRule();
-    const res = publish ? actions.saveAndPublishRule(rule) : actions.saveRuleDraft(rule);
+    const res = actions.saveAndPublishRule(rule);
     if (!res.ok) {
       // 保存/发布失败：弹窗与表单内容保留，用户可修正后重试
       message.error(res.message);
@@ -230,20 +230,11 @@ export default function RuleConfigPage() {
         title: '发布新版本',
         content: `规则「${editing.code}」当前发布版本 ${fromV}，发布后历史报警仍按原版本快照解释，新报警按新版本判定。`,
         okText: '发布新版本', cancelText: '取消',
-        onOk: () => saveRule({ publish: true }),
+        onOk: () => saveRule(),
       });
       return;
     }
-    saveRule({ publish: true });
-  };
-  const copyConfig = async () => {
-    const json = JSON.stringify(buildRule(), null, 2);
-    try {
-      await navigator.clipboard.writeText(json);
-      message.success('当前规则配置 JSON 已复制到剪贴板（模板持久化为 P2，可先粘贴复用）');
-    } catch {
-      Modal.info({ title: '规则配置 JSON', width: 560, content: <pre style={{ maxHeight: 320, overflow: 'auto', fontSize: 12 }}>{json}</pre> });
-    }
+    saveRule();
   };
 
   // 批量发布（P2）：批次内草稿逐条发布（独立校验与版本快照，部分成功语义）
@@ -464,8 +455,6 @@ export default function RuleConfigPage() {
           ? [<Button key="close" type="primary" onClick={() => setOpen(false)}>知道了</Button>]
           : [
             <Button key="cancel" onClick={() => setOpen(false)}>取消</Button>,
-            <Button key="draft" onClick={() => saveRule({ publish: false })}>保存草稿</Button>,
-            <Button key="tpl" icon={<Copy size={13} />} onClick={copyConfig}>复制配置</Button>,
             <Button key="savetpl" onClick={() => { setSaveTplName(form.name ? `${form.name} 模板` : ''); setSaveTplScope(currentTarget?.metric?.name || ''); setSaveTplOpen(true); }}>存为模板</Button>,
             <Button key="pub" type="primary" onClick={confirmPublish}>{editing?.status === '已发布' ? '发布新版本' : '保存并发布'}</Button>,
           ]}

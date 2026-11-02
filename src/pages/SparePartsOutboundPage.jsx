@@ -194,7 +194,6 @@ export default function SparePartsOutboundPage() {
         <Alert
           type="info" showIcon style={{ marginBottom: 14 }}
           message={`当前出库幂等键：outbound:{工单}:{备件}:req-outbound-${String(outReqNo.current).padStart(4, '0')}`}
-          description="重复点击确认不会重复扣库存（幂等）；出库成功后自动更换下一次的幂等键。"
         />
         <Form form={outForm} labelCol={{ span: 6 }} wrapperCol={{ span: 16 }}>
           <Form.Item label="关联维修工单" name="repairOrderId" rules={[{ required: true, message: '请选择关联维修工单' }]}>
@@ -246,7 +245,7 @@ export default function SparePartsOutboundPage() {
           <Alert
             type="info" showIcon style={{ marginBottom: 14 }}
             message={`${dash(retTarget.items?.[0]?.spareName)} · 出库 ${retTarget.items?.[0]?.qty} · 已退库 ${returnedQtyOf(retTarget.outboundId)} · 可退余量 ${retRemaining}`}
-            description={`退库后按原出库仓库「${retTarget.warehouseId}」回冲在库量；幂等键 return:{出库单}:{requestId}。`}
+            description={`退库后按原出库仓库「${retTarget.warehouseId}」回冲在库量`}
           />
         )}
         <Form form={retForm} labelCol={{ span: 6 }} wrapperCol={{ span: 16 }}>

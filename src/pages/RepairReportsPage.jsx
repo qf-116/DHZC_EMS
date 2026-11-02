@@ -235,7 +235,7 @@ export default function RepairReportsPage() {
       >
         <Alert type="warning" showIcon
           message="报修单不支持直接取消"
-          description="报修单随维修主工单状态机推进（待派工 → 已派工 → 维修中 → 待验收 → 已完成 / 已取消）。如需终止维修，请在维修工单侧按状态机处理。" />
+          description="如需终止维修，请在维修工单侧处理。" />
       </Modal>
     </>
   );

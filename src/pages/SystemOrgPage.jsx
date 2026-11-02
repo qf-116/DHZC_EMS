@@ -284,8 +284,6 @@ export default function SystemOrgPage() {
         okText="创建"
         cancelText="取消"
       >
-        <Alert type="info" showIcon style={{ marginBottom: 16 }}
-          message="此处仅录入基础信息并挂到部门下；角色、密码等完整账号管理在「用户管理」页维护" />
         <Form form={memberForm} layout="vertical">
           <Form.Item label="工号（自动生成，不可编辑）" name="userId" rules={[{ required: true, message: '请输入工号' }]}>
             <Input disabled />

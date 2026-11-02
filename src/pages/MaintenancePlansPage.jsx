@@ -202,8 +202,8 @@ export default function MaintenancePlansPage() {
         <Alert
           type="info" showIcon style={{ marginBottom: 16 }}
           message={editing
-            ? '编辑保存后，变更内容自动同步到未执行的保养任务，以及后续按计划生成的任务。'
-            : '保存后系统按周期 + 间隔自动生成保养任务，无需手工逐条新建。'}
+            ? '保存后同步到未执行及后续任务'
+            : '保存后按周期自动生成保养任务'}
         />
         <Form form={form} layout="vertical">
           <Form.Item label="计划编号" name="code"><Input disabled /></Form.Item>

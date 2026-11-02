@@ -200,7 +200,7 @@ export default function PlannedDowntimePage() {
           <Form.Item
             name="range" label="起止时间"
             rules={[{ required: true, message: '请选择开始与结束时间' }]}
-            extra="开始时间必须早于结束时间；保存时校验与该设备未取消单据不重叠（校验由系统执行）"
+            extra="开始时间必须早于结束时间，且不与该设备已有单据重叠"
           >
             <DatePicker.RangePicker
               showTime={{ format: 'HH:mm' }}
@@ -226,7 +226,7 @@ export default function PlannedDowntimePage() {
           <Form.Item
             name="reason" label="取消原因（留痕）"
             rules={[{ required: true, message: '取消必须填写原因' }]}
-            extra="待执行单据取消后按登记原因处理并记录；已发生的停机（进行中/已结束）不可删除"
+            extra="待执行单据按取消原因留痕；已发生（进行中/已结束）的停机不可删除"
           >
             <Input.TextArea rows={2} placeholder="请填写取消原因" />
           </Form.Item>

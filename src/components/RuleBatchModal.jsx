@@ -128,7 +128,6 @@ export default function RuleBatchModal({ open, onClose, targets, onCommitted }) 
 
       {step === 0 && (
         <Space direction="vertical" style={{ width: '100%' }} size={10}>
-          <Alert type="info" showIcon message="只有同一指标（相同 metricCode、数值型）才能批量创建；每台设备生成一条独立规则草稿，差距过大的指标不会被合并成一条规则。" />
           <Select
             placeholder="选择指标（仅数值型，按绑定关系聚合设备）"
             style={{ width: 420 }}
@@ -165,8 +164,8 @@ export default function RuleBatchModal({ open, onClose, targets, onCommitted }) 
         <Space direction="vertical" style={{ width: '100%' }} size={10}>
           <Alert type="info" showIcon
             message={groups.length <= 1
-              ? `已选 ${selectedKeys.length} 个目标，自动识别为 ${groups.length} 个配置组（同指标 + 同数据类型 + 同单位 + 同量程 + 同设备型号），可统一配置阈值。`
-              : `已选 ${selectedKeys.length} 个目标，自动识别为 ${groups.length} 个配置组（量程或型号不同）：${groups.map((g) => `${g.targets.length} 台`).join('、')}。当前版本按统一绝对值配置；如各组阈值差异大，请分批创建。`} />
+              ? `已选 ${selectedKeys.length} 个目标，识别为 ${groups.length} 个配置组`
+              : `已选 ${selectedKeys.length} 个目标，识别为 ${groups.length} 个配置组（量程或型号不同）`} />
           {groups.length > 1 && (
             <Table rowKey="groupKey" size="small" pagination={false} dataSource={groups} columns={[
               { title: '配置组', dataIndex: 'groupKey', render: (v) => <span style={{ fontSize: 12 }}>{v}</span> },
@@ -215,7 +214,7 @@ export default function RuleBatchModal({ open, onClose, targets, onCommitted }) 
             <Statistic title="已存在跳过" value={preview.summary.skipped} valueStyle={{ color: '#d97706' }} />
             <Statistic title="阻断" value={preview.summary.blocked} valueStyle={{ color: '#d64545' }} />
           </div>
-          <Alert type="info" showIcon message="批量只生成草稿，不直接发布；生成后可在规则列表逐条调整，再逐条发布。" />
+          <Alert type="info" showIcon message="仅生成草稿，不直接发布" />
           <Table rowKey="targetKey" size="small" pagination={false} dataSource={preview.rows} columns={[
             { title: '设备', dataIndex: 'deviceName', width: 170 },
             { title: '指标', dataIndex: 'metricCode', width: 150 },
@@ -233,7 +232,7 @@ export default function RuleBatchModal({ open, onClose, targets, onCommitted }) 
             <Statistic title="阻断" value={batchResult.result?.blocked ?? 0} valueStyle={{ color: '#d64545' }} />
             <Statistic title="失败" value={batchResult.result?.failed ?? 0} />
           </div>
-          <Alert type="success" showIcon message={`批次 ${batchResult.batchId} 已记录（草稿已生成）。草稿发布前不会触发报警；重复提交同一批次不会重复生成规则。`} />
+          <Alert type="success" showIcon message={`批次 ${batchResult.batchId} 已记录，生成 ${batchResult.result?.created ?? 0} 条草稿`} />
           <Table rowKey="targetKey" size="small" pagination={false} dataSource={resultRows} columns={[
             { title: '设备', dataIndex: 'deviceName', width: 170 },
             { title: '规则编号', dataIndex: 'ruleCode', width: 150, render: (v) => v || '--' },

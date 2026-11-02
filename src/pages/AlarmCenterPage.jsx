@@ -199,7 +199,7 @@ export default function AlarmCenterPage() {
     { title: '通知', dataIndex: 'notify', width: 80, render: (v, r) => <Tooltip title={`通知策略 ${r.policy || '--'}`}><Tag color={v === '成功' ? 'success' : 'default'}>{v || '--'}</Tag></Tooltip> },
     { title: '处理人', dataIndex: 'handler', width: 80, render: v => v || '--' },
     { title: '关联维修单', dataIndex: 'relatedRepairOrderId', width: 150, render: v => (v
-      ? <Tooltip title="已生成唯一主工单；派工 / 改派在「维修任务」页面进行"><a onClick={() => navigate('/repair-orders')}>{v}</a></Tooltip>
+      ? <Tooltip title="派工 / 改派在「维修任务」页面进行"><a onClick={() => navigate('/repair-orders')}>{v}</a></Tooltip>
       : '--') },
     { title: '操作', fixed: 'right', width: 290, render: (_, r) => {
       const buttons = [];
@@ -214,7 +214,7 @@ export default function AlarmCenterPage() {
         buttons.push(<Button key="close" size="small" danger icon={<XCircle size={12} />} onClick={() => openWith(setCloseRow, r)}>关闭</Button>);
       } // 已关闭：只读，无操作按钮
       if (r.status !== '已关闭' && !r.relatedRepairOrderId) {
-        buttons.push(<Tooltip key="repair" title="生成唯一维修主工单（重复点击幂等，不重复建单）；可顺手立即派工">
+        buttons.push(<Tooltip key="repair" title="生成唯一维修主工单，可立即派工">
           <Button size="small" icon={<FilePlus2 size={12} />} onClick={() => {
             setToRepairFaultType('其他'); setToRepairDispatch(false); setToRepairAssignee(null); setToRepairGroup(null);
             setToRepairRow(r);
@@ -293,7 +293,7 @@ export default function AlarmCenterPage() {
             <Statistic title="持续 / 重复" value={`${ackRows[0].duration || '--'} · 重复 ${ackRows[0].repeat || 0} 次`} valueStyle={{ fontSize: 14 }} />
           </div>
         )}
-        <div style={{ fontSize: 12, color: '#8a97a3', marginBottom: 8 }}>确认人：当前登录人 · 确认后报警进入处理流程；重复确认会被动作层幂等拦截，不产生重复履历。</div>
+        <div style={{ fontSize: 12, color: '#8a97a3', marginBottom: 8 }}>确认人：当前登录人，确认后进入处理流程</div>
         <Input.TextArea rows={3} placeholder="确认说明（必填），如：已到现场查看，主轴温度持续上升，安排停机检查。" value={ackNote} onChange={e => setAckNote(e.target.value)} />
       </Modal>
 
@@ -308,8 +308,7 @@ export default function AlarmCenterPage() {
       >
         <Space direction="vertical" style={{ width: '100%' }} size={10}>
           <div style={{ fontSize: 12, color: '#8a97a3' }}>
-            处置提交后报警进入「处理中」；如需维修请使用列表中的「转维修」生成唯一主工单（已关联工单的报警显示跳转链接），
-            派工与改派统一在「维修任务」页面进行。
+            提交后报警进入「处理中」
           </div>
           <Input.TextArea rows={3} placeholder="处置措施（必填），如：已更换冷却液并清洗管路，持续观察温度回落。" value={handleMeasure} onChange={e => setHandleMeasure(e.target.value)} />
           <DatePicker showTime style={{ width: '100%' }} placeholder="请选择预计恢复时间" value={handleExpectedAt} onChange={v => setHandleExpectedAt(v)} />
@@ -333,7 +332,7 @@ export default function AlarmCenterPage() {
         )}
         <Space direction="vertical" style={{ width: '100%' }} size={10}>
           <div style={{ fontSize: 12, color: '#8a97a3' }}>
-            将生成唯一维修主工单并回写至本报警（重复点击幂等，不重复建单）；工单等级按报警严重度自动映射，SLA 时限同步继承。
+            将生成唯一维修主工单并回写本报警
           </div>
           <Space wrap size={4}>
             <span style={{ fontSize: 12, color: '#5d6b78' }}>故障类型</span>
@@ -346,7 +345,7 @@ export default function AlarmCenterPage() {
               <span style={{ fontSize: 13 }}>转维修时直接派工（跳过待维修队列）</span>
             </Space>
             <div style={{ fontSize: 12, color: '#8a97a3', marginTop: 4, marginLeft: 36 }}>
-              已明确维修人时勾选，一步生成「已派工」工单；不勾选则工单为「待派工」，进入待维修看板由调度统一排程派工。
+              勾选后生成「已派工」工单；不勾选进入待派工。
             </div>
           </div>
           {toRepairDispatch && (
@@ -374,12 +373,12 @@ export default function AlarmCenterPage() {
       >
         {recoverRow && (
           <div style={{ fontSize: 12, color: '#8a97a3', marginBottom: 8 }}>
-            该报警恢复口径：<b>{recoverRow.recovery || '--'}</b>。
+            恢复口径：<b>{recoverRow.recovery || '--'}</b>
             {recoverRow.recovery === '自动恢复'
               ? (recoverRow.relatedRepairOrderId || recoverRow.relatedDowntimeId
-                ? '存在关联工单或停机，恢复后进入「已恢复待关闭」；关闭仍需通过业务闭环校验。'
-                : '无业务关联的自动恢复类规则登记恢复后将自动关闭。')
-              : '登记恢复后进入「已恢复待关闭」，需再填写恢复证据与关闭原因完成关闭。'}
+                ? '，恢复后进入「已恢复待关闭」'
+                : '，登记后自动关闭')
+              : '，登记后进入「已恢复待关闭」'}
           </div>
         )}
         <Input.TextArea rows={3} placeholder="恢复证据（必填），如：主轴温度回落至 72℃，持续 30s 满足恢复条件。" value={recoverEvidence} onChange={e => setRecoverEvidence(e.target.value)} />
@@ -396,8 +395,7 @@ export default function AlarmCenterPage() {
       >
         {closeRow && (
           <div style={{ fontSize: 12, color: '#8a97a3', marginBottom: 8 }}>
-            该报警触发规则 <b>{closeRow.rule}</b>（恢复口径：{closeRow.recovery || '--'}）。关闭前系统将校验关闭前置条件
-            （指标已恢复、关联维修工单已完成验收、关联停机已结束），不满足时拒绝关闭并提示原因。
+            触发规则 <b>{closeRow.rule}</b>（恢复口径：{closeRow.recovery || '--'}）；不满足关闭前置条件将拒绝关闭。
           </div>
         )}
         <Space direction="vertical" style={{ width: '100%' }} size={10}>

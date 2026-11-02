@@ -716,6 +716,8 @@ export function validateRuleDraft(rule, ctx = {}) {
 
   // ---- 同目标同类型重复（警告：批量提交时将跳过） ----
   function warnDuplicate(rule2, typeLabel, target, ctx2, warns) {
+    // 未选定目标设备时不查重：空表单报「同目标已存在规则」没有意义
+    if (!target?.deviceId) return;
     const rules = Object.values(ctx2.alarmRulesById || {});
     const sameMetric = (r) => {
       if (typeLabel === '质量') return !r.target?.metricCode && r.target?.deviceId === target?.deviceId;

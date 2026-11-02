@@ -180,8 +180,8 @@ export default function PatrolPlansPage() {
         <Alert
           type="info" showIcon style={{ marginBottom: 16 }}
           message={editing
-            ? '编辑保存后，变更内容直接更新到今天及后续按计划生成的巡检任务（执行周期不可修改）。'
-            : '保存后系统按巡检线路 + 周期 + 跳过规则自动生成巡检任务，无需手工逐条新建。'}
+            ? '保存后同步到今天及后续任务，周期不可修改'
+            : '保存后按周期自动生成巡检任务'}
         />
         <Form form={form} layout="vertical">
           <Form.Item label="计划编号" name="code"><Input disabled /></Form.Item>

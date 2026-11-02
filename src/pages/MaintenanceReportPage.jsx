@@ -234,7 +234,7 @@ export default function MaintenanceReportPage() {
       >
         <Space direction="vertical" size={8}>
           <Typography.Text>
-            导出内容：按设备 / 执行人聚合的保养执行统计报表（含计划完成率与异常率明细）。
+            导出内容：按设备 / 执行人聚合的保养执行统计。
           </Typography.Text>
         </Space>
       </Modal>

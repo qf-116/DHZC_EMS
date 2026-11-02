@@ -174,7 +174,7 @@ export default function RepairPendingPage() {
             </div>
             {dispatchItem.kind === 'report' && (
               <div style={{ fontSize: 12, color: '#8a6d3b', background: '#fffbe6', border: '1px solid #ffe58f', borderRadius: 6, padding: '6px 10px', marginBottom: 12 }}>
-                该报修单尚未生成维修工单，确认派工后将自动创建主工单并完成派工。
+                尚未生成维修工单，确认后自动创建并派工。
               </div>
             )}
             <Form form={form} layout="vertical" initialValues={{ assigneeGroup: '机修班' }}>

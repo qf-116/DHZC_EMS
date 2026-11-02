@@ -168,8 +168,8 @@ export default function MetricHistoryPanel({ device, realtime, metricsByKey, ref
       <Alert
         type="info" showIcon
         message={targets.length === 0
-          ? '该设备绑定的指标当前无采样数据（设备离线或未上报）：无数据不存储、不生成空记录；恢复上报后历史数据将在此展示。'
-          : `查询范围：${applied.range[0].format('YYYY-MM-DD HH:mm')} 至 ${applied.range[1].format('YYYY-MM-DD HH:mm')}，共 ${rows.length} 个拉取时间点，按采集时间升序排列。按绑定整体拉取：一次拉取覆盖全部来源设备的全部指标，同行采集时间一致；约 2% 批次延迟（橙色，悬停看接收时间）。${excludedCount > 0 ? `另有 ${excludedCount} 个指标无采样数据（离线 / 无值），未存储记录、不列入展示。` : ''}`}
+          ? '该设备绑定的指标当前无采样数据'
+          : `查询范围：${applied.range[0].format('YYYY-MM-DD HH:mm')} 至 ${applied.range[1].format('YYYY-MM-DD HH:mm')}，共 ${rows.length} 个拉取时间点${excludedCount > 0 ? `；${excludedCount} 项指标无采样数据，未存储未展示` : ''}`}
       />
       <Table
         rowKey="key" size="small" style={{ marginTop: 12 }}

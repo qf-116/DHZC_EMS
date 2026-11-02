@@ -365,9 +365,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
                   const item = draftItems.find((i) => i.iotDeviceId === s.iotDeviceId);
                   if (!item) return <span style={{ color: '#b6c2cc' }}>--</span>;
                   return (
-                    <Tooltip title="指标自动发现：保存启用后将全量接入并存储这些指标">
-                      <Tag color="cyan" style={{ cursor: 'help' }}>将接入 {(item.metrics || []).length} 项</Tag>
-                    </Tooltip>
+                    <Tag color="cyan">将接入 {(item.metrics || []).length} 项</Tag>
                   );
                 },
               },
@@ -375,7 +373,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
                 title: '占用状态', width: 140,
                 render: (_, s) => (occupiedCodes.has(s.iotDeviceCode)
                   ? (
-                    <Tooltip title="仅提示：该编码已被其它设备绑定，不影响本次绑定（业务允许多台设备绑定同一来源）">
+                    <Tooltip title="该编码已被其它设备绑定，不影响本次绑定">
                       <Tag color="warning" style={{ cursor: 'help' }}>已被其它设备占用</Tag>
                     </Tooltip>
                   )
@@ -558,12 +556,8 @@ function MonitorConfigModal({ deviceId, deviceName, open, onClose }) {
         </Button>,
       ]}
     >
-      <Alert
-        type="info" showIcon style={{ marginBottom: 12 }}
-        message="该设备的全部接入指标已在持续存储；勾选 = 纳入监控（曲线 / 实时监测呈现），不勾选 = 仅存储不做监控，可随时在设备台账「数据指标历史」中查看。勾选后请点击「确认」统一生效，直接取消则不保存本次修改。"
-      />
       {!binding ? (
-        <div style={{ color: '#8a97a3', fontSize: 12 }}>该设备尚未创建绑定：请先完成设备绑定。</div>
+        <div style={{ color: '#8a97a3', fontSize: 12 }}>该设备尚未创建绑定</div>
       ) : (
         items.map((item) => {
           const monitoredOfItem = (item.metrics || []).filter((m) => draftFlags[`${item.iotDeviceId}:${m.metricCode}`]).length;

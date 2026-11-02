@@ -191,7 +191,7 @@ export default function RuleTemplatePage() {
           <div style={{ fontSize: 13, lineHeight: 2 }}>
             <div>生成草稿 {created} 条，已有规则跳过 {skipped}，阻断 {blocked}。</div>
             {results.map((r) => <div key={r} style={{ fontSize: 12, color: '#5d6b78' }}>· {r}</div>)}
-            <div style={{ marginTop: 8, fontSize: 12, color: '#8a97a3' }}>草稿已入库（DemoStore 批次记录），请到「报警规则配置」逐条确认参数后发布。</div>
+            <div style={{ marginTop: 8, fontSize: 12, color: '#8a97a3' }}>草稿已入库，请在「报警规则配置」确认后发布。</div>
           </div>
         ),
       });
@@ -280,7 +280,7 @@ export default function RuleTemplatePage() {
             <Form.Item label="适用指标说明" name="metricType" rules={[{ required: true, message: '请输入适用指标类型' }]}>
               <Input placeholder="如：温度类指标（主轴/冷却液/轴承温度）" />
             </Form.Item>
-            <Form.Item label="适用指标（canonical，限定模板可套用的指标；应用到设备时按启用绑定匹配）" name="applicableMetricCodes">
+            <Form.Item label="适用指标（canonical，限定模板可套用的指标）" name="applicableMetricCodes">
               <Select mode="multiple" placeholder="选择适用的平台指标" options={applicableOptions} maxTagCount="responsive" />
             </Form.Item>
             <Space wrap>
@@ -355,7 +355,7 @@ export default function RuleTemplatePage() {
               maxTagCount="responsive"
             />
             <div style={{ fontSize: 12, color: '#8a97a3', marginTop: 8, lineHeight: 1.7 }}>
-              将按各设备<b>当前启用绑定</b>匹配模板适用指标，每个匹配目标生成 1 条独立规则草稿（独立批次记录、已有规则跳过）；生成后为草稿状态，需逐条确认参数后发布。
+              每个匹配目标生成 1 条独立规则草稿，不直接发布。
             </div>
           </>
         )}

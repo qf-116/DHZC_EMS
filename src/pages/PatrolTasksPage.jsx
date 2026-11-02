@@ -152,7 +152,7 @@ export default function PatrolTasksPage() {
       >
         <Alert
           type="info" showIcon style={{ marginBottom: 16 }}
-          message={editing ? '编辑保存后同步更新该任务的执行信息。' : '临时任务不从巡检计划生成，适用于临时安排的巡检工作。'}
+          message={editing ? '保存后同步更新执行信息' : '临时任务不从巡检计划生成'}
         />
         <Form form={form} layout="vertical">
           <Form.Item label="任务编号" name="code"><Input disabled /></Form.Item>

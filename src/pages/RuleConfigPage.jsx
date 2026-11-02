@@ -1,12 +1,12 @@
 import React from 'react';
 import { Card, Table, Tag, Button, Space, Select, App, Input, InputNumber, Switch, Alert, Modal, Statistic, Tooltip, Cascader, Radio } from 'antd';
-import { Plus, TestTube2, Zap, Info, Copy, Layers } from 'lucide-react';
+import { Plus, TestTube2, Zap, Copy, Layers } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import { metricAlarmTemplates, ruleTemplates } from '../data/demoData.js';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import {
   resolveRuleTargets, createEmptyRuleForm, ruleToForm, formToRule, switchRuleFormType,
-  validateRuleDraft, conditionTextOf, recoveryTextOf, replayTrend, ruleGroupInfo,
+  validateRuleDraft, conditionTextOf, replayTrend, ruleGroupInfo,
   LEGACY_BUSINESS_RULE_TYPES, NUMERIC_TRIGGER_MODES,
 } from '../domain/alarmRule.js';
 import RuleBatchModal from '../components/RuleBatchModal.jsx';
@@ -22,16 +22,7 @@ import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 // - 批量新建：同类指标逐目标预览，只生成草稿（见 RuleBatchModal）。
 const hint = { fontSize: 12, color: '#5d6b78', lineHeight: 1.7 };
 
-const InfoTip = ({ text }) => (
-  <Tooltip title={<div style={{ maxWidth: 320, lineHeight: 1.7 }}>{text}</div>}>
-    <Info size={13} style={{ color: '#8a97a3', cursor: 'help', verticalAlign: '-2px', marginLeft: 4 }} />
-  </Tooltip>
-);
-
 const RULE_TYPE_LABEL = { threshold: '阈值规则', state: '状态规则', quality: '质量规则', combo: '组合规则' };
-
-// 静默窗口展示文本
-const silenceText = (windows) => (windows || []).map((w) => `${w.start}-${w.end}`).join('、') || '';
 
 export default function RuleConfigPage() {
   const { message, modal } = App.useApp();
@@ -40,6 +31,8 @@ export default function RuleConfigPage() {
   const E = state.entities;
 
   const [open, setOpen] = React.useState(false);
+  // 校验提示只在提交后才出现：新建空表单时直接报「名称必填/必须选设备」没有意义
+  const [submitAttempted, setSubmitAttempted] = React.useState(false);
   const [editing, setEditing] = React.useState(null);          // 编辑中的规则（新增为 null）
   const [form, setForm] = React.useState(() => createEmptyRuleForm());
   const [testOpen, setTestOpen] = React.useState(false);
@@ -115,12 +108,14 @@ export default function RuleConfigPage() {
   const openCreate = () => {
     setEditing(null);
     setImportedTpl(null);
+    setSubmitAttempted(false);
     setForm(createEmptyRuleForm());
     setOpen(true);
   };
   const openEdit = (r) => {
     setEditing(r);
     setImportedTpl(null);
+    setSubmitAttempted(false);
     // 待发布草稿优先回填；legacy 规则经 adapter 解析，解析不出则保持默认并只读展示
     const src = r.draftConfig || r;
     setForm(ruleToForm(src));
@@ -217,6 +212,7 @@ export default function RuleConfigPage() {
   }, [form, open, legacyLocked]);
 
   const saveRule = ({ publish = false } = {}) => {
+    setSubmitAttempted(true);
     const rule = buildRule();
     const res = publish ? actions.saveAndPublishRule(rule) : actions.saveRuleDraft(rule);
     if (!res.ok) {
@@ -478,17 +474,17 @@ export default function RuleConfigPage() {
           <Space direction="vertical" style={{ width: '100%' }} size={12}>
             {legacyLocked && (
               <Alert type="warning" showIcon
-                message="该规则为旧版业务规则或区间等结构（结构化编辑将在后续版本开放），当前仅可查看，不能修改。"
+                message="旧版业务规则仅可查看，不能修改。"
                 description={editing ? `规则类型：${editing.type}；触发条件：${editing.condition || '--'}` : ''}
               />
             )}
             {editingFromDraft && !legacyLocked && (
-              <Alert type="info" showIcon message={`该规则存在待发布草稿，当前编辑的是草稿内容；当前发布版本 ${editing.publishedVersion || editing.version} 不受影响，发布后生成新版本。`} />
+              <Alert type="info" showIcon message={`当前编辑的是待发布草稿；已发布版本 ${editing.publishedVersion || editing.version} 不受影响，发布后生成新版本。`} />
             )}
-            {validation.errors.length > 0 && (
+            {submitAttempted && validation.errors.length > 0 && (
               <Alert type="error" showIcon message={<>保存前需修正以下问题：<br />{validation.errors.map((e, i) => <div key={i}>· {e}</div>)}</>} />
             )}
-            {validation.warnings.length > 0 && (
+            {submitAttempted && validation.warnings.length > 0 && (
               <Alert type="warning" showIcon message={<>提示：<br />{validation.warnings.map((e, i) => <div key={i}>· {e}</div>)}</>} />
             )}
 
@@ -509,15 +505,9 @@ export default function RuleConfigPage() {
               )}
               <Select value={form.type} disabled={legacyLocked} onChange={changeRuleType} style={{ width: 130 }} options={[{ value: 'threshold', label: '阈值' }, { value: 'state', label: '状态' }, { value: 'quality', label: '质量' }, { value: 'combo', label: '组合' }]} />
               <Select value={form.severity} disabled={legacyLocked} onChange={(v) => patch({ severity: v })} style={{ width: 100 }} options={['紧急', '重要', '一般', '提示'].map((v) => ({ value: v, label: v }))} />
-              <Tag color="red" style={{ marginInlineEnd: 0 }}>判定数据源：实时订阅流（由目标指标自动确定）</Tag>
             </Space>
 
-            <Card size="small" title={<>
-              {form.type === 'quality' ? '质量监控对象（选择设备，监控其数据链路质量，无需选择指标）' : '规则目标（设备 → 子设备 → 指标 级联，仅限当前启用绑定中的已勾选指标）'}
-              <InfoTip text={form.type === 'quality'
-                ? '质量规则作用于设备的数据链路质量（订阅断开、拉取超时、BAD 质量码占比、采集延迟），不作用于指标数值，因此不出现指标级联与阈值/回差配置。'
-                : '级联来自正式设备绑定事实：① 系统设备（canonical 编号 DEV-*）→ ② 来源设备（主设备 / 传感器）→ ③ 已勾选指标。停用绑定与失效指标不进入可选范围；状态规则仅可选状态类 S.* 指标；换绑后需确认规则仍有效。'} />
-            </>}>
+            <Card size="small" title="规则目标">
               <Space direction="vertical" style={{ width: '100%' }}>
                 {form.type === 'quality' ? (
                   <Select
@@ -547,16 +537,12 @@ export default function RuleConfigPage() {
                     指标：{currentTarget.metric.name}（{currentTarget.metricCode}）· 单位 {currentTarget.metric.unit || '--'} · {currentTarget.metric.enumValues ? `取值 ${currentTarget.metric.enumValues.join(' / ')}` : `量程 ${currentTarget.metric.range ? `${currentTarget.metric.range.min} ~ ${currentTarget.metric.range.max}` : '--'}`}
                   </div>
                 )}
-                {importedTpl && (
-                  <Alert type="success" showIcon
-                    message={<>已按规则模板「<b>{importedTpl.name}</b>」导入参数，可修改。更换指标时模板参数保持不变。</>} />
-                )}
               </Space>
             </Card>
 
             <Card
               size="small"
-              title={<>① 触发条件<InfoTip text="阈值：持续时间为 0 时立即触发，仅建议状态类使用；区间 = 值超出正常区间任一方向即候选，双向共用一条规则。状态：取值落入异常枚举立即触发，状态恢复即恢复。质量：监控数据链路（中断 / 无效率 / 延迟），异常持续 N 分钟判定为质量事件。组合：多条件 AND / OR，各子条件独立配置目标与阈值。样本数据无效（null / BAD / OFFLINE）不参与触发判定。" /></>}
+              title="① 触发条件"
               extra={<Tag color="blue">{RULE_TYPE_LABEL[form.type]}配置方式</Tag>}
             >
               <Space direction="vertical" style={{ width: '100%' }} size={8}>
@@ -622,7 +608,6 @@ export default function RuleConfigPage() {
                         maxTagCount="responsive"
                       />
                     </Space>
-                    <div style={hint}>异常与正常枚举不能重叠；状态规则立即触发（持续时间 0），状态恢复即恢复。</div>
                   </>
                 )}
                 {form.type === 'quality' && (
@@ -659,7 +644,6 @@ export default function RuleConfigPage() {
                         </>
                       )}
                     </Space>
-                    <div style={hint}>质量判定数据为数据链路质量汇总（分钟级聚合），触发时按设备当前通信健康事实（状态 / 延迟 / 质量率）判定，不依赖指标样本值。</div>
                   </>
                 )}
                 {form.type === 'combo' && (
@@ -713,20 +697,18 @@ export default function RuleConfigPage() {
                     </Button>
                   </>
                 )}
-                <div style={hint}>触发条件文本：{conditionTextOf(form.triggerConfig)}</div>
               </Space>
             </Card>
 
             <Card
               size="small"
-              title={<>② 恢复条件<InfoTip text="回差（迟滞带）防止值在阈值附近震荡导致反复横跳；区间恢复带上下回差独立配置；状态规则状态恢复即恢复；质量规则数据恢复正常持续后恢复；组合规则全部子条件回到非触发态并稳定后恢复。恢复需 GOOD 数据稳定持续；恢复过程中再次超限，稳定计时归零。有维修工单关联时指标恢复后仍需业务验收才能关闭。" /></>}
+              title="② 恢复条件"
               extra={<Tag color="blue">{RULE_TYPE_LABEL[form.type]}恢复口径</Tag>}
             >
               <Space direction="vertical" style={{ width: '100%' }} size={8}>
                 <Space wrap>
                   <span>恢复方式</span>
                   <Select value="auto" disabled style={{ width: 190 }} options={[{ value: 'auto', label: '自动恢复（满足条件）' }, { value: 'business', label: '恢复后业务闭环（随维修验收）' }, { value: 'manual', label: '人工确认关闭' }]} />
-                  <span style={hint}>自动恢复为默认；有维修工单/停机关联时恢复后仍需业务闭环才能关闭</span>
                 </Space>
                 {form.type === 'threshold' && ['rangeOut', 'rangeIn'].includes(form.triggerConfig.mode) && (
                   <Space wrap>
@@ -768,22 +750,12 @@ export default function RuleConfigPage() {
                     </Space>
                   </>
                 )}
-                {form.type === 'state' && (
-                  <div style={hint}>状态恢复即恢复：状态回到正常枚举（{form.triggerConfig.normalValues.join('、') || '未配置'}）后进入恢复流程；无阈值与回差概念。</div>
-                )}
-                {form.type === 'quality' && (
-                  <div style={hint}>数据质量恢复正常（质量码 GOOD 且拉取/订阅成功）持续 {form.recoveryConfig.stabilize.durationSec}s 后自动恢复；不涉及阈值回差。</div>
-                )}
-                {form.type === 'combo' && (
-                  <div style={hint}>组合规则恢复：{form.triggerConfig.operator === 'OR' ? '所有处于触发态的子条件' : '全部子条件'}回到非触发态并持续 {form.recoveryConfig.stabilize.durationSec}s 后恢复；各子条件阈值独立，回差在子条件内消化。</div>
-                )}
-                <div style={hint}>恢复条件文本：{recoveryTextOf(form.recoveryConfig, form.triggerConfig)}</div>
               </Space>
             </Card>
 
             <Card
               size="small"
-              title={<>③ 重复报警抑制<InfoTip text="活动事件未关闭期间命中同一去重键时合并计数（系统统一口径，不可关闭）；重复提醒不新建事件；报警关闭后再次触发必须新建事件。提醒间隔与次数为本规则可调参数，随版本快照保存。" /></>}
+              title="③ 重复报警抑制"
             >
               <Space direction="vertical" size={8}>
                 <Switch disabled checkedChildren="活动事件未关闭期间抑制重复触发（系统统一口径）" checked />
@@ -802,7 +774,7 @@ export default function RuleConfigPage() {
 
             <Card
               size="small"
-              title={<>④ 报警风暴保护（限流合并）<InfoTip text="统计窗口内新建事件达到上限后，超出部分按超限动作处理（合并计入首条事件或降级 / 暂停新建），并生成系统提示；风暴结束后自动解除。限流只兜底极端风暴，正常抖动应由抑制与回差消化；参数随版本快照保存。" /></>}
+              title="④ 报警风暴保护（限流合并）"
             >
               <Space direction="vertical" size={8}>
                 <Space wrap>
@@ -829,7 +801,7 @@ export default function RuleConfigPage() {
 
             <Card
               size="small"
-              title={<>⑤ 静默时段（规则级）<InfoTip text="静默时段内满足触发条件只记录不通知。启用规则级静默后以本规则配置的时段为准；计划停机静默始终联动「计划停机配置」。最终生效口径随版本快照保存。" /></>}
+              title="⑤ 静默时段（规则级）"
             >
               <Space direction="vertical" size={8} style={{ width: '100%' }}>
                 <Space wrap>
@@ -840,9 +812,6 @@ export default function RuleConfigPage() {
                   />
                   <Switch disabled checkedChildren="计划停机期间静默" checked />
                 </Space>
-                <div style={hint}>
-                  本规则静默：{form.silenceConfig.enabled ? (silenceText(form.silenceConfig.windows) || '未配置时段') : '未启用'} ／ 计划停机期间始终静默
-                </div>
                 {form.silenceConfig.enabled && (
                   <>
                     {form.silenceConfig.windows.map((w, idx) => (
@@ -887,7 +856,7 @@ export default function RuleConfigPage() {
                   <Statistic title="生成事件" value={backtest.replay.events} suffix="条" valueStyle={{ color: '#00b8d4' }} />
                   <Statistic title="被抑制 / 合并" value={backtest.replay.suppressed} suffix="点" valueStyle={{ color: '#d97706' }} />
                 </div>
-                <Alert type="success" showIcon message={`已按当前配置（${conditionTextOf(testForm.triggerConfig)}）对 ${backtest.key} 最近 ${backtest.replay.points} 个采样点（60s 间隔）真实回放：持续时间、无效数据与活动事件抑制口径与执行层一致。若被抑制占比过高，建议增大回差或延长持续时间。`} />
+                <Alert type="success" showIcon message={`已按当前配置（${conditionTextOf(testForm.triggerConfig)}）对 ${backtest.key} 最近 ${backtest.replay.points} 个采样点（60s 间隔）真实回放。`} />
               </>
             ) : (
               <>
@@ -896,7 +865,7 @@ export default function RuleConfigPage() {
                   <Statistic title="实际生成事件" value={testRule.trig7d || 0} suffix="条" valueStyle={{ color: '#00b8d4' }} />
                   <Statistic title="被抑制 / 合并" value={testRule.supp7d || 0} suffix="次" valueStyle={{ color: '#d97706' }} />
                 </div>
-                <Alert type="info" showIcon message={`该目标（${backtest.key}）暂无历史趋势采样数据，无法按当前配置真实回放；以上为该规则近 7 天种子统计（含抑制口径）。接入趋势数据的目标（如主轴温度、冷却液温度、油压）支持真实回放。`} />
+                <Alert type="info" showIcon message={`该目标（${backtest.key}）暂无历史趋势采样数据，以下为该规则近 7 天种子统计（含抑制口径）。`} />
               </>
             )}
           </>
@@ -914,7 +883,7 @@ export default function RuleConfigPage() {
       >
         <Space direction="vertical" style={{ width: '100%' }} size={10}>
           <Alert type="info" showIcon
-            message={<>将修改：{selectedRules.map((r) => r.code).join('、')}。留空的字段不修改；每条规则保持自身触发模式（越上/下限应用阈值，区间应用上下限），保存后逐条生成<b>待发布草稿</b>，当前发布版本与版本快照不受影响，需发布后生效。</>} />
+            message={<>将修改：{selectedRules.map((r) => r.code).join('、')}。留空的字段不修改；保存后逐条生成<b>待发布草稿</b>，需发布后生效。</>} />
           <Space wrap>
             <div><div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>报警等级</div>
               <Select allowClear placeholder="不修改" style={{ width: 120 }} value={beForm.severity} onChange={(v) => setBeForm({ ...beForm, severity: v ?? null })}
@@ -965,7 +934,6 @@ export default function RuleConfigPage() {
             <div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>适用指标说明</div>
             <Input value={saveTplScope} onChange={(e) => setSaveTplScope(e.target.value)} placeholder={currentTarget ? `如：${currentTarget.metric.name}类指标` : '如：温度类指标'} />
           </div>
-          <Alert type="info" showIcon message="模板保存触发 / 恢复 / 治理参数（不含设备目标与指标绑定）；可在「报警规则模板」页维护，新增规则时导入或批量应用到设备。模板更新不回写已发布规则。" />
         </Space>
       </Modal>
 

@@ -251,7 +251,6 @@ export default function RepairExecutePage() {
       {/* 挂起弹窗（必填原因） */}
       <Modal title={`挂起工单（${order.code}）`} width={480} open={pauseOpen} destroyOnClose
         onCancel={() => setPauseOpen(false)} onOk={doPause} okText="确认挂起" cancelText="取消">
-        <Alert type="warning" showIcon style={{ marginBottom: 12 }} message="挂起需填写原因（留痕）；恢复维修请在挂起状态点击「恢复维修」。" />
         <Form form={pauseForm} layout="vertical">
           <Form.Item label="挂起原因" name="reason" required rules={[{ required: true, message: '请填写挂起原因' }]}>
             <Input.TextArea rows={3} placeholder="如：等待备件到货、需外协支持等" maxLength={200} showCount />
@@ -263,7 +262,7 @@ export default function RepairExecutePage() {
       <Modal title={`提交验收（${order.code}）`} width={620} open={submitOpen} destroyOnClose
         onCancel={() => setSubmitOpen(false)} onOk={doSubmit} okText="提交验收" cancelText="取消">
         <Alert type="info" showIcon style={{ marginBottom: 12 }}
-          message="提交后工单进入「待验收」，验收通过后设备才恢复、关联停机结束、关联报警进入恢复流程。" />
+          message="提交后工单进入「待验收」" />
         {order.parts?.length > 0 && (
           <div style={{ fontSize: 13, background: '#f6f9fb', border: '1px solid #e8eef2', borderRadius: 8, padding: '6px 10px', marginBottom: 12 }}>
             本次更换备件：{order.parts.map(p => `${p.spareName || p.spareCode || '--'} ×${p.qty ?? '--'}`).join('；')}

@@ -170,7 +170,7 @@ export default function SystemRolesPage() {
         cancelText="取消"
       >
         <Alert type="info" showIcon style={{ marginBottom: 16 }}
-          message="角色编码创建后不可修改；功能权限请通过「分配权限」单独配置" />
+          message="角色编码创建后不可修改" />
         <Form form={form} layout="vertical">
           <Form.Item label="角色编号（自动生成，不可编辑）" name="roleId" rules={[{ required: true, message: '请输入角色编号' }]}>
             <Input disabled placeholder="保存时自动生成" />
@@ -206,8 +206,6 @@ export default function SystemRolesPage() {
         okText="保存权限"
         cancelText="取消"
       >
-        <Alert type="info" showIcon style={{ marginBottom: 12 }}
-          message="勾选菜单/页面即授予访问权；基础配置节点为操作级权限。保存后权限在用户下次进入页面时刷新生效。" />
         <div style={{ maxHeight: 420, overflow: 'auto', border: '1px solid #e5e9f0', borderRadius: 8, padding: 8 }}>
           <Tree
             checkable

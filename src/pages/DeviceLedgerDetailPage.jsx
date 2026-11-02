@@ -685,13 +685,9 @@ export function DeviceLedgerDetailContent({ state, deviceId: suppliedDeviceId, e
         okText={`确定（已选 ${curveDraft.length} 项）`}
         cancelText="取消"
       >
-        <Alert
-          type="info" showIcon style={{ marginBottom: 12 }}
-          message="仅列出该设备绑定（启用）来源中类型为「数值」的指标；状态 / 事件类指标（S.*）不参与曲线监控。可多选，确定后在「状态与趋势」栏目形成各指标的曲线趋势图。"
-        />
         {numericMetricOptions.length === 0 ? (
           <div style={{ color: '#8a97a3', fontSize: 12, padding: '8px 0' }}>
-            该设备监控中（monitored）的数值类指标为空：请先在「物联网接入配置 · 监控指标配置」中把数值型指标勾选纳入监控。
+            该设备暂无监控中的数值指标
           </div>
         ) : (
           <div style={{ border: '1px solid #eef1f4', borderRadius: 6, padding: '8px 12px', maxHeight: 320, overflow: 'auto' }}>

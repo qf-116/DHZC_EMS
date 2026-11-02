@@ -146,10 +146,6 @@ export default function LifecycleTasksPage({ mode = null }) {
 
   const procurementFields = (
     <>
-      <Alert
-        type="info" showIcon style={{ marginBottom: 16 }}
-        message="本表单无需填写设备编号：设备编码在「设备办理手续入账」节点由系统按采购数量自动批量生成，并自动与本任务建立关联（任务 ↔ 设备台账）。"
-      />
       {!selected && (
         <Form.Item label="来源说明" name="sourceNote" rules={[{ required: true, message: '手工新增时请填写来源说明' }]}><Input.TextArea rows={2} placeholder="手工新增仅用于直送现场补录 / 历史设备补录 / 接口未覆盖；采购到货信息由采购系统（SRM/WMS）同步生成，无需手工新建" /></Form.Item>
       )}
@@ -241,7 +237,7 @@ export default function LifecycleTasksPage({ mode = null }) {
         {registrationPreview && (
           <Alert
             type="info" showIcon style={{ marginBottom: 16 }}
-            message={`按采购数量 ${registrationPreview.length} 台批量生成设备台账：${registrationPreview.join('、')}。设备编码由系统自动生成，提交后自动写入台账并与本任务建立双向关联（设备档案「入账来源」↔ 本任务）。`}
+            message={`按采购数量 ${registrationPreview.length} 台批量生成：${registrationPreview.join('、')}`}
           />
         )}
         <Form form={form} layout="vertical">
@@ -269,7 +265,7 @@ export default function LifecycleTasksPage({ mode = null }) {
                       ))}
                     </Space>
                   )
-                  : <span style={{ color: '#8a97a3' }}>尚未办理设备手续入账（入账时由系统按采购数量生成设备编码）</span>,
+                  : <span style={{ color: '#8a97a3' }}>尚未办理设备手续入账</span>,
               },
             ]} />
             <div style={{ marginTop: 16, fontWeight: 600 }}>流程履历</div>

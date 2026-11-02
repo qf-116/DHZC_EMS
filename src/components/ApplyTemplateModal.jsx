@@ -6,7 +6,7 @@
 // ============================================================
 
 import React, { useMemo, useState } from 'react';
-import { App, Alert, Checkbox, Modal, Select, Typography } from 'antd';
+import { App, Checkbox, Modal, Select, Typography } from 'antd';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import { selectAllDevices } from '../state/selectors.js';
 
@@ -50,10 +50,6 @@ export default function ApplyTemplateModal({ open, initialTemplateId, onClose })
       okText={`应用到 ${deviceIds.length} 台设备`} cancelText="取消"
       okButtonProps={{ disabled: !template || deviceIds.length === 0 }}
     >
-      <Alert
-        type="info" showIcon style={{ marginBottom: 12 }}
-        message="应用模板 = 一次完成两步：① 创建设备绑定（绑定即全量接入并存储该来源上报的全部指标）② 按模板预置监控指标勾选（曲线呈现）。应用时由物联网平台为每台设备自动分配专属 IoT 来源编码（演示模拟），不会与已占用编码冲突。"
-      />
       <div style={{ marginBottom: 10 }}>
         <div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>监控指标模板</div>
         <Select
@@ -65,7 +61,7 @@ export default function ApplyTemplateModal({ open, initialTemplateId, onClose })
         />
       </div>
       <div style={{ marginBottom: 10 }}>
-        <div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>目标设备（可搜索多选，几十台上百台建议按型号分批应用）</div>
+        <div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>目标设备（可多选）</div>
         <Select
           mode="multiple" showSearch optionFilterProp="label"
           style={{ width: '100%' }} placeholder="请选择要应用模板的设备"

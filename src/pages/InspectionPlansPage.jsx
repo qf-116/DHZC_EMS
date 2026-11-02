@@ -174,8 +174,8 @@ export default function InspectionPlansPage() {
         <Alert
           type="info" showIcon style={{ marginBottom: 16 }}
           message={editing
-            ? '编辑保存后，变更内容自动同步到没有执行的任务，以及后续按新计划生成的任务（执行周期不可修改）。'
-            : '保存后系统按周期 + 间隔 + 跳过规则自动生成点检任务，无需手工逐条新建。'}
+            ? '保存后同步到未执行及后续任务，周期不可修改'
+            : '保存后按周期自动生成点检任务'}
         />
         <Form form={form} layout="vertical">
           <Form.Item label="计划编号" name="code"><Input disabled /></Form.Item>

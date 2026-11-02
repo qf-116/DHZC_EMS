@@ -191,7 +191,7 @@ export default function MaintenanceTasksPage() {
       >
         <Alert
           type="info" showIcon style={{ marginBottom: 16 }}
-          message={editing ? '编辑保存后同步更新该任务的执行信息。' : '适用于临时安排的保养工作；计划类保养任务由保养计划按周期自动生成。'}
+          message={editing ? '保存后同步更新执行信息' : '临时任务；计划类任务由计划生成'}
         />
         <Form form={form} layout="vertical">
           <Form.Item label="任务编号" name="code"><Input disabled /></Form.Item>

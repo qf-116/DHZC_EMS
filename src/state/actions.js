@@ -190,6 +190,12 @@ export function createDemoActions(state, dispatch) {
       act('binding/disable', { deviceId, reason: opts?.reason || '' }, `binding-disable:${deviceId}:v${b.version}`);
       return { ok: true, message: '绑定已停用', refs: { deviceId } };
     },
+    deleteBinding(deviceId) {
+      const b = E.bindingsByDeviceId[deviceId];
+      if (!b) return fail('该设备尚未创建绑定');
+      act('binding/delete', { deviceId }, `binding-delete:${deviceId}:${b.bindingId}`);
+      return { ok: true, message: '绑定已删除', refs: { deviceId } };
+    },
     addBindingSource(deviceId, source) {
       act('binding/addSource', { deviceId, source });
       return { ok: true, message: `已将 ${source.iotDeviceCode} 加入绑定草稿（未保存）`, refs: { deviceId } };

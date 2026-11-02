@@ -483,6 +483,14 @@ export function reducer(state, action) {
       next = addHistory(next, at, 'binding', bindingId, '保存绑定草稿，待生效', { deviceId: payload.deviceId });
       return finish(next, action, true, '绑定已保存，状态「待生效」；启用后生效，影响监测/报警/OEE/报表', { bindingId, version, deviceId: payload.deviceId }, false, at);
     }
+    case 'binding/delete': {
+      const binding = E.bindingsByDeviceId[payload.deviceId];
+      if (!binding) return reject(state, action, '该设备尚未创建绑定');
+      let next = { ...state, entities: { ...state.entities, bindingsByDeviceId: { ...E.bindingsByDeviceId, [payload.deviceId]: undefined } } };
+      next = { ...next, ui: { ...next.ui, bindingDraftsByDeviceId: { ...(next.ui.bindingDraftsByDeviceId || {}), [`draft-${payload.deviceId}`]: undefined } } };
+      next = addHistory(next, at, 'binding', binding.bindingId, '绑定已删除', { deviceId: payload.deviceId });
+      return finish(next, action, true, '绑定已删除', { deviceId: payload.deviceId }, false, at);
+    }
     case 'binding/enable': {
       const b = E.bindingsByDeviceId[payload.deviceId];
       if (!b) return reject(state, action, '该设备尚未创建绑定');

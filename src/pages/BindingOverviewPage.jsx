@@ -14,7 +14,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   App, Alert, Button, Card, Checkbox, Input, Modal, Select, Space, Steps, Table, Tag, Tooltip, Typography,
 } from 'antd';
-import { Plus, Save, Play, PauseCircle, Settings2, LayoutTemplate, Activity, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Plus, Save, Play, PauseCircle, Pencil, Trash2, LayoutTemplate, ArrowRight, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader.jsx';
 import StatusTag from '../components/StatusTag.jsx';
@@ -634,8 +634,8 @@ export default function BindingOverviewPage() {
   // UI 局部状态：弹窗开关
   const [draftTarget, setDraftTarget] = useState(null);     // { deviceId, deviceName }
   const [disableTarget, setDisableTarget] = useState(null); // { deviceId, deviceName }
+  const [deleteTarget, setDeleteTarget] = useState(null);  // { deviceId, deviceName }
   const [applyTarget, setApplyTarget] = useState(null);     // null=关闭；字符串=预选模板 id（''=不预选）
-  const [monitorTarget, setMonitorTarget] = useState(null); // { deviceId, deviceName }
   const [detailTarget, setDetailTarget] = useState(null);   // { type: sources|metrics|monitored, deviceId, deviceName }
 
   const rows = useMemo(() => selectAllDevices(state).map((d) => {
@@ -667,34 +667,37 @@ export default function BindingOverviewPage() {
   };
 
   const renderActions = (r) => {
-    const { status, binding, device } = r;
+    const { status, device } = r;
+    const blueButton = { type: 'link', size: 'small', style: { color: '#1677ff', paddingInline: 4 } };
     if (status === '未配置') {
-      return <Button type="primary" size="small" icon={<Plus size={13} />} onClick={() => setDraftTarget({ deviceId: device.deviceId, deviceName: device.name })}>新建绑定</Button>;
+      return <Button {...blueButton} icon={<Plus size={13} />} onClick={() => setDraftTarget({ deviceId: device.deviceId, deviceName: device.name })}>新建绑定</Button>;
     }
     if (status === '已启用') {
       return (
-        <Space size={4}>
-          <Button size="small" icon={<Activity size={13} />} onClick={() => setMonitorTarget({ deviceId: device.deviceId, deviceName: device.name })}>监控指标</Button>
-          <Button size="small" icon={<PauseCircle size={13} />} onClick={() => setDisableTarget({ deviceId: device.deviceId, deviceName: device.name })}>停用</Button>
-          <Tooltip title="换绑说明：打开绑定向导，修改来源与监控指标后保存；监控勾选按来源+指标自动继承；保存后进入「待生效」，再点「启用」完成换绑。">
-            <Button size="small" type="text" icon={<Settings2 size={13} />} onClick={() => setDraftTarget({ deviceId: device.deviceId, deviceName: device.name })}>换绑</Button>
-          </Tooltip>
+        <Space size={2}>
+          <Button {...blueButton} icon={<Pencil size={13} />} onClick={() => setDraftTarget({ deviceId: device.deviceId, deviceName: device.name })}>编辑</Button>
+          <Button {...blueButton} icon={<PauseCircle size={13} />} onClick={() => setDisableTarget({ deviceId: device.deviceId, deviceName: device.name })}>停用</Button>
+          <Button {...blueButton} icon={<Trash2 size={13} />} onClick={() => setDeleteTarget({ deviceId: device.deviceId, deviceName: device.name })}>删除</Button>
         </Space>
       );
     }
     if (status === '待生效') {
       return (
-        <Space size={4}>
-          <Button type="primary" size="small" icon={<Play size={13} />} onClick={() => enable(r)}>启用</Button>
-          <Button size="small" onClick={() => setDraftTarget({ deviceId: device.deviceId, deviceName: device.name })}>编辑草稿</Button>
+        <Space size={2}>
+          <Button {...blueButton} icon={<Play size={13} />} onClick={() => enable(r)}>启用</Button>
+          <Button {...blueButton} icon={<Pencil size={13} />} onClick={() => setDraftTarget({ deviceId: device.deviceId, deviceName: device.name })}>编辑</Button>
+          <Button {...blueButton} icon={<Trash2 size={13} />} onClick={() => setDeleteTarget({ deviceId: device.deviceId, deviceName: device.name })}>删除</Button>
         </Space>
       );
     }
     if (status === '已停用') {
-      // 状态机约束：已停用 → 草稿（重新绑定保存后「待生效」→「启用」），不能直接启用
-      return <Button size="small" icon={<Plus size={13} />} onClick={() => setDraftTarget({ deviceId: device.deviceId, deviceName: device.name })}>重新绑定</Button>;
+      return (
+        <Space size={2}>
+          <Button {...blueButton} icon={<Pencil size={13} />} onClick={() => setDraftTarget({ deviceId: device.deviceId, deviceName: device.name })}>编辑</Button>
+          <Button {...blueButton} icon={<Trash2 size={13} />} onClick={() => setDeleteTarget({ deviceId: device.deviceId, deviceName: device.name })}>删除</Button>
+        </Space>
+      );
     }
-    // 草稿 / 校验中 / 换绑中：草稿不持久（向导关闭即放弃），列表不出现这些状态的行内编辑入口
     return null;
   };
 
@@ -720,7 +723,7 @@ export default function BindingOverviewPage() {
         <Space wrap style={{ marginBottom: 12 }}>
           <Button type="primary" icon={<Plus size={14} />} onClick={() => setDraftTarget({})}>新建绑定</Button>
           <Button icon={<LayoutTemplate size={14} />} onClick={() => setApplyTarget('')}>模板快速接入</Button>
-          <Button icon={<Settings2 size={14} />} onClick={() => navigate('/binding-templates')}>监控指标模板管理</Button>
+          <Button icon={<Pencil size={14} />} onClick={() => navigate('/binding-templates')}>监控指标模板管理</Button>
         </Space>
         <Table
           rowKey={(r) => r.device.deviceId}
@@ -832,12 +835,22 @@ export default function BindingOverviewPage() {
         open={!!disableTarget}
         onClose={() => setDisableTarget(null)}
       />
-      <MonitorConfigModal
-        deviceId={monitorTarget?.deviceId}
-        deviceName={monitorTarget?.deviceName}
-        open={!!monitorTarget}
-        onClose={() => setMonitorTarget(null)}
-      />
+      <Modal
+        title={`删除绑定 · ${deleteTarget?.deviceName || '--'}（${deleteTarget?.deviceId || '--'}）`}
+        open={!!deleteTarget}
+        onCancel={() => setDeleteTarget(null)}
+        onOk={() => {
+          const res = actions.deleteBinding(deleteTarget.deviceId);
+          if (res.ok) { message.success(res.message); setDeleteTarget(null); } else message.error(res.message);
+        }}
+        okText="确认删除"
+        okButtonProps={{ danger: true }}
+        cancelText="取消"
+      >
+        <Typography.Paragraph style={{ marginBottom: 0 }}>
+          确定删除该设备的绑定配置吗？删除后可重新创建绑定。
+        </Typography.Paragraph>
+      </Modal>
       <BindingDetailModal
         type={detailTarget?.type}
         deviceId={detailTarget?.deviceId}

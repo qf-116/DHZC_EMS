@@ -5,7 +5,7 @@
 //   → ③ 选择监控指标（可选：不选则无曲线 / 实时监测呈现；无论选否，接入指标均全量存储，
 //   可在设备台账「数据指标历史」查看）。向导内监控勾选作用于草稿（binding/setDraftMonitored，
 //   保存时随草稿整体落库）；已保存绑定的勾选调整走行内「监控指标」（binding/setMonitored，即时生效）。
-// 状态轴：未配置 → 草稿 → 校验 → 待生效 → 已启用 → 已停用/换绑中（domain/binding.js）。
+// 状态轴：未配置 → 草稿 → 校验 → 待生效 → 已启用 → 已停用（domain/binding.js）。
 // 页面不展示绑定版本或待补偿字段；绑定关系与状态按当前配置展示。
 // DEV-008 故意未配置，用于演示「首次绑定」全流程（首绑后监控指标默认全部不勾选）。
 // ============================================================
@@ -14,7 +14,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   App, Alert, Button, Card, Checkbox, Input, Modal, Select, Space, Steps, Table, Tag, Tooltip, Typography,
 } from 'antd';
-import { Plus, Save, Play, PauseCircle, Pencil, Trash2, LayoutTemplate, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Plus, Save, Play, PauseCircle, Pencil, Trash2, Eye, LayoutTemplate, ArrowRight, ArrowLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader.jsx';
 import StatusTag from '../components/StatusTag.jsx';
@@ -75,8 +75,8 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
     keys.filter((id) => !draftItems.some((i) => i.iotDeviceId === id))
       .concat(draftItems.map((i) => i.iotDeviceId).filter((id) => !keys.includes(id))),
   );
-  // 每次打开重置向导进度：预选了设备（换绑/编辑草稿）直接进第 2 步，否则从第 1 步选设备开始。
-  // 换绑/编辑类打开时（已有绑定）：把当前绑定启用的来源带入草稿（binding/addSource 自动继承监控勾选），
+  // 每次打开重置向导进度：预选了设备（编辑/编辑草稿）直接进第 2 步，否则从第 1 步选设备开始。
+  // 编辑类打开时（已有绑定）：把当前绑定启用的来源带入草稿（binding/addSource 自动继承监控勾选），
   // 来源列表即以「已勾选」状态呈现，用户在此基础上增减后保存。
   useEffect(() => {
     if (open) {
@@ -123,7 +123,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
   const discoveredMetrics = draftItems.reduce((s, i) => s + (i.metrics || []).length, 0);
   const monitoredMetrics = draftItems.reduce((s, i) => s + (i.metrics || []).filter((m) => m.monitored).length, 0);
   const selectedDevice = allDevices.find((d) => d.deviceId === deviceId);
-  // 设备绑定情况：已有绑定（含历史停用）即视为「已绑定」——不能重复新建，只能换绑；
+  // 设备绑定情况：已有绑定（含历史停用）即视为「已绑定」——不能重复新建，只能编辑；
   // 未保存的草稿不算已绑定（放弃草稿即可重新新建）
   const boundOf = (devId) => state.entities.bindingsByDeviceId[devId] || null;
   const deviceRows = useMemo(() => {
@@ -140,7 +140,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
   const goNext = () => {
     if (step === 0) {
       if (!deviceId) { message.warning('请先选择设备管理系统的主设备'); return; }
-      if (boundOf(deviceId)) { message.warning('该设备已绑定，不能重复绑定：请关闭后使用列表中的「换绑」'); return; }
+      if (boundOf(deviceId)) { message.warning('该设备已绑定，不能重复绑定：请关闭后使用列表中的「编辑」'); return; }
       setStep(1);
       return;
     }
@@ -186,7 +186,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
 
   const footer = [
     <Button key="cancel" onClick={handleClose}>取消</Button>,
-    // 预选设备进入（换绑 / 编辑草稿 / 重新绑定）时主设备已固定，「上一步」无意义，隐藏
+    // 预选设备进入（编辑 / 编辑草稿 / 重新绑定）时主设备已固定，「上一步」无意义，隐藏
     ...(step > 0 && !presetDeviceId ? [<Button key="prev" icon={<ArrowLeft size={14} />} onClick={goPrev}>上一步</Button>] : []),
     ...(step === 0
       ? [<Button key="next" type="primary" disabled={!deviceId} onClick={goNext}>下一步：选择物联网平台子设备 <ArrowRight size={14} style={{ verticalAlign: '-2px' }} /></Button>]
@@ -238,7 +238,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
               onClick: () => {
                 if (d.bound) {
                   const b = boundOf(d.deviceId);
-                  message.warning(`设备 ${d.name} 已完成绑定（${b.configStatus}），不能重复绑定：请关闭弹窗后使用列表中的「换绑」`);
+                  message.warning(`设备 ${d.name} 已完成绑定（${b.configStatus}），不能重复绑定：请关闭弹窗后使用列表中的「编辑」`);
                   return;
                 }
                 setDeviceId(d.deviceId);
@@ -264,7 +264,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
                   const b = boundOf(d.deviceId);
                   if (!b) return <Tag color="green">未绑定</Tag>;
                   return (
-                    <Tooltip title={`已完成绑定（${b.configStatus}）：不能重复绑定，仅可在列表中「换绑」`}>
+                    <Tooltip title={`已完成绑定（${b.configStatus}）：不能重复绑定，仅可在列表中「编辑」`}>
                       <Tag color="blue" style={{ cursor: 'help' }}>已绑定</Tag>
                     </Tooltip>
                   );
@@ -430,9 +430,9 @@ function DisableBindingModal({ deviceId, deviceName, open, onClose }) {
   );
 }
 
-// ---------- 监控指标弹窗（行内操作）：按来源分组勾选监控指标。
+// ---------- 监控指标配置弹窗（保留组件供已有状态兼容） ----------
 // 2026-10-29 交互统一：勾选先暂存在弹窗本地状态，点击「确认」后统一生效（不产生新版本）；
-// 已保存绑定的事后调整入口（绑定向导第 3 步覆盖创建期勾选）。「存为模板」操作已移除 ----------
+// 已保存绑定的指标调整入口由列表「编辑」统一处理，保存时与来源设备一并生效；「存为模板」操作已移除 ----------
 function MonitorConfigModal({ deviceId, deviceName, open, onClose }) {
   const state = useDemoState();
   const actions = useDemoActions();

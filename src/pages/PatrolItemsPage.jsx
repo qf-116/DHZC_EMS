@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Card, Table, Button, Space, Input, Select, Tag, App, Modal, Form, Radio } from 'antd';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -19,6 +20,7 @@ export default function PatrolItemsPage() {
   const { message, modal } = App.useApp();
 
   const [kw, setKw] = useState('');
+  const [kwDraft, setKwDraft] = useState('');
   const [status, setStatus] = useState(null);
   const [resultType, setResultType] = useState(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -83,16 +85,20 @@ export default function PatrolItemsPage() {
     <>
       <PageHeader title="巡检项目" />
       <DegradedBanner meta={meta} />
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
-          <Input.Search style={{ width: 240 }} placeholder="项目编号 / 名称 / 内容" allowClear onSearch={setKw} onChange={e => { if (!e.target.value) setKw(''); }} />
-          <Select style={{ width: 120 }} placeholder="状态" allowClear value={status} onChange={setStatus}
+      <FilterBar onQuery={() => setKw(kwDraft)} onReset={() => { setKw(''); setKwDraft(''); setStatus(null); setResultType(null); }}>
+        <FilterField label="项目名称">
+          <Input style={{ width: 240 }} placeholder="项目编号 / 名称 / 内容" allowClear value={kwDraft}
+            onChange={e => { setKwDraft(e.target.value); if (!e.target.value) setKw(''); }} onPressEnter={() => setKw(kwDraft)} />
+        </FilterField>
+        <FilterField label="状态">
+          <Select style={{ width: 120 }} allowClear value={status} onChange={setStatus}
             options={[...new Set(patrolItems.map(r => r.status))].map(v => ({ value: v, label: v }))} />
-          <Select style={{ width: 140 }} placeholder="判断结果类型" allowClear value={resultType} onChange={setResultType}
+        </FilterField>
+        <FilterField label="判断结果类型">
+          <Select style={{ width: 140 }} allowClear value={resultType} onChange={setResultType}
             options={RESULT_TYPES.map(v => ({ value: v, label: v }))} />
-          <Button onClick={() => { setKw(''); setStatus(null); setResultType(null); }}>重置</Button>
-        </Space>
-      </Card>
+        </FilterField>
+      </FilterBar>
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
           <Button type="primary" icon={<Plus size={14} />} onClick={() => openModal(null)}>新增巡检项目</Button>

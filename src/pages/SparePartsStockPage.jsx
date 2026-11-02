@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import { useDemoState } from '../state/DemoStore.jsx';
 import { selectStockRows } from '../state/selectors.js';
 
@@ -54,8 +55,8 @@ export default function SparePartsStockPage() {
     <>
       <PageHeader title="备件库存总览" />
       <DegradedBanner meta={state.meta} />
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
+      <FilterBar onQuery={() => {}} onReset={() => { setKeyword(''); setWarehouseId(null); }}>
+        <FilterField label="备件查询">
           <Input
             style={{ width: 240 }}
             placeholder="备件编码 / 名称 / 品牌"
@@ -63,17 +64,18 @@ export default function SparePartsStockPage() {
             value={keyword}
             onChange={e => setKeyword(e.target.value)}
           />
+        </FilterField>
+        <FilterField label="仓库">
           <Select
             style={{ width: 160 }}
-            placeholder="仓库"
+            placeholder="全部仓库"
             allowClear
             value={warehouseId}
             onChange={setWarehouseId}
             options={Object.values(state.entities.warehousesById).map(w => ({ value: w.warehouseId, label: w.name }))}
           />
-          <Button onClick={() => { setKeyword(''); setWarehouseId(null); }}>重置</Button>
-        </Space>
-      </Card>
+        </FilterField>
+      </FilterBar>
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
           <Button type="primary" icon={<Inbox size={14} />} onClick={() => navigate('/spare-parts-inbound')}>到货入库</Button>

@@ -10,6 +10,7 @@ import { App, Button, Card, Input, Modal, Select, Space, Table, Tag, Typography 
 import { Download } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import { useDemoState } from '../state/DemoStore.jsx';
 import { selectProgramHandles } from '../state/selectors.js';
 
@@ -46,16 +47,14 @@ export default function ProgramHandleRecordPage() {
     <>
       <PageHeader title="比对处理记录" />
       {/* 筛选卡：查询条件独立在列表卡上方 */}
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
-          <Select style={{ width: 220 }} placeholder="设备" allowClear showSearch optionFilterProp="label"
-            value={qDevice} onChange={setQDevice} options={deviceOptions} />
-          <Input style={{ width: 240 }} allowClear placeholder="搜索：记录号 / 程序 / 处理人 / 结论"
-            value={qKw} onChange={(e) => setQKw(e.target.value)} />
-          <Button onClick={() => { setQDevice(null); setQKw(''); }}>重置</Button>
-          <span style={{ fontSize: 12, color: '#8a97a3' }}>共 {filteredRows.length} 条</span>
-        </Space>
-      </Card>
+      <FilterBar onQuery={() => {}} onReset={() => { setQDevice(null); setQKw(''); }} extra={<span style={{ fontSize: 12, color: '#8a97a3' }}>共 {filteredRows.length} 条</span>}>
+        <FilterField label="设备">
+          <Select style={{ width: 220 }} placeholder="请选择" allowClear showSearch optionFilterProp="label" value={qDevice} onChange={setQDevice} options={deviceOptions} />
+        </FilterField>
+        <FilterField label="关键词">
+          <Input style={{ width: 240 }} allowClear placeholder="记录号 / 程序 / 处理人 / 结论" value={qKw} onChange={(e) => setQKw(e.target.value)} />
+        </FilterField>
+      </FilterBar>
       {/* 列表卡：操作工具栏 → 表格 */}
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>

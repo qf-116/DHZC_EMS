@@ -2,9 +2,10 @@ import React, { useMemo, useState } from 'react';
 import { Card, Table, Tag, Button, Space, Select, DatePicker } from 'antd';
 import dayjs from 'dayjs';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { Download, Search } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { App } from 'antd';
 import PageHeader from '../components/PageHeader.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import MetricTile from '../components/MetricTile.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -161,8 +162,8 @@ export default function RepairReportPage() {
           <Button type="primary" icon={<Download size={14} />} onClick={handleExport}>导出</Button>
         </Space>
       </div>
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
+      <FilterBar onQuery={handleQuery} onReset={handleReset}>
+        <FilterField label="统计日期">
           <RangePicker
             style={{ width: 250 }} allowClear
             value={range} onChange={setRange}
@@ -172,12 +173,14 @@ export default function RepairReportPage() {
             ]}
             placeholder={['开始日期', '结束日期']}
           />
+        </FilterField>
+        <FilterField label="设备">
           <Select value={device} onChange={setDevice} style={{ width: 170 }} showSearch optionFilterProp="label" options={[{ value: 'all', label: '全部设备' }, ...deviceOptions]} />
+        </FilterField>
+        <FilterField label="状态">
           <Select value={status} onChange={setStatus} style={{ width: 130 }} options={[{ value: 'all', label: '全部状态' }, ...STATUS_KEYS.map(k => ({ value: k, label: k }))]} />
-          <Button type="primary" icon={<Search size={14} />} onClick={handleQuery}>查询</Button>
-          <Button onClick={handleReset}>重置</Button>
-        </Space>
-      </Card>
+        </FilterField>
+      </FilterBar>
       <div className="metric-grid" style={{ marginBottom: 12 }}>
         <MetricTile label="维修工单" value={totals.total} unit="单" />
         <MetricTile label="报修记录" value={reports.length || '--'} unit={reports.length ? '单' : ''} />

@@ -7,6 +7,7 @@ import { selectOeeRecomputeLog, selectDowntime } from '../state/selectors.js';
 import { fmtMinutes } from '../domain/downtime.js';
 import PageHeader from '../components/PageHeader.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 
 // 计划停机管理：统一停机事实中类别为「计划停机 / 换模」的单据。
 // 口径：可用率 = 运行时间 / (负荷时间 − 计划停机时间)，本页登记直接参与 OEE 可用率分母。
@@ -103,13 +104,14 @@ export default function PlannedDowntimePage() {
       <DegradedBanner meta={state.meta} />
       <PageHeader title="计划停机时间管理" />
       {/* 筛选卡：查询条件独立在列表卡上方 */}
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
+      <FilterBar onQuery={() => {}} onReset={() => { setKw(''); setStatus('all'); }}>
+        <FilterField label="关键词">
           <Input allowClear prefix={<Search size={13} />} placeholder="设备名称 / 停机原因 / 单号" style={{ width: 240 }} value={kw} onChange={e => setKw(e.target.value)} />
-          <Select value={status} onChange={setStatus} style={{ width: 120 }} options={[{ value: 'all', label: '全部状态' }, ...['待执行', '进行中', '已结束', '已取消'].map(s => ({ value: s, label: s }))]} />
-          <Button onClick={() => { setKw(''); setStatus('all'); }}>重置</Button>
-        </Space>
-      </Card>
+        </FilterField>
+        <FilterField label="状态">
+          <Select value={status} onChange={setStatus} style={{ width: 140 }} options={[{ value: 'all', label: '全部状态' }, ...['待执行', '进行中', '已结束', '已取消'].map(s => ({ value: s, label: s }))]} />
+        </FilterField>
+      </FilterBar>
       {/* 列表卡：操作工具栏 → 表格 */}
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>

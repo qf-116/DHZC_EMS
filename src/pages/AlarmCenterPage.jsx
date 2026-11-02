@@ -22,6 +22,7 @@ import DegradedBanner from '../components/DegradedBanner.jsx';
 import { useDemoStore, useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import { selectActiveAlarms, selectDevice, selectNotificationDeliveries } from '../state/selectors.js';
 import { FAULT_TYPES } from '../domain/repair.js';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import { users } from '../data/demo/masterData.js';
 
 // 转维修「立即派工」候选：与待维修看板派工弹窗同一份维修人员 / 班组口径
@@ -233,24 +234,29 @@ export default function AlarmCenterPage() {
       />
       <DegradedBanner meta={state.meta} />
       {/* 筛选卡：查询条件独立在列表卡上方 */}
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
-          <Select value={statusFilter} onChange={setStatusFilter} style={{ width: 140 }} options={[
+      <FilterBar onQuery={() => {}} onReset={() => { setStatusFilter('active'); setRecoveryFilter('all'); setSeverityFilter('all'); setKeyword(''); }}>
+        <FilterField label="状态">
+          <Select value={statusFilter} onChange={setStatusFilter} style={{ width: 180 }} options={[
             { value: 'active', label: '活动报警（未关闭）' }, { value: 'all', label: '全部状态' },
             ...['已触发', '已确认', '处理中', '已恢复待关闭', '已关闭'].map(v => ({ value: v, label: v })),
           ]} />
-          <Select value={recoveryFilter} onChange={setRecoveryFilter} style={{ width: 130 }} options={[
+        </FilterField>
+        <FilterField label="恢复口径">
+          <Select value={recoveryFilter} onChange={setRecoveryFilter} style={{ width: 150 }} options={[
             { value: 'all', label: '全部恢复口径' },
             ...['自动恢复', '业务闭环', '人工确认关闭'].map(v => ({ value: v, label: v })),
           ]} />
-          <Select value={severityFilter} onChange={setSeverityFilter} style={{ width: 110 }} options={[
+        </FilterField>
+        <FilterField label="等级">
+          <Select value={severityFilter} onChange={setSeverityFilter} style={{ width: 120 }} options={[
             { value: 'all', label: '全部等级' },
             ...['紧急', '重要', '一般', '提示'].map(v => ({ value: v, label: v })),
           ]} />
+        </FilterField>
+        <FilterField label="关键词">
           <Input allowClear placeholder="设备 / 报警 / 编号 / 规则" style={{ width: 220 }} value={keyword} onChange={e => setKeyword(e.target.value)} />
-          <Button onClick={() => { setStatusFilter('active'); setRecoveryFilter('all'); setSeverityFilter('all'); setKeyword(''); }}>重置</Button>
-        </Space>
-      </Card>
+        </FilterField>
+      </FilterBar>
       {/* 列表卡：操作工具栏（需勾选的批量操作默认禁用）→ 表格 */}
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>

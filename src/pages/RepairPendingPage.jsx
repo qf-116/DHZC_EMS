@@ -5,6 +5,7 @@ import PageHeader from '../components/PageHeader.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import { selectAllRepairReports, selectAllRepairOrders } from '../state/selectors.js';
 import { SLA_HOURS } from '../domain/repair.js';
@@ -103,16 +104,25 @@ export default function RepairPendingPage() {
         title="待维修"
       />
       <DegradedBanner meta={meta} />
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space size={24} align="center">
-          <Space>
-            <Button type={level === '紧急' ? 'primary' : 'default'} danger={level === '紧急'} onClick={() => setLevel(level === '紧急' ? null : '紧急')}>紧急（{counts.紧急}）</Button>
-            <Button type={level === '严重' ? 'primary' : 'default'} onClick={() => setLevel(level === '严重' ? null : '严重')} style={level === '严重' ? { background: '#fa8c16', borderColor: '#fa8c16' } : {}}>严重（{counts.严重}）</Button>
-            <Button type={level === '一般' ? 'primary' : 'default'} onClick={() => setLevel(level === '一般' ? null : '一般')}>一般（{counts.一般}）</Button>
-          </Space>
-          <Input.Search style={{ width: 280 }} placeholder="设备名称 / 报修名称 / 单号" onSearch={setKw} allowClear />
-        </Space>
-      </Card>
+      <FilterBar onQuery={() => setKw(kw)} onReset={() => { setKw(''); setLevel(null); }}>
+        <FilterField label="故障等级">
+          <Select
+            style={{ width: 140 }}
+            placeholder="全部等级"
+            allowClear
+            value={level}
+            onChange={setLevel}
+            options={[
+              { value: '紧急', label: `紧急（${counts.紧急}）` },
+              { value: '严重', label: `严重（${counts.严重}）` },
+              { value: '一般', label: `一般（${counts.一般}）` },
+            ]}
+          />
+        </FilterField>
+        <FilterField label="待派工查询">
+          <Input.Search style={{ width: 280 }} placeholder="设备名称 / 报修名称 / 单号" value={kw} onSearch={setKw} onChange={e => setKw(e.target.value)} allowClear />
+        </FilterField>
+      </FilterBar>
       {list.length === 0 ? (
         <Card size="small">
           <EmptyState

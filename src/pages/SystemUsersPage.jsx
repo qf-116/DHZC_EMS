@@ -12,6 +12,7 @@ import { Download, KeyRound, Plus, Upload } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import { useDemoState } from '../state/DemoStore.jsx';
 import { sysOrgTree, sysRoles, sysUsers } from '../data/systemConfig.js';
 
@@ -113,16 +114,20 @@ export default function SystemUsersPage() {
         title="用户管理"
         subtitle={`数据更新于 ${meta.demoDay}`}
       />
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
-          <Input.Search style={{ width: 240 }} placeholder="工号 / 姓名 / 账号 / 手机号" allowClear
-            onSearch={setKw} onChange={(e) => { if (!e.target.value) setKw(''); }} />
-          <Select style={{ width: 200 }} placeholder="所属部门" allowClear options={DEPT_OPTIONS} value={dept} onChange={setDept} />
-          <Select style={{ width: 150 }} placeholder="角色" allowClear options={ROLE_OPTIONS} value={role} onChange={setRole} />
-          <Select style={{ width: 120 }} placeholder="状态" allowClear options={STATUS_OPTIONS} value={status} onChange={setStatus} />
-          <Button onClick={() => { setKw(''); setDept(null); setRole(null); setStatus(null); }}>重置</Button>
-        </Space>
-      </Card>
+      <FilterBar onQuery={() => {}} onReset={() => { setKw(''); setDept(null); setRole(null); setStatus(null); }}>
+        <FilterField label="关键词">
+          <Input style={{ width: 240 }} placeholder="工号 / 姓名 / 账号 / 手机号" allowClear value={kw} onChange={(e) => setKw(e.target.value)} />
+        </FilterField>
+        <FilterField label="所属部门">
+          <Select style={{ width: 200 }} placeholder="请选择" allowClear options={DEPT_OPTIONS} value={dept} onChange={setDept} />
+        </FilterField>
+        <FilterField label="角色">
+          <Select style={{ width: 150 }} placeholder="请选择" allowClear options={ROLE_OPTIONS} value={role} onChange={setRole} />
+        </FilterField>
+        <FilterField label="状态">
+          <Select style={{ width: 120 }} placeholder="请选择" allowClear options={STATUS_OPTIONS} value={status} onChange={setStatus} />
+        </FilterField>
+      </FilterBar>
 
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>

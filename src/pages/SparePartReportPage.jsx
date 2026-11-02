@@ -2,9 +2,10 @@ import React, { useMemo, useState } from 'react';
 import { Card, Table, Tag, Button, Space, Select, Input, DatePicker } from 'antd';
 import dayjs from 'dayjs';
 import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { Download, Search } from 'lucide-react';
+import { Download } from 'lucide-react';
 import { App } from 'antd';
 import PageHeader from '../components/PageHeader.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import MetricTile from '../components/MetricTile.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -168,8 +169,8 @@ export default function SparePartReportPage() {
           <Button type="primary" icon={<Download size={14} />} onClick={handleExport}>导出</Button>
         </Space>
       </div>
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
+      <FilterBar onQuery={handleQuery} onReset={handleReset}>
+        <FilterField label="统计日期">
           <RangePicker
             style={{ width: 250 }} allowClear
             value={range} onChange={setRange}
@@ -179,6 +180,8 @@ export default function SparePartReportPage() {
             ]}
             placeholder={['开始日期', '结束日期']}
           />
+        </FilterField>
+        <FilterField label="备件">
           <Input.Search
             value={keyword}
             onChange={e => setKeyword(e.target.value)}
@@ -187,11 +190,11 @@ export default function SparePartReportPage() {
             style={{ width: 180 }}
             allowClear
           />
+        </FilterField>
+        <FilterField label="库存水位">
           <Select value={level} onChange={setLevel} style={{ width: 150 }} options={[{ value: 'all', label: '全部水位' }, ...levelOptions]} />
-          <Button type="primary" icon={<Search size={14} />} onClick={handleQuery}>查询</Button>
-          <Button onClick={handleReset}>重置</Button>
-        </Space>
-      </Card>
+        </FilterField>
+      </FilterBar>
       <div className="metric-grid" style={{ marginBottom: 12 }}>
         <MetricTile label="备件种类" value={rows.length} unit="种" />
         <MetricTile label="低于安全库存" value={totals.low} unit="种" color="#d97706" />

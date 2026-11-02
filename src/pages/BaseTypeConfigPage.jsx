@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Table, Button, Space, Input, Card } from 'antd';
 import { Plus } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import { baseTypes } from '../data/standardData.js';
 
 export default function BaseTypeConfigPage() {
@@ -14,12 +15,11 @@ export default function BaseTypeConfigPage() {
   return (
     <>
       <PageHeader title="基础类型配置" />
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
-          <Input.Search allowClear style={{ width: 240 }} placeholder="分类 / 可选值 / 更新人" value={kw} onChange={(e) => setKw(e.target.value)} />
-          <Button onClick={() => setKw('')}>重置</Button>
-        </Space>
-      </Card>
+      <FilterBar onQuery={() => {}} onReset={() => setKw('')}>
+        <FilterField label="关键词">
+          <Input allowClear style={{ width: 240 }} placeholder="分类 / 可选值 / 更新人" value={kw} onChange={(e) => setKw(e.target.value)} />
+        </FilterField>
+      </FilterBar>
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
           <Button type="primary" icon={<Plus size={14} />}>新增分类</Button>

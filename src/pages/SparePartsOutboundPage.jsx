@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import UserPickerModal from '../components/UserPickerModal.jsx';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 
@@ -123,25 +124,26 @@ export default function SparePartsOutboundPage() {
     <>
       <PageHeader title="出库记录" />
       <DegradedBanner meta={state.meta} />
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
+      <FilterBar onQuery={() => {}} onReset={() => { setRange(null); setTypeKw(null); }}>
+        <FilterField label="出库日期">
           <RangePicker
             style={{ width: 240 }}
-            placeholder={['请选择开始结束日期', '请选择开始结束日期']}
+            placeholder={['请选择开始日期', '请选择结束日期']}
             value={range}
             onChange={setRange}
           />
+        </FilterField>
+        <FilterField label="出库类型">
           <Select
             style={{ width: 140 }}
-            placeholder="出库类型"
+            placeholder="全部类型"
             allowClear
             value={typeKw}
             onChange={setTypeKw}
             options={['领用出库', '维修出库'].map(v => ({ value: v, label: v }))}
           />
-          <Button onClick={() => { setRange(null); setTypeKw(null); }}>重置</Button>
-        </Space>
-      </Card>
+        </FilterField>
+      </FilterBar>
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
           <Button type="primary" icon={<PackageOpen size={14} />} onClick={openOutbound}>维修领料出库</Button>

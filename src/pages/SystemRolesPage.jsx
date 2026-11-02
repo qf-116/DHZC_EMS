@@ -12,6 +12,7 @@ import { Plus, ShieldCheck } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import { useDemoState } from '../state/DemoStore.jsx';
 import { sysPermissionTree, sysRoles } from '../data/systemConfig.js';
 
@@ -107,14 +108,14 @@ export default function SystemRolesPage() {
         title="角色管理"
         subtitle="数据更新于 2026-09-16"
       />
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
-          <Input.Search style={{ width: 240 }} placeholder="角色编号 / 编码 / 名称" allowClear
-            onSearch={setKw} onChange={(e) => { if (!e.target.value) setKw(''); }} />
-          <Select style={{ width: 120 }} placeholder="状态" allowClear options={STATUS_OPTIONS} value={status} onChange={setStatus} />
-          <Button onClick={() => { setKw(''); setStatus(null); }}>重置</Button>
-        </Space>
-      </Card>
+      <FilterBar onQuery={() => {}} onReset={() => { setKw(''); setStatus(null); }}>
+        <FilterField label="关键词">
+          <Input style={{ width: 240 }} placeholder="角色编号 / 编码 / 名称" allowClear value={kw} onChange={(e) => setKw(e.target.value)} />
+        </FilterField>
+        <FilterField label="状态">
+          <Select style={{ width: 120 }} placeholder="请选择" allowClear options={STATUS_OPTIONS} value={status} onChange={setStatus} />
+        </FilterField>
+      </FilterBar>
 
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>

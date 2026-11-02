@@ -10,6 +10,7 @@ import { Download, GitCompare, Undo2 } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 
 // 参与比对的版本字段（均为快照只读字段）
 const DIFF_FIELDS = [
@@ -104,15 +105,15 @@ export default function AlarmRuleVersionPage() {
         subtitle="版本快照只读 · 不可修改 · 活动报警使用触发时版本快照 · 比对为只读展示 · 回滚 = 按历史快照内容发布为新版本（历史留痕）"
       />
       {/* 筛选卡：查询条件独立在列表卡上方 */}
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
-          <Input style={{ width: 240 }} allowClear placeholder="搜索：规则编号 / 名称" value={qKw} onChange={(e) => setQKw(e.target.value)} />
-          <Select style={{ width: 120 }} placeholder="状态" allowClear value={qStatus} onChange={setQStatus}
+      <FilterBar onQuery={() => {}} onReset={() => { setQKw(''); setQStatus(null); }} extra={<span style={{ fontSize: 12, color: '#8a97a3' }}>共 {filteredRows.length} 条</span>}>
+        <FilterField label="关键词">
+          <Input style={{ width: 240 }} allowClear placeholder="规则编号 / 名称" value={qKw} onChange={(e) => setQKw(e.target.value)} />
+        </FilterField>
+        <FilterField label="状态">
+          <Select style={{ width: 120 }} placeholder="请选择" allowClear value={qStatus} onChange={setQStatus}
             options={['已发布', '已归档'].map((v) => ({ value: v, label: v }))} />
-          <Button onClick={() => { setQKw(''); setQStatus(null); }}>重置</Button>
-          <span style={{ fontSize: 12, color: '#8a97a3' }}>共 {filteredRows.length} 条</span>
-        </Space>
-      </Card>
+        </FilterField>
+      </FilterBar>
       {/* 列表卡：操作工具栏 → 表格 */}
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>

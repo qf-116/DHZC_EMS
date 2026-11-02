@@ -3,6 +3,7 @@ import { Card, Table, Button, Space, Input, Select, Modal, Form, App, Popconfirm
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import PageHeader from '../components/PageHeader.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -20,6 +21,7 @@ export default function PatrolTasksPage() {
   const meta = state.meta;
 
   const [kw, setKw] = useState('');
+  const [kwDraft, setKwDraft] = useState('');
   const [status, setStatus] = useState(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState(null); // null=新增临时任务，对象=编辑
@@ -116,14 +118,16 @@ export default function PatrolTasksPage() {
         subtitle={`数据更新于 ${meta.updatedAt}`}
       />
       <DegradedBanner meta={meta} />
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
-          <Input.Search style={{ width: 240 }} placeholder="任务编号 / 线路 / 执行人" allowClear onSearch={setKw} onChange={e => { if (!e.target.value) setKw(''); }} />
-          <Select style={{ width: 120 }} placeholder="状态" allowClear value={status} onChange={setStatus}
+      <FilterBar onQuery={() => setKw(kwDraft)} onReset={() => { setKw(''); setKwDraft(''); setStatus(null); }}>
+        <FilterField label="任务名称">
+          <Input style={{ width: 240 }} placeholder="任务编号 / 线路 / 执行人" allowClear value={kwDraft}
+            onChange={e => { setKwDraft(e.target.value); if (!e.target.value) setKw(''); }} onPressEnter={() => setKw(kwDraft)} />
+        </FilterField>
+        <FilterField label="状态">
+          <Select style={{ width: 120 }} allowClear value={status} onChange={setStatus}
             options={[...new Set(rows.map(r => r.status))].map(v => ({ value: v, label: v }))} />
-          <Button onClick={() => { setKw(''); setStatus(null); }}>重置</Button>
-        </Space>
-      </Card>
+        </FilterField>
+      </FilterBar>
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
           <Button type="primary" onClick={openCreate}>新增临时任务</Button>

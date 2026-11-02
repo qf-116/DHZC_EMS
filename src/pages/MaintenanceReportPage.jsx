@@ -3,6 +3,7 @@ import { Card, Table, Tabs, Button, Tooltip, Typography, Modal, Space, Tag, Date
 import dayjs from 'dayjs';
 import { Download } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import { useDemoState } from '../state/DemoStore.jsx';
@@ -168,8 +169,8 @@ export default function MaintenanceReportPage() {
       />
       <DegradedBanner meta={meta} />
 
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space size={32} wrap>
+      <FilterBar onQuery={() => {}} onReset={() => setRange(null)}>
+        <FilterField label="统计日期">
           <RangePicker
             style={{ width: 250 }} allowClear
             value={range} onChange={setRange}
@@ -179,13 +180,12 @@ export default function MaintenanceReportPage() {
             ]}
             placeholder={['开始日期', '结束日期']}
           />
-          <Typography.Text>任务总数：<strong>{totals.total}</strong></Typography.Text>
-          <Typography.Text>已完成：<strong>{totals.done}</strong></Typography.Text>
-          <Typography.Text>已关闭：<strong>{totals.closed}</strong></Typography.Text>
-          <Typography.Text>整体计划完成率：<strong>{totals.rate}</strong></Typography.Text>
-          <Button onClick={() => setRange(null)}>重置</Button>
-        </Space>
-      </Card>
+        </FilterField>
+        <Typography.Text>任务总数：<strong>{totals.total}</strong></Typography.Text>
+        <Typography.Text>已完成：<strong>{totals.done}</strong></Typography.Text>
+        <Typography.Text>已关闭：<strong>{totals.closed}</strong></Typography.Text>
+        <Typography.Text>整体计划完成率：<strong>{totals.rate}</strong></Typography.Text>
+      </FilterBar>
 
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>

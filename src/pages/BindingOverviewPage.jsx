@@ -14,11 +14,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   App, Alert, Button, Card, Checkbox, Input, Modal, Select, Space, Steps, Table, Tag, Tooltip, Typography,
 } from 'antd';
-import { Plus, Save, Play, PauseCircle, Pencil, Trash2, Eye, LayoutTemplate, ArrowRight, ArrowLeft } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { Plus, Save, Play, PauseCircle, Pencil, Trash2, Eye, ArrowRight, ArrowLeft } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import StatusTag from '../components/StatusTag.jsx';
-import ApplyTemplateModal from '../components/ApplyTemplateModal.jsx';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import { selectAllDevices, selectBindingDraft } from '../state/selectors.js';
 import { validateBindingDraft } from '../domain/binding.js';
@@ -31,27 +30,65 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
   const state = useDemoState();
   const actions = useDemoActions();
   const { message } = App.useApp();
-  const [step, setStep] = useState(0);                        // 向导步骤：0=选主设备，1=选 IoT 子设备，2=选监控指标
+  const [step, setStep] = useState(0);                        // 向导步骤：0=选主设备，1=选择模板/物联网设备，2=选择监控指标
   const [deviceId, setDeviceId] = useState(null);             // 向导内选定的设备管理台账设备
   const [devKw, setDevKw] = useState('');                     // 第 1 步查询条件：编号/名称/资产编码
   const [devBound, setDevBound] = useState('all');            // 第 1 步查询条件：是否已绑定
   const [devType, setDevType] = useState('all');              // 第 1 步查询条件：设备类型
-  const [sourceKw, setSourceKw] = useState('');               // 来源列表搜索（设备多时缓解弹窗拥挤）
-  const [sourceProduct, setSourceProduct] = useState('all');  // 来源列表查询条件：产品名称
+  const [sourceKw, setSourceKw] = useState('');               // 来源列表搜索
+  const [templateId, setTemplateId] = useState('');            // 可选模板：先预置来源，再允许手工调整
+  const [templateProductFilter, setTemplateProductFilter] = useState('all');
+  const [appliedSourceKw, setAppliedSourceKw] = useState('');
+  const [appliedProductFilter, setAppliedProductFilter] = useState('all');
 
   const allDevices = useMemo(() => selectAllDevices(state), [state]);
   const draft = deviceId ? selectBindingDraft(state, deviceId) : null;
   const sourceDevicesAll = Object.values(state.entities.sourceDevicesById);
   const sourceDevices = useMemo(() => {
-    const k = sourceKw.trim().toLowerCase();
+    const k = appliedSourceKw.trim().toLowerCase();
     return sourceDevicesAll
-      .filter((s) => (sourceProduct === 'all' ? true : s.product === sourceProduct))
+      .filter((s) => (appliedProductFilter === 'all' ? true : s.product === appliedProductFilter))
       .filter((s) => (!k ? true : `${s.iotDeviceCode} ${s.name}`.toLowerCase().includes(k)));
-  }, [sourceDevicesAll, sourceKw, sourceProduct]);
+  }, [sourceDevicesAll, appliedSourceKw, appliedProductFilter]);
   const sourceProducts = useMemo(
     () => [...new Set(sourceDevicesAll.map((s) => s.product).filter(Boolean))],
     [sourceDevicesAll],
   );
+  const templates = state.ui.bindingTemplates || [];
+  const applyTemplateToDraft = (id) => {
+    setTemplateId(id || '');
+    if (!id || !deviceId) return;
+    const template = templates.find((t) => t.templateId === id);
+    if (!template) return;
+    const host = allDevices.find((d) => d.deviceId === deviceId);
+    const hostNumbers = `${host?.deviceId || ''} ${host?.name || ''}`.match(/\d+/g) || [];
+    const matchedSources = (template.items || []).map((item) => {
+      const product = item.product || item.sensorType;
+      const candidates = sourceDevicesAll.filter((s) => s.product === product);
+      if (!candidates.length) return null;
+      const exact = hostNumbers.map((n) => candidates.find((s) => (`${s.name} ${s.iotDeviceCode}`).includes(n))).find(Boolean);
+      return { item, source: exact || candidates[0] };
+    }).filter(Boolean);
+
+    draftItems.forEach((item) => actions.removeBindingSource(deviceId, item.iotDeviceId));
+    matchedSources.forEach(({ item, source }) => {
+      actions.addBindingSource(deviceId, {
+        iotDeviceId: source.iotDeviceId,
+        iotDeviceCode: source.iotDeviceCode,
+        name: source.name,
+        sensorType: source.name,
+        metrics: [],
+      });
+      (item.metrics || []).filter((m) => m.monitored !== false).forEach((m) => {
+        actions.setDraftMetricMonitoredValue(deviceId, source, m.metricCode, true);
+      });
+    });
+  };
+
+  const sourceDevicesForView = useMemo(() => sourceDevices.filter((s) => {
+    if (templateProductFilter === 'all') return true;
+    return s.product === templateProductFilter;
+  }), [sourceDevices, templateProductFilter]);
 
   // 勾选来源（表格行选 / 多选）：新增走 binding/addSource（自动发现指标），移除走 binding/removeSource
   const toggleSourcesByIds = (ids) => {
@@ -83,7 +120,10 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
       setStep(presetDeviceId ? 1 : 0);
       setDeviceId(presetDeviceId || null);
       setSourceKw('');
-      setSourceProduct('all');
+      setTemplateProductFilter('all');
+      setAppliedSourceKw('');
+      setAppliedProductFilter('all');
+      setTemplateId('');
       setDevKw('');
       setDevBound('all');
       setDevType('all');
@@ -209,7 +249,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
     >
       <Steps
         size="small" current={step} style={{ marginBottom: 16, maxWidth: 660 }}
-        items={[{ title: '选择主设备' }, { title: '选择 IoT 子设备' }, { title: '选择监控指标（可选）' }]}
+        items={[{ title: '选择主设备' }, { title: '选择模板 / 物联网设备' }, { title: '选择监控指标（可选）' }]}
       />
 
       {step === 0 && (
@@ -280,22 +320,27 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
 
       {step === 1 && (
         <>
-          <Space size={8} wrap style={{ marginBottom: 8 }}>
-            <Input
-              allowClear size="small" style={{ width: 220 }}
-              placeholder="搜索来源编码 / 名称" value={sourceKw} onChange={(e) => setSourceKw(e.target.value)}
-            />
-            <Select
-              size="small" style={{ width: 170 }} value={sourceProduct}
-              onChange={setSourceProduct}
-              options={[{ value: 'all', label: '产品名称：全部' }, ...sourceProducts.map((t) => ({ value: t, label: t }))]}
-            />
-            <Button size="small" onClick={() => { setSourceKw(''); setSourceProduct('all'); }}>重置</Button>
+          <Space size={8} wrap>
+            <FilterField label="模板">
+              <Select
+                allowClear size="small" style={{ width: 220 }} placeholder="选择模板（可选）"
+                value={templateId || undefined} onChange={applyTemplateToDraft}
+                options={templates.map((t) => ({ value: t.templateId, label: t.name }))}
+              />
+            </FilterField>
+            <FilterField label="物联网设备">
+              <Input allowClear size="small" style={{ width: 180 }} placeholder="编号 / 名称" value={sourceKw} onChange={(e) => setSourceKw(e.target.value)} />
+            </FilterField>
+            <FilterField label="产品">
+              <Select size="small" style={{ width: 180 }} value={templateProductFilter} onChange={setTemplateProductFilter} options={[{ value: 'all', label: '全部' }, ...sourceProducts.map((p) => ({ value: p, label: p }))]} />
+            </FilterField>
+            <Button size="small" type="primary" onClick={() => { setAppliedSourceKw(sourceKw); setAppliedProductFilter(templateProductFilter); }}>查询</Button>
+            <Button size="small" onClick={() => { setSourceKw(''); setTemplateProductFilter('all'); setAppliedSourceKw(''); setAppliedProductFilter('all'); }}>重置</Button>
           </Space>
           <Table
             rowKey="iotDeviceId" size="small"
-            dataSource={sourceDevices}
-            pagination={sourceDevices.length > 8 ? { pageSize: 8, size: 'small' } : false}
+            dataSource={sourceDevicesForView}
+            pagination={sourceDevicesForView.length > 8 ? { pageSize: 8, size: 'small' } : false}
             rowSelection={{
               selectedRowKeys: draftItems.map((i) => i.iotDeviceId),
               onChange: toggleSources,
@@ -366,6 +411,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
                   </Space>
                 )}
               >
+                {templateId && <Tag color="blue">已应用模板，可继续调整</Tag>}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 4 }}>
                   {(item.metrics || []).map((m) => {
                     const def = state.entities.metricsByKey[m.metricCode];
@@ -562,62 +608,40 @@ function MonitorConfigModal({ deviceId, deviceName, open, onClose }) {
 }
 
 // ---------- 绑定明细弹窗（列表点击查看）：来源设备明细 / 接入指标明细 / 监控指标明细 ----------
-function BindingDetailModal({ type, deviceId, deviceName, open, onClose }) {
+function BindingDetailModal({ deviceId, deviceName, open, onClose }) {
   const state = useDemoState();
   const binding = state.entities.bindingsByDeviceId[deviceId];
   const draft = selectBindingDraft(state, deviceId);
   const items = (draft || binding)?.items || [];
-  const meta = {
-    sources: { title: '来源设备明细' },
-    metrics: { title: '接入指标明细' },
-    monitored: { title: '监控指标明细' },
-  }[type] || { title: '明细' };
-  // 绑定条目可能未存来源名称：从来源设备档案反查兜底
-  const sourceNameOf = (i) => i.name
-    || state.entities.sourceDevicesById[i.iotDeviceId]?.name
-    || '--';
-  const flatMetrics = items.flatMap((i) => (i.metrics || []).map((m) => ({
-    iotDeviceId: i.iotDeviceId,
+  const sourceNameOf = (i) => i.name || state.entities.sourceDevicesById[i.iotDeviceId]?.name || '--';
+  const metricRows = items.flatMap((i) => (i.metrics || []).map((m) => ({
+    key: `${i.iotDeviceId}:${m.metricCode}`,
     source: `${i.iotDeviceCode} · ${sourceNameOf(i)}`,
-    ...m,
+    metricCode: m.metricCode,
+    metricVersion: m.metricVersion,
+    monitored: m.monitored,
   })));
-  const metricRows = type === 'monitored' ? flatMetrics.filter((m) => m.monitored) : flatMetrics;
 
   return (
     <Modal
-      title={`${meta.title} · ${deviceName || '--'}（${deviceId || '--'}）`}
-      width={720}
+      title={`绑定详情 · ${deviceName || '--'}（${deviceId || '--'}）`}
+      width={860}
       open={open}
       onCancel={onClose}
       footer={<Button onClick={onClose}>关闭</Button>}
     >
-      {type === 'sources' ? (
-        <Table
-          rowKey="iotDeviceId" size="small"
-          dataSource={items}
-          pagination={items.length > 10 ? { pageSize: 10, size: 'small' } : false}
-          columns={[
-            { title: '来源编码', dataIndex: 'iotDeviceCode', width: 120 },
-            { title: '来源名称', dataIndex: 'name', width: 170, render: (_, i) => sourceNameOf(i) },
-            { title: '类型', dataIndex: 'sensorType', width: 120, render: (v) => (v && v !== '--' ? v : '来源设备') },
-            { title: '指标数', width: 70, render: (_, i) => (i.metrics || []).length },
-            { title: '状态', width: 80, render: (_, i) => (i.enabled ? <Tag color="green">启用</Tag> : <Tag>停用</Tag>) },
-          ]}
-        />
-      ) : (
-        <Table
-          rowKey={(m) => `${m.iotDeviceId}:${m.metricCode}`} size="small"
-          dataSource={metricRows}
-          pagination={metricRows.length > 10 ? { pageSize: 10, size: 'small' } : false}
-          columns={[
-            { title: '所属来源', dataIndex: 'source', width: 200 },
-            { title: '指标名称', width: 130, render: (_, m) => state.entities.metricsByKey[m.metricCode]?.name || m.metricCode },
-            { title: '指标编码', dataIndex: 'metricCode', width: 150 },
-            { title: '指标版本', dataIndex: 'metricVersion', width: 70 },
-            { title: '监控状态', width: 90, render: (_, m) => (m.monitored ? <Tag color="blue">监控中</Tag> : <Tag>仅存储</Tag>) },
-          ]}
-        />
-      )}
+      <Table
+        rowKey="key" size="small"
+        dataSource={metricRows}
+        pagination={metricRows.length > 10 ? { pageSize: 10, size: 'small' } : false}
+        columns={[
+          { title: '物联网平台设备', dataIndex: 'source', width: 250 },
+          { title: '指标名称', width: 150, render: (_, m) => state.entities.metricsByKey[m.metricCode]?.name || m.metricCode },
+          { title: '指标编码', dataIndex: 'metricCode', width: 150 },
+          { title: '指标版本', dataIndex: 'metricVersion', width: 80 },
+          { title: '监控状态', width: 90, render: (_, m) => (m.monitored ? <Tag color="blue">监控中</Tag> : <Tag>仅存储</Tag>) },
+        ]}
+      />
     </Modal>
   );
 }
@@ -629,14 +653,12 @@ export default function BindingOverviewPage() {
   const state = useDemoState();
   const actions = useDemoActions();
   const { message } = App.useApp();
-  const navigate = useNavigate();
 
   // UI 局部状态：弹窗开关
   const [draftTarget, setDraftTarget] = useState(null);     // { deviceId, deviceName }
   const [disableTarget, setDisableTarget] = useState(null); // { deviceId, deviceName }
   const [deleteTarget, setDeleteTarget] = useState(null);  // { deviceId, deviceName }
-  const [applyTarget, setApplyTarget] = useState(null);     // null=关闭；字符串=预选模板 id（''=不预选）
-  const [detailTarget, setDetailTarget] = useState(null);   // { type: sources|metrics|monitored, deviceId, deviceName }
+  const [detailTarget, setDetailTarget] = useState(null);   // { deviceId, deviceName }
 
   const rows = useMemo(() => selectAllDevices(state).map((d) => {
     const binding = state.entities.bindingsByDeviceId[d.deviceId] || null;
@@ -651,14 +673,16 @@ export default function BindingOverviewPage() {
   // 查询条件（实时筛选；规范 §4：关键词 → 下拉 → 重置；2026-10-29 去掉健康状态条件与列）
   const [kw, setKw] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [appliedKw, setAppliedKw] = useState('');
+  const [appliedStatusFilter, setAppliedStatusFilter] = useState('all');
   const statusOptions = useMemo(() => [...new Set(rows.map((r) => r.status))], [rows]);
   const filteredRows = useMemo(() => rows.filter((r) => {
-    const k = kw.trim().toLowerCase();
+    const k = appliedKw.trim().toLowerCase();
     if (k && !`${r.device.deviceId} ${r.device.name} ${r.device.assetCode || ''}`.toLowerCase().includes(k)) return false;
-    if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+    if (appliedStatusFilter !== 'all' && r.status !== appliedStatusFilter) return false;
     return true;
-  }), [rows, kw, statusFilter]);
-  const resetFilters = () => { setKw(''); setStatusFilter('all'); };
+  }), [rows, appliedKw, appliedStatusFilter]);
+  const resetFilters = () => { setKw(''); setStatusFilter('all'); setAppliedKw(''); setAppliedStatusFilter('all'); };
 
   const enable = (r) => {
     const res = actions.enableBinding(r.device.deviceId);
@@ -669,61 +693,34 @@ export default function BindingOverviewPage() {
   const renderActions = (r) => {
     const { status, device } = r;
     const blueButton = { type: 'link', size: 'small', style: { color: '#1677ff', paddingInline: 4 } };
-    if (status === '未配置') {
-      return <Button {...blueButton} icon={<Plus size={13} />} onClick={() => setDraftTarget({ deviceId: device.deviceId, deviceName: device.name })}>新建绑定</Button>;
-    }
-    if (status === '已启用') {
-      return (
-        <Space size={2}>
-          <Button {...blueButton} icon={<Pencil size={13} />} onClick={() => setDraftTarget({ deviceId: device.deviceId, deviceName: device.name })}>编辑</Button>
-          <Button {...blueButton} icon={<PauseCircle size={13} />} onClick={() => setDisableTarget({ deviceId: device.deviceId, deviceName: device.name })}>停用</Button>
-          <Button {...blueButton} icon={<Trash2 size={13} />} onClick={() => setDeleteTarget({ deviceId: device.deviceId, deviceName: device.name })}>删除</Button>
-        </Space>
-      );
-    }
-    if (status === '待生效') {
-      return (
-        <Space size={2}>
-          <Button {...blueButton} icon={<Play size={13} />} onClick={() => enable(r)}>启用</Button>
-          <Button {...blueButton} icon={<Pencil size={13} />} onClick={() => setDraftTarget({ deviceId: device.deviceId, deviceName: device.name })}>编辑</Button>
-          <Button {...blueButton} icon={<Trash2 size={13} />} onClick={() => setDeleteTarget({ deviceId: device.deviceId, deviceName: device.name })}>删除</Button>
-        </Space>
-      );
-    }
-    if (status === '已停用') {
-      return (
-        <Space size={2}>
-          <Button {...blueButton} icon={<Pencil size={13} />} onClick={() => setDraftTarget({ deviceId: device.deviceId, deviceName: device.name })}>编辑</Button>
-          <Button {...blueButton} icon={<Trash2 size={13} />} onClick={() => setDeleteTarget({ deviceId: device.deviceId, deviceName: device.name })}>删除</Button>
-        </Space>
-      );
-    }
+    const edit = <Button {...blueButton} icon={<Pencil size={13} />} onClick={() => setDraftTarget({ deviceId: device.deviceId, deviceName: device.name })}>编辑</Button>;
+    const detail = <Button {...blueButton} icon={<Eye size={13} />} onClick={() => setDetailTarget({ deviceId: device.deviceId, deviceName: device.name })}>详情</Button>;
+    const remove = <Button {...blueButton} icon={<Trash2 size={13} />} onClick={() => setDeleteTarget({ deviceId: device.deviceId, deviceName: device.name })}>删除</Button>;
+    if (status === '未配置') return <Button {...blueButton} icon={<Plus size={13} />} onClick={() => setDraftTarget({})}>新建绑定</Button>;
+    if (status === '已启用') return <Space size={2}>{detail}{edit}<Button {...blueButton} icon={<PauseCircle size={13} />} onClick={() => setDisableTarget({ deviceId: device.deviceId, deviceName: device.name })}>停用</Button>{remove}</Space>;
+    if (status === '待生效') return <Space size={2}>{detail}<Button {...blueButton} icon={<Play size={13} />} onClick={() => enable(r)}>启用</Button>{edit}{remove}</Space>;
+    if (status === '已停用') return <Space size={2}>{detail}{edit}{remove}</Space>;
     return null;
   };
 
   // ===== 主视图：设备绑定列表（规范结构：查询条件 → 工具栏（左上）→ 列表） =====
   const bindingTab = (
     <>
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap size={8}>
-          <Input.Search
-            allowClear placeholder="搜索设备编号 / 名称 / 资产编码" style={{ width: 240 }}
-            value={kw} onChange={(e) => setKw(e.target.value)}
-          />
-          <Select
-            style={{ width: 140 }} value={statusFilter}
-            onChange={setStatusFilter}
-            options={[{ value: 'all', label: '配置状态：全部' }, ...statusOptions.map((s) => ({ value: s, label: s }))]}
-          />
-          <Button onClick={resetFilters}>重置</Button>
-        </Space>
-      </Card>
+      <FilterBar
+        onQuery={() => { setAppliedKw(kw); setAppliedStatusFilter(statusFilter); }}
+        onReset={resetFilters}
+      >
+        <FilterField label="设备">
+          <Input allowClear placeholder="设备编号 / 名称 / 资产编码" style={{ width: 250 }} value={kw} onChange={(e) => setKw(e.target.value)} />
+        </FilterField>
+        <FilterField label="配置状态">
+          <Select style={{ width: 150 }} value={statusFilter} onChange={setStatusFilter} options={[{ value: 'all', label: '全部' }, ...statusOptions.map((s) => ({ value: s, label: s }))]} />
+        </FilterField>
+      </FilterBar>
 
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
           <Button type="primary" icon={<Plus size={14} />} onClick={() => setDraftTarget({})}>新建绑定</Button>
-          <Button icon={<LayoutTemplate size={14} />} onClick={() => setApplyTarget('')}>模板快速接入</Button>
-          <Button icon={<Pencil size={14} />} onClick={() => navigate('/binding-templates')}>监控指标模板管理</Button>
         </Space>
         <Table
           rowKey={(r) => r.device.deviceId}
@@ -733,6 +730,10 @@ export default function BindingOverviewPage() {
           columns={[
             { title: '设备编号', width: 100, render: (_, r) => r.device.deviceId },
             { title: '设备名称', width: 130, render: (_, r) => r.device.name },
+            { title: '来源设备数', width: 100, render: (_, r) => (r.metricTotal === null ? '--' : `${((r.draft || r.binding)?.items || []).filter((i) => i.enabled).length} 个`) },
+            { title: '接入指标', width: 90, render: (_, r) => (r.metricTotal === null ? '--' : `${r.metricTotal} 项`) },
+            { title: '监控指标', width: 90, render: (_, r) => (r.metricMonitored === null ? '--' : `${r.metricMonitored} 项`) },
+            { title: '拉取周期', width: 90, render: (_, r) => (r.binding ? `${r.binding.pullCycleSec} 秒` : '--') },
             {
               title: '配置状态', width: 100,
               render: (_, r) => (
@@ -742,77 +743,9 @@ export default function BindingOverviewPage() {
                 />
               ),
             },
-            {
-              title: '来源设备数', width: 100,
-              render: (_, r) => {
-                if (r.metricTotal === null) return '--';
-                const count = ((r.draft || r.binding)?.items || []).filter((i) => i.enabled).length;
-                return (
-                  <Button type="link" size="small" style={{ padding: 0, height: 'auto' }} onClick={() => setDetailTarget({ type: 'sources', deviceId: r.device.deviceId, deviceName: r.device.name })}>
-                    {count} 个
-                  </Button>
-                );
-              },
-            },
-            {
-              title: '接入指标', width: 90,
-              render: (_, r) => {
-                if (r.metricTotal === null) return '--';
-                return (
-                  <Button type="link" size="small" style={{ padding: 0, height: 'auto' }} onClick={() => setDetailTarget({ type: 'metrics', deviceId: r.device.deviceId, deviceName: r.device.name })}>
-                    {r.metricTotal} 项
-                  </Button>
-                );
-              },
-            },
-            {
-              title: '监控指标', width: 90,
-              render: (_, r) => {
-                if (r.metricMonitored === null) return '--';
-                if (r.metricMonitored === 0) return <Tag>0 项</Tag>;
-                return (
-                  <Button type="link" size="small" style={{ padding: 0, height: 'auto' }} onClick={() => setDetailTarget({ type: 'monitored', deviceId: r.device.deviceId, deviceName: r.device.name })}>
-                    {r.metricMonitored} 项
-                  </Button>
-                );
-              },
-            },
-            { title: '拉取周期', width: 90, render: (_, r) => (r.binding ? `${r.binding.pullCycleSec} 秒` : '--') },
-            { title: '最近拉取', width: 150, render: (_, r) => (r.binding?.lastPullTime || '--') },
-            { title: '操作', width: 230, fixed: 'right', render: (_, r) => renderActions(r) },
+            { title: '创建时间', width: 150, render: (_, r) => (r.binding?.createdAt || r.binding?.effectiveFrom || '--') },
+            { title: '操作', width: 300, fixed: 'right', render: (_, r) => renderActions(r) },
           ]}
-          expandable={{
-            expandedRowRender: (r) => {
-              const items = (r.draft || r.binding)?.items || [];
-              if (!items.length) return <span style={{ color: '#8a97a3', fontSize: 12 }}>无绑定来源（{r.status === '未配置' ? '未配置：点击「新建绑定」创建首个绑定' : '--'}）</span>;
-              return (
-                <div style={{ display: 'grid', gap: 6 }}>
-                  {items.map((i) => (
-                    <div key={i.iotDeviceId} style={{ fontSize: 12 }}>
-                      <Space size={6} wrap>
-                        <Tag color={i.enabled ? undefined : 'default'}>{i.iotDeviceCode}{i.enabled ? '' : '（停用）'}</Tag>
-                        <span>{i.sensorType && i.sensorType !== '--' ? i.sensorType : '来源设备'}</span>
-                        <span style={{ color: '#8a97a3' }}>接入：</span>
-                        {(i.metrics || []).map((m) => {
-                          const def = state.entities.metricsByKey[m.metricCode];
-                          return (
-                            <Tag
-                              key={m.metricCode}
-                              color={m.monitored ? 'blue' : 'default'}
-                              style={{ cursor: 'help' }}
-                              title={m.monitored ? '监控中：纳入曲线 / 实时监测呈现' : '仅存储：未纳入监控，可在设备台账「数据指标历史」查看'}
-                            >
-                              {def?.name || m.metricCode}{m.monitored ? ' · 监控中' : ''}
-                            </Tag>
-                          );
-                        })}
-                      </Space>
-                    </div>
-                  ))}
-                </div>
-              );
-            },
-          }}
         />
       </Card>
     </>
@@ -852,16 +785,10 @@ export default function BindingOverviewPage() {
         </Typography.Paragraph>
       </Modal>
       <BindingDetailModal
-        type={detailTarget?.type}
         deviceId={detailTarget?.deviceId}
         deviceName={detailTarget?.deviceName}
         open={!!detailTarget}
         onClose={() => setDetailTarget(null)}
-      />
-      <ApplyTemplateModal
-        open={applyTarget !== null}
-        initialTemplateId={applyTarget || ''}
-        onClose={() => setApplyTarget(null)}
       />
     </>
   );

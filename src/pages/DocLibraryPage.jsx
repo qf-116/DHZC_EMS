@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Table, Tag, Button, Space, Select, Input, Upload, Card } from 'antd';
 import { Download, FileText } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import { docLibrary } from '../data/standardData.js';
 
 export default function DocLibraryPage() {
@@ -21,14 +22,17 @@ export default function DocLibraryPage() {
   return (
     <>
       <PageHeader title="综合文档库" />
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
-          <Input.Search allowClear style={{ width: 240 }} placeholder="文档编号 / 名称 / 更新人" value={kw} onChange={(e) => setKw(e.target.value)} />
-          <Select allowClear style={{ width: 140 }} placeholder="全部类型" value={type} onChange={setType} options={typeOptions} />
-          <Select allowClear style={{ width: 150 }} placeholder="全部设备" value={device} onChange={setDevice} options={deviceOptions} />
-          <Button onClick={() => { setKw(''); setType(null); setDevice(null); }}>重置</Button>
-        </Space>
-      </Card>
+      <FilterBar onQuery={() => {}} onReset={() => { setKw(''); setType(null); setDevice(null); }}>
+        <FilterField label="关键词">
+          <Input allowClear style={{ width: 240 }} placeholder="文档编号 / 名称 / 更新人" value={kw} onChange={(e) => setKw(e.target.value)} />
+        </FilterField>
+        <FilterField label="类型">
+          <Select allowClear style={{ width: 140 }} placeholder="请选择" value={type} onChange={setType} options={typeOptions} />
+        </FilterField>
+        <FilterField label="设备">
+          <Select allowClear style={{ width: 150 }} placeholder="请选择" value={device} onChange={setDevice} options={deviceOptions} />
+        </FilterField>
+      </FilterBar>
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
           <Upload><Button type="primary" icon={<FileText size={14} />}>上传文档</Button></Upload>

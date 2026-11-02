@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Card, Table, Button, Space, Input, Select, Tabs, Modal, Form, Tag, App } from 'antd';
 import { Plus } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -24,6 +25,7 @@ export default function MaintenanceItemsPage() {
 
   const [rows, setRows] = useState(maintenanceItems);
   const [kw, setKw] = useState('');
+  const [kwDraft, setKwDraft] = useState('');
   const [activeGroup, setActiveGroup] = useState('all');
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
@@ -113,13 +115,16 @@ export default function MaintenanceItemsPage() {
         subtitle={`数据更新于 ${meta.demoDay}`}
       />
       <DegradedBanner meta={meta} />
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
-          <Input.Search style={{ width: 240 }} placeholder="项目编号 / 名称 / 部位 / 要求" allowClear
-            onSearch={setKw} onChange={e => { if (!e.target.value) setKw(''); }} />
-          <Button onClick={() => { setKw(''); setActiveGroup('all'); }}>重置</Button>
-        </Space>
-      </Card>
+      <FilterBar onQuery={() => setKw(kwDraft)} onReset={() => { setKw(''); setKwDraft(''); setActiveGroup('all'); }}>
+        <FilterField label="项目名称">
+          <Input style={{ width: 240 }} placeholder="项目编号 / 名称 / 部位 / 要求" allowClear value={kwDraft}
+            onChange={e => { setKwDraft(e.target.value); if (!e.target.value) setKw(''); }} onPressEnter={() => setKw(kwDraft)} />
+        </FilterField>
+        <FilterField label="分组">
+          <Select style={{ width: 150 }} value={activeGroup === 'all' ? undefined : activeGroup} allowClear placeholder="全部"
+            options={maintenanceItemGroups.map(v => ({ value: v, label: v }))} onChange={value => setActiveGroup(value || 'all')} />
+        </FilterField>
+      </FilterBar>
       <Card size="small">
         <Tabs
           activeKey={activeGroup}

@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { Card, Table, Button, Space, Input, Select, Modal, Form, Tag, App } from 'antd';
 import PageHeader from '../components/PageHeader.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -19,6 +20,7 @@ export default function InspectionItemsPage() {
   const meta = state.meta;
 
   const [kw, setKw] = useState('');
+  const [kwDraft, setKwDraft] = useState('');
   const [type, setType] = useState(null);
   const [status, setStatus] = useState(null);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -64,15 +66,18 @@ export default function InspectionItemsPage() {
         subtitle={`数据更新于 ${meta.demoDay}`}
       />
       <DegradedBanner meta={meta} />
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
-          <Input.Search style={{ width: 240 }} placeholder="项目编号 / 名称 / 内容" allowClear
-            onSearch={setKw} onChange={e => { if (!e.target.value) setKw(''); }} />
-          <Select style={{ width: 150 }} placeholder="检查类型" allowClear options={TYPE_OPTIONS} value={type} onChange={setType} />
-          <Select style={{ width: 120 }} placeholder="状态" allowClear options={STATUS_OPTIONS} value={status} onChange={setStatus} />
-          <Button onClick={() => { setKw(''); setType(null); setStatus(null); }}>重置</Button>
-        </Space>
-      </Card>
+      <FilterBar onQuery={() => setKw(kwDraft)} onReset={() => { setKw(''); setKwDraft(''); setType(null); setStatus(null); }}>
+        <FilterField label="项目名称">
+          <Input style={{ width: 240 }} placeholder="项目编号 / 名称 / 内容" allowClear value={kwDraft}
+            onChange={e => { setKwDraft(e.target.value); if (!e.target.value) setKw(''); }} onPressEnter={() => setKw(kwDraft)} />
+        </FilterField>
+        <FilterField label="检查类型">
+          <Select style={{ width: 150 }} allowClear options={TYPE_OPTIONS} value={type} onChange={setType} />
+        </FilterField>
+        <FilterField label="状态">
+          <Select style={{ width: 120 }} allowClear options={STATUS_OPTIONS} value={status} onChange={setStatus} />
+        </FilterField>
+      </FilterBar>
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
           <Button type="primary" onClick={openCreate}>新增点检项目</Button>

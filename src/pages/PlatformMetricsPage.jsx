@@ -11,6 +11,7 @@ import { Card, Input, Select, Space, Table, Tag, Typography } from 'antd';
 import { Search } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import StatusTag from '../components/StatusTag.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import { useDemoState } from '../state/DemoStore.jsx';
 import { selectIngestionTasks } from '../state/selectors.js';
 import { metrics } from '../data/demo/metrics.js';
@@ -47,37 +48,17 @@ export default function PlatformMetricsPage() {
         title="平台指标清单"
         subtitle="从 IoT 平台同步的只读指标目录（含版本快照与失效标记）· 指标新增/修改/停用由平台接入服务提供，本页只读"
       />
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
-          <Input
-            style={{ width: 220 }}
-            prefix={<Search size={13} />}
-            placeholder="指标编码 / 指标名称"
-            allowClear
-            value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
-          />
-          <Select
-            style={{ width: 130 }}
-            placeholder="数据类型"
-            allowClear
-            value={dataType}
-            onChange={setDataType}
-            options={['数值', '状态', '事件'].map((v) => ({ value: v, label: v }))}
-          />
-          <Select
-            style={{ width: 130 }}
-            placeholder="同步状态"
-            allowClear
-            value={syncStatus}
-            onChange={setSyncStatus}
-            options={['正常', '已失效'].map((v) => ({ value: v, label: v }))}
-          />
-          <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-            共 {metricRows.length} / {metrics.length} 项 · 已失效指标不能参与绑定（校验不通过）
-          </Typography.Text>
-        </Space>
-      </Card>
+      <FilterBar onQuery={() => {}} onReset={() => { setKeyword(''); setDataType(null); setSyncStatus(null); }} extra={<Typography.Text type="secondary" style={{ fontSize: 12 }}>共 {metricRows.length} / {metrics.length} 项 · 已失效指标不能参与绑定（校验不通过）</Typography.Text>}>
+        <FilterField label="指标关键词">
+          <Input style={{ width: 220 }} prefix={<Search size={13} />} placeholder="指标编码 / 指标名称" allowClear value={keyword} onChange={(e) => setKeyword(e.target.value)} />
+        </FilterField>
+        <FilterField label="数据类型">
+          <Select style={{ width: 130 }} placeholder="请选择" allowClear value={dataType} onChange={setDataType} options={['数值', '状态', '事件'].map((v) => ({ value: v, label: v }))} />
+        </FilterField>
+        <FilterField label="同步状态">
+          <Select style={{ width: 130 }} placeholder="请选择" allowClear value={syncStatus} onChange={setSyncStatus} options={['正常', '已失效'].map((v) => ({ value: v, label: v }))} />
+        </FilterField>
+      </FilterBar>
 
       <Card size="small" style={{ marginBottom: 12 }} title="指标字典（只读 · 平台同步快照）">
         <Table

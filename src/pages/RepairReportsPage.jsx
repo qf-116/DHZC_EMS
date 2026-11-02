@@ -5,6 +5,7 @@ import PageHeader from '../components/PageHeader.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import { selectAllRepairReports, selectAllRepairOrders, selectAllDevices } from '../state/selectors.js';
 import { REPAIR_LEVELS, FAULT_TYPES } from '../domain/repair.js';
@@ -114,14 +115,14 @@ export default function RepairReportsPage() {
         title="故障报修"
       />
       <DegradedBanner meta={meta} />
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
-          <Input.Search style={{ width: 240 }} placeholder="报修单号 / 报修名称 / 设备" allowClear onSearch={setKw} onChange={e => { if (!e.target.value) setKw(''); }} />
-          <Select style={{ width: 130 }} placeholder="状态" allowClear options={statusOptions} value={status} onChange={setStatus} />
-          <Button type="primary" onClick={() => setKw(kw)}>查询</Button>
-          <Button onClick={() => { setKw(''); setStatus(null); }}>重置</Button>
-        </Space>
-      </Card>
+      <FilterBar onQuery={() => setKw(kw)} onReset={() => { setKw(''); setStatus(null); }}>
+        <FilterField label="报修查询">
+          <Input.Search style={{ width: 240 }} placeholder="报修单号 / 报修名称 / 设备" allowClear value={kw} onSearch={setKw} onChange={e => setKw(e.target.value)} />
+        </FilterField>
+        <FilterField label="状态">
+          <Select style={{ width: 130 }} placeholder="全部状态" allowClear options={statusOptions} value={status} onChange={setStatus} />
+        </FilterField>
+      </FilterBar>
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
           <Button type="primary" icon={<Plus size={14} />} onClick={openModal}>新增</Button>

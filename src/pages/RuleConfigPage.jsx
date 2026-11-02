@@ -10,6 +10,7 @@ import {
   LEGACY_BUSINESS_RULE_TYPES, NUMERIC_TRIGGER_MODES,
 } from '../domain/alarmRule.js';
 import RuleBatchModal from '../components/RuleBatchModal.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 
 // 报警规则配置 V4（方案 V1.2 M1-M4）：
 // - 受控表单统一模型（createEmptyRuleForm / ruleToForm / formToRule），保存内容全部来自表单状态；
@@ -352,24 +353,24 @@ export default function RuleConfigPage() {
       )}
 
       {/* 筛选卡（规范 §1/§4：查询条件独立在列表卡上方） */}
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
-          <Input
-            style={{ width: 240 }} allowClear
-            placeholder="搜索：规则编号 / 名称 / 指标 / 设备"
-            value={qKw} onChange={(e) => setQKw(e.target.value)}
-          />
-          <Select style={{ width: 110 }} placeholder="类型" allowClear value={qType} onChange={setQType}
+      <FilterBar onQuery={() => {}} onReset={() => { setQKw(''); setQType(null); setQStatus(null); setQGroup(null); }} extra={<span style={{ fontSize: 12, color: '#8a97a3' }}>共 {rows.length} 条</span>}>
+        <FilterField label="关键词">
+          <Input style={{ width: 240 }} allowClear placeholder="规则编号 / 名称 / 指标 / 设备" value={qKw} onChange={(e) => setQKw(e.target.value)} />
+        </FilterField>
+        <FilterField label="类型">
+          <Select style={{ width: 110 }} placeholder="请选择" allowClear value={qType} onChange={setQType}
             options={['阈值', '状态', '质量', '组合', '程序', '备件'].map((v) => ({ value: v, label: v }))} />
-          <Select style={{ width: 110 }} placeholder="状态" allowClear value={qStatus} onChange={setQStatus}
+        </FilterField>
+        <FilterField label="状态">
+          <Select style={{ width: 110 }} placeholder="请选择" allowClear value={qStatus} onChange={setQStatus}
             options={['草稿', '已发布', '已停用'].map((v) => ({ value: v, label: v }))} />
-          <Select style={{ width: 260 }} placeholder="分组（指标 · 量程 · 型号）" allowClear value={qGroup} onChange={setQGroup}
+        </FilterField>
+        <FilterField label="分组">
+          <Select style={{ width: 260 }} placeholder="指标 · 量程 · 型号" allowClear value={qGroup} onChange={setQGroup}
             options={groupKeys.map((k) => ({ value: k, label: allRows.find((r) => r.groupKey === k)?.groupLabel || k }))}
             showSearch optionFilterProp="label" maxTagCount="responsive" />
-          <Button onClick={() => { setQKw(''); setQType(null); setQStatus(null); setQGroup(null); }}>重置</Button>
-          <span style={{ fontSize: 12, color: '#8a97a3' }}>共 {rows.length} 条</span>
-        </Space>
-      </Card>
+        </FilterField>
+      </FilterBar>
       {/* 列表卡：操作工具栏（左上第一行）→ 表格 */}
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>

@@ -12,6 +12,7 @@ import { Plus } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import { sysDictEntries, sysDictTypes } from '../data/systemConfig.js';
 
 const STATUS_OPTIONS = ['已启用', '已停用'].map((v) => ({ value: v, label: v }));
@@ -145,12 +146,16 @@ export default function SystemDictPage() {
 
       <div style={{ display: 'flex', gap: 12, alignItems: 'stretch' }}>
         {/* 左：字典类型 */}
-        <Card size="small" style={{ width: 400, flexShrink: 0 }} title="字典类型"
-          extra={<Input.Search size="small" style={{ width: 160 }} placeholder="编码 / 名称" allowClear
-            onSearch={setTypeKw} onChange={(e) => { if (!e.target.value) setTypeKw(''); }} />}>
-          <Space wrap style={{ marginBottom: 12 }}>
-            <Button type="primary" icon={<Plus size={14} />} onClick={openTypeCreate}>新增字典类型</Button>
-          </Space>
+        <Card size="small" style={{ width: 400, flexShrink: 0 }} title="字典类型">
+          <FilterBar
+            onQuery={() => {}}
+            onReset={() => setTypeKw('')}
+            extra={<Button type="primary" icon={<Plus size={14} />} onClick={openTypeCreate}>新增字典类型</Button>}
+          >
+            <FilterField label="关键词">
+              <Input style={{ width: 160 }} placeholder="编码 / 名称" allowClear value={typeKw} onChange={(e) => setTypeKw(e.target.value)} />
+            </FilterField>
+          </FilterBar>
           <Table
             rowKey="typeCode" size="small"
             dataSource={typeList}
@@ -179,12 +184,16 @@ export default function SystemDictPage() {
 
         {/* 右：字典项 */}
         <Card size="small" style={{ flex: 1, minWidth: 0 }}
-          title={`字典项 —— ${currentType?.typeName || '--'}（${selectedType}）`}
-          extra={<Input.Search size="small" style={{ width: 180 }} placeholder="标签 / 键值 / 备注" allowClear
-            onSearch={setEntryKw} onChange={(e) => { if (!e.target.value) setEntryKw(''); }} />}>
-          <Space wrap style={{ marginBottom: 12 }}>
-            <Button type="primary" icon={<Plus size={14} />} onClick={openEntryCreate} disabled={!currentType}>新增字典项</Button>
-          </Space>
+          title={`字典项 —— ${currentType?.typeName || '--'}（${selectedType}）`}>
+          <FilterBar
+            onQuery={() => {}}
+            onReset={() => setEntryKw('')}
+            extra={<Button type="primary" icon={<Plus size={14} />} onClick={openEntryCreate} disabled={!currentType}>新增字典项</Button>}
+          >
+            <FilterField label="关键词">
+              <Input style={{ width: 180 }} placeholder="标签 / 键值 / 备注" allowClear value={entryKw} onChange={(e) => setEntryKw(e.target.value)} />
+            </FilterField>
+          </FilterBar>
           <Table
             rowKey="entryId" size="small"
             dataSource={entryList}

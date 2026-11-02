@@ -1,8 +1,9 @@
 import React, { useMemo, useState } from 'react';
 import { Alert, App, Button, Card, DatePicker, Select, Space, Table, Tag } from 'antd';
 import dayjs from 'dayjs';
-import { Download, Search } from 'lucide-react';
+import { Download } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
@@ -116,8 +117,8 @@ export default function QualityReportPage() {
           <Button type="primary" icon={<Download size={14} />} onClick={handleExport}>导出</Button>
         </Space>
       </div>
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
+      <FilterBar onQuery={handleQuery} onReset={handleReset}>
+        <FilterField label="统计日期">
           <RangePicker
             style={{ width: 250 }} allowClear
             value={range} onChange={setRange}
@@ -127,13 +128,17 @@ export default function QualityReportPage() {
             ]}
             placeholder={['开始日期', '结束日期']}
           />
+        </FilterField>
+        <FilterField label="车间">
           <Select value={workshop} onChange={setWorkshop} style={{ width: 140 }} options={[{ value: 'all', label: '全部车间' }, ...workshopOptions]} />
+        </FilterField>
+        <FilterField label="设备">
           <Select value={device} onChange={setDevice} style={{ width: 170 }} showSearch optionFilterProp="label" options={[{ value: 'all', label: '全部设备' }, ...deviceOptions]} />
+        </FilterField>
+        <FilterField label="日期">
           <Select value={date} onChange={setDate} style={{ width: 140 }} options={[{ value: 'all', label: '全部日期' }, ...dateOptions]} />
-          <Button type="primary" icon={<Search size={14} />} onClick={handleQuery}>查询</Button>
-          <Button onClick={handleReset}>重置</Button>
-        </Space>
-      </Card>
+        </FilterField>
+      </FilterBar>
       <Alert
         className="rule-alert"
         type="info"

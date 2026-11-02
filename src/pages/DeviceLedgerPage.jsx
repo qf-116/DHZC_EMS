@@ -9,6 +9,7 @@ import EmptyState from '../components/EmptyState.jsx';
 import { useDemoState } from '../state/DemoStore.jsx';
 import { selectDevice, selectRealtime, selectHealth, selectBinding } from '../state/selectors.js';
 import UserPickerModal from '../components/UserPickerModal.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import { workshops as orgWorkshops } from '../data/demo/masterData.js';
 
 // 设备台账列表：数据来自 devicesById + crosswalk（§3.1 唯一映射）。
@@ -157,18 +158,21 @@ export default function DeviceLedgerPage() {
             defaultExpandAll
             defaultSelectedKeys={['all']}
             treeData={typeTree}
-            onSelect={(keys) => setKw(keys[0] && keys[0] !== 'all' ? keys[0] : '')}
+            onSelect={(keys) => setTypeFilter(keys[0] && keys[0] !== 'all' ? keys[0] : null)}
           />
         </Card>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <Card size="small" style={{ marginBottom: 12 }}>
-            <Space wrap>
-              <Select style={{ width: 130 }} placeholder="生命周期" allowClear value={lifecycle} onChange={setLifecycle} options={lifecycles.map(v => ({ value: v, label: v }))} />
-              <Select style={{ width: 130 }} placeholder="车间" allowClear value={workshop} onChange={setWorkshop} options={workshops.map(v => ({ value: v, label: v }))} />
+          <FilterBar onQuery={() => {}} onReset={() => { setLifecycle(null); setWorkshop(null); setKw(''); }}>
+            <FilterField label="生命周期">
+              <Select style={{ width: 130 }} placeholder="请选择" allowClear value={lifecycle} onChange={setLifecycle} options={lifecycles.map(v => ({ value: v, label: v }))} />
+            </FilterField>
+            <FilterField label="车间">
+              <Select style={{ width: 130 }} placeholder="请选择" allowClear value={workshop} onChange={setWorkshop} options={workshops.map(v => ({ value: v, label: v }))} />
+            </FilterField>
+            <FilterField label="关键字">
               <Input style={{ width: 200 }} placeholder="资产编号 / 名称 / 型号 / 负责人" allowClear value={kw} onChange={e => setKw(e.target.value)} />
-              <Button onClick={() => { setLifecycle(null); setWorkshop(null); setKw(''); }}>重置</Button>
-            </Space>
-          </Card>
+            </FilterField>
+          </FilterBar>
           <Card size="small">
             <Space wrap style={{ marginBottom: 12 }}>
               <Button type="primary" icon={<Plus size={14} />} onClick={() => openModal(null)}>新增</Button>

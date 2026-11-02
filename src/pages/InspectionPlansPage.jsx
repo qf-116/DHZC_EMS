@@ -3,6 +3,7 @@ import { Card, Table, Button, Space, Input, Select, Progress, Modal, Form, App, 
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import PageHeader from '../components/PageHeader.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -22,6 +23,7 @@ export default function InspectionPlansPage() {
   const meta = state.meta;
 
   const [kw, setKw] = useState('');
+  const [kwDraft, setKwDraft] = useState('');
   const [status, setStatus] = useState(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState(null); // null=新增，对象=编辑
@@ -97,14 +99,15 @@ export default function InspectionPlansPage() {
         subtitle={`数据更新于 ${meta.demoDay}`}
       />
       <DegradedBanner meta={meta} />
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
-          <Input.Search style={{ width: 240 }} placeholder="计划编号 / 名称 / 负责人" allowClear
-            onSearch={setKw} onChange={e => { if (!e.target.value) setKw(''); }} />
-          <Select style={{ width: 120 }} placeholder="状态" allowClear options={statusOptions} value={status} onChange={setStatus} />
-          <Button onClick={() => { setKw(''); setStatus(null); }}>重置</Button>
-        </Space>
-      </Card>
+      <FilterBar onQuery={() => setKw(kwDraft)} onReset={() => { setKw(''); setKwDraft(''); setStatus(null); }}>
+        <FilterField label="计划名称">
+          <Input style={{ width: 240 }} placeholder="计划编号 / 名称 / 负责人" allowClear value={kwDraft}
+            onChange={e => { setKwDraft(e.target.value); if (!e.target.value) setKw(''); }} onPressEnter={() => setKw(kwDraft)} />
+        </FilterField>
+        <FilterField label="状态">
+          <Select style={{ width: 120 }} allowClear options={statusOptions} value={status} onChange={setStatus} />
+        </FilterField>
+      </FilterBar>
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
           <Button type="primary" onClick={openCreate}>新增点检计划</Button>

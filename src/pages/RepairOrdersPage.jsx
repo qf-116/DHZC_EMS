@@ -4,6 +4,7 @@ import PageHeader from '../components/PageHeader.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import { useNavigate } from 'react-router-dom';
 import { useDemoState } from '../state/DemoStore.jsx';
 import { selectAllRepairOrders } from '../state/selectors.js';
@@ -40,14 +41,14 @@ export default function RepairOrdersPage() {
         title="维修任务"
       />
       <DegradedBanner meta={meta} />
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
-          <Input.Search style={{ width: 240 }} placeholder="工单号 / 设备 / 故障名称 / 维修人" allowClear onSearch={setKw} onChange={e => { if (!e.target.value) setKw(''); }} />
-          <Select style={{ width: 120 }} placeholder="状态" allowClear options={statusOptions} value={status} onChange={setStatus} />
-          <Button type="primary" onClick={() => setKw(kw)}>查询</Button>
-          <Button onClick={() => { setKw(''); setStatus(null); }}>重置</Button>
-        </Space>
-      </Card>
+      <FilterBar onQuery={() => setKw(kw)} onReset={() => { setKw(''); setStatus(null); }}>
+        <FilterField label="工单查询">
+          <Input.Search style={{ width: 240 }} placeholder="工单号 / 设备 / 故障名称 / 维修人" allowClear value={kw} onSearch={setKw} onChange={e => setKw(e.target.value)} />
+        </FilterField>
+        <FilterField label="状态">
+          <Select style={{ width: 120 }} placeholder="全部状态" allowClear options={statusOptions} value={status} onChange={setStatus} />
+        </FilterField>
+      </FilterBar>
       <Card size="small">
         <Table
           rowKey="repairOrderId" size="small"

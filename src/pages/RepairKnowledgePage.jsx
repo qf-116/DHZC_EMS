@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Card, Table, Tag, Button, Space, Input, Select, App, Modal, Form } from 'antd';
 import { Plus, Pencil, Trash2 } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import { repairKnowledge } from '../data/standardData.js';
 
 // 维修经验库（新增/编辑为弹窗；查询条件/列表字段/按钮严格按原型；按创建时间倒序）
@@ -9,8 +10,23 @@ export default function RepairKnowledgePage() {
   const { message, modal } = App.useApp();
   const [modalOpen, setModalOpen] = useState(false);
   const [editing, setEditing] = useState(null);
+  const [filters, setFilters] = useState({ faultType: undefined, deviceType: undefined, devicePart: undefined, status: undefined, name: '' });
+  const [appliedFilters, setAppliedFilters] = useState({ faultType: undefined, deviceType: undefined, devicePart: undefined, status: undefined, name: '' });
 
   const openModal = (record) => { setEditing(record || null); setModalOpen(true); };
+  const filteredKnowledge = repairKnowledge.filter(record =>
+    (!appliedFilters.faultType || record.faultType === appliedFilters.faultType) &&
+    (!appliedFilters.deviceType || record.deviceType === appliedFilters.deviceType) &&
+    (!appliedFilters.devicePart || record.devicePart === appliedFilters.devicePart) &&
+    (!appliedFilters.status || record.status === appliedFilters.status) &&
+    (!appliedFilters.name || (record.name || '').includes(appliedFilters.name.trim())),
+  );
+  const setFilter = key => value => setFilters(current => ({ ...current, [key]: value?.target ? value.target.value : value }));
+  const resetFilters = () => {
+    const empty = { faultType: undefined, deviceType: undefined, devicePart: undefined, status: undefined, name: '' };
+    setFilters(empty);
+    setAppliedFilters(empty);
+  };
 
   // 删除维修经验：二次确认（工具栏批量 / 行内单个共用）
   const confirmDelete = (record) => {
@@ -27,17 +43,23 @@ export default function RepairKnowledgePage() {
   return (
     <>
       <PageHeader title="维修经验库" />
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
-          <Select style={{ width: 110 }} placeholder="故障类型" allowClear options={['过热', '磨损', '异响', '短路', '漏水', '压力不足', '响应故障'].map(v => ({ value: v, label: v }))} />
-          <Select style={{ width: 110 }} placeholder="设备类型" allowClear options={['电机', '液压系统', '剪板机', '控制面板', '传动系统'].map(v => ({ value: v, label: v }))} />
-          <Select style={{ width: 110 }} placeholder="设备部位" allowClear options={['电机', '液压泵', '刀片', '轴承', '控制面板'].map(v => ({ value: v, label: v }))} />
-          <Select style={{ width: 100 }} placeholder="状态" allowClear options={['启用', '停用'].map(v => ({ value: v, label: v }))} />
-          <Input style={{ width: 130 }} placeholder="故障名称" allowClear />
-          <Button type="primary">查询</Button>
-          <Button>重置</Button>
-        </Space>
-      </Card>
+      <FilterBar onQuery={() => setAppliedFilters({ ...filters, name: filters.name.trim() })} onReset={resetFilters}>
+        <FilterField label="故障类型">
+          <Select style={{ width: 130 }} placeholder="全部类型" allowClear value={filters.faultType} onChange={setFilter('faultType')} options={['过热', '磨损', '异响', '短路', '漏水', '压力不足', '响应故障'].map(v => ({ value: v, label: v }))} />
+        </FilterField>
+        <FilterField label="设备类型">
+          <Select style={{ width: 130 }} placeholder="全部类型" allowClear value={filters.deviceType} onChange={setFilter('deviceType')} options={['电机', '液压系统', '剪板机', '控制面板', '传动系统'].map(v => ({ value: v, label: v }))} />
+        </FilterField>
+        <FilterField label="设备部位">
+          <Select style={{ width: 130 }} placeholder="全部部位" allowClear value={filters.devicePart} onChange={setFilter('devicePart')} options={['电机', '液压泵', '刀片', '轴承', '控制面板'].map(v => ({ value: v, label: v }))} />
+        </FilterField>
+        <FilterField label="状态">
+          <Select style={{ width: 100 }} placeholder="全部状态" allowClear value={filters.status} onChange={setFilter('status')} options={['启用', '停用'].map(v => ({ value: v, label: v }))} />
+        </FilterField>
+        <FilterField label="故障名称">
+          <Input style={{ width: 150 }} placeholder="请输入名称" allowClear value={filters.name} onChange={setFilter('name')} />
+        </FilterField>
+      </FilterBar>
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
           <Button type="primary" icon={<Plus size={14} />} onClick={() => openModal(null)}>新增</Button>
@@ -48,7 +70,7 @@ export default function RepairKnowledgePage() {
         </Space>
         <Table
           rowKey="code" size="small" rowSelection={{ columnWidth: 40 }}
-          dataSource={repairKnowledge}
+          dataSource={filteredKnowledge}
           columns={[
             { title: '序号', dataIndex: 'code', width: 60 },
             { title: '维修经验名称', dataIndex: 'name', width: 170 },

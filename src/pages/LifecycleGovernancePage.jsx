@@ -4,6 +4,7 @@ import { ArrowRightLeft, Archive, CirclePause, FilePlus2, ShieldCheck } from 'lu
 import { useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import PageHeader from '../components/PageHeader.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import { useDemoActions, useDemoState } from '../state/DemoStore.jsx';
@@ -143,13 +144,14 @@ export default function LifecycleGovernancePage({ kind = 'change' }) {
     <>
       <PageHeader title={cfg.title} />
       <Tabs items={cfg.tabs} />
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
-          <Input.Search allowClear style={{ width: 240 }} placeholder="单号 / 设备 / 原因" value={kw} onChange={(e) => setKw(e.target.value)} />
-          <Select allowClear style={{ width: 160 }} placeholder="状态" value={statusFilter} onChange={setStatusFilter} options={statusOptions} />
-          <Button onClick={() => { setKw(''); setStatusFilter(null); }}>重置</Button>
-        </Space>
-      </Card>
+      <FilterBar onQuery={() => {}} onReset={() => { setKw(''); setStatusFilter(null); }}>
+        <FilterField label="关键词">
+          <Input allowClear style={{ width: 240 }} placeholder="单号 / 设备 / 原因" value={kw} onChange={(e) => setKw(e.target.value)} />
+        </FilterField>
+        <FilterField label="状态">
+          <Select allowClear style={{ width: 160 }} value={statusFilter} onChange={setStatusFilter} options={statusOptions} />
+        </FilterField>
+      </FilterBar>
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
           <Button type="primary" icon={<FilePlus2 size={14} />} onClick={openCreate}>{kind === 'change' ? '新建变更' : kind === 'idle' ? '新建闲置申请' : '新建报废申请'}</Button>

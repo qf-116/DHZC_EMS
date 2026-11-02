@@ -4,6 +4,7 @@ import { ClipboardCheck, FilePlus2, CheckCircle2, RotateCcw, Search } from 'luci
 import { useLocation, useNavigate } from 'react-router-dom';
 import dayjs from 'dayjs';
 import PageHeader from '../components/PageHeader.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import { useDemoActions, useDemoState } from '../state/DemoStore.jsx';
@@ -220,13 +221,14 @@ export default function LifecycleTasksPage({ mode = null }) {
           ]}
         />
       )}
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
+      <FilterBar onQuery={() => {}} onReset={() => { setKeyword(''); setStatus(MODES[mode]?.status || undefined); }}>
+        <FilterField label="关键词">
           <Input prefix={<Search size={14} />} placeholder="任务号 / 设备名称 / 型号 / 部门" value={keyword} onChange={e => setKeyword(e.target.value)} allowClear style={{ width: 260 }} />
-          <Select placeholder="当前节点" allowClear value={status} onChange={setStatus} style={{ width: 180 }} options={Object.values(MODES).map(m => m.status).filter(Boolean).map(v => ({ value: v, label: v })).concat([{ value: '试用不合格退回', label: '试用不合格退回' }, { value: '设备已入账', label: '设备已入账' }])} />
-          <Button onClick={() => { setKeyword(''); setStatus(undefined); }}>重置</Button>
-        </Space>
-      </Card>
+        </FilterField>
+        <FilterField label="当前节点">
+          <Select allowClear value={status} onChange={setStatus} style={{ width: 180 }} options={Object.values(MODES).map(m => m.status).filter(Boolean).map(v => ({ value: v, label: v })).concat([{ value: '试用不合格退回', label: '试用不合格退回' }, { value: '设备已入账', label: '设备已入账' }])} />
+        </FilterField>
+      </FilterBar>
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
           <Button type="primary" icon={<FilePlus2 size={14} />} onClick={mode ? openForMode : openCreate}>手工新增采购入账</Button>

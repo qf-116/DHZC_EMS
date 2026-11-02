@@ -13,6 +13,7 @@ import { Download, Eraser } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import { sysLoginLogs, sysOperationLogs } from '../data/systemConfig.js';
 
 const OP_TYPE_COLOR = {
@@ -76,17 +77,19 @@ export default function SystemLogsPage() {
               label: <span>登录日志 <Tag color={failCount(loginRows) ? 'error' : 'default'}>{failCount(loginRows)} 失败</Tag></span>,
               children: (
                 <>
-                  <Card size="small" style={{ marginBottom: 12 }}>
-                    <Space wrap>
-                      <Input.Search style={{ width: 220 }} placeholder="用户 / 账号 / IP / 登录地点" allowClear
-                        onSearch={setLoginKw} onChange={(e) => { if (!e.target.value) setLoginKw(''); }} />
-                      <Select style={{ width: 130 }} placeholder="操作用户" allowClear showSearch optionFilterProp="label"
+                  <FilterBar onQuery={() => {}} onReset={() => { setLoginKw(''); setLoginUser(null); setLoginResult(null); }}>
+                    <FilterField label="关键词">
+                      <Input style={{ width: 220 }} placeholder="用户 / 账号 / IP / 登录地点" allowClear value={loginKw} onChange={(e) => setLoginKw(e.target.value)} />
+                    </FilterField>
+                    <FilterField label="操作用户">
+                      <Select style={{ width: 130 }} placeholder="请选择" allowClear showSearch optionFilterProp="label"
                         options={userOptions} value={loginUser} onChange={setLoginUser} />
-                      <Select style={{ width: 110 }} placeholder="登录结果" allowClear
+                    </FilterField>
+                    <FilterField label="登录结果">
+                      <Select style={{ width: 110 }} placeholder="请选择" allowClear
                         options={resultOptions} value={loginResult} onChange={setLoginResult} />
-                      <Button onClick={() => { setLoginKw(''); setLoginUser(null); setLoginResult(null); }}>重置</Button>
-                    </Space>
-                  </Card>
+                    </FilterField>
+                  </FilterBar>
                   <Card size="small">
                     <Space wrap style={{ marginBottom: 12 }}>
                       <Button icon={<Download size={14} />}>导出</Button>
@@ -128,19 +131,23 @@ export default function SystemLogsPage() {
               label: <span>系统操作日志 <Tag color="default">{opRows.length} 条</Tag></span>,
               children: (
                 <>
-                  <Card size="small" style={{ marginBottom: 12 }}>
-                    <Space wrap>
-                      <Input.Search style={{ width: 220 }} placeholder="操作人 / 操作内容 / IP" allowClear
-                        onSearch={setOpKw} onChange={(e) => { if (!e.target.value) setOpKw(''); }} />
-                      <Select style={{ width: 130 }} placeholder="所属模块" allowClear showSearch optionFilterProp="label"
+                  <FilterBar onQuery={() => {}} onReset={() => { setOpKw(''); setOpModule(null); setOpUser(null); setOpResult(null); }}>
+                    <FilterField label="关键词">
+                      <Input style={{ width: 220 }} placeholder="操作人 / 操作内容 / IP" allowClear value={opKw} onChange={(e) => setOpKw(e.target.value)} />
+                    </FilterField>
+                    <FilterField label="所属模块">
+                      <Select style={{ width: 130 }} placeholder="请选择" allowClear showSearch optionFilterProp="label"
                         options={moduleOptions} value={opModule} onChange={setOpModule} />
-                      <Select style={{ width: 130 }} placeholder="操作人" allowClear showSearch optionFilterProp="label"
+                    </FilterField>
+                    <FilterField label="操作人">
+                      <Select style={{ width: 130 }} placeholder="请选择" allowClear showSearch optionFilterProp="label"
                         options={userOptions} value={opUser} onChange={setOpUser} />
-                      <Select style={{ width: 110 }} placeholder="操作结果" allowClear
+                    </FilterField>
+                    <FilterField label="操作结果">
+                      <Select style={{ width: 110 }} placeholder="请选择" allowClear
                         options={resultOptions} value={opResult} onChange={setOpResult} />
-                      <Button onClick={() => { setOpKw(''); setOpModule(null); setOpUser(null); setOpResult(null); }}>重置</Button>
-                    </Space>
-                  </Card>
+                    </FilterField>
+                  </FilterBar>
                   <Card size="small">
                     <Space wrap style={{ marginBottom: 12 }}>
                       <Button icon={<Download size={14} />}>导出</Button>

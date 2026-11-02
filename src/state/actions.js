@@ -215,6 +215,12 @@ export function createDemoActions(state, dispatch) {
       act('binding/setDraftMonitored', { deviceId, iotDeviceId, iotDeviceCode, metricCode });
       return { ok: true, message: '监控勾选已更新（草稿）', refs: { deviceId } };
     },
+    setDraftMetricMonitoredValue(deviceId, source, metricCode, monitored) {
+      const iotDeviceId = typeof source === 'object' ? source.iotDeviceId : source;
+      const iotDeviceCode = typeof source === 'object' ? source.iotDeviceCode : undefined;
+      act('binding/setDraftMonitored', { deviceId, iotDeviceId, iotDeviceCode, metricCode, monitored: !!monitored });
+      return { ok: true, message: '监控勾选已更新（草稿）', refs: { deviceId } };
+    },
     setMetricMonitored(deviceId, source, metricCode) {
       // 监控指标开关（监控指标配置 Tab）：直接作用于正式绑定，即时生效、不产生新版本
       const iotDeviceId = typeof source === 'object' ? source.iotDeviceId : source;

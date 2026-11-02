@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import UserPickerModal from '../components/UserPickerModal.jsx';
 import { suppliers } from '../data/demo/masterData.js';
@@ -71,18 +72,19 @@ export default function SparePartsInboundPage() {
     <>
       <PageHeader title="入库记录" />
       <DegradedBanner meta={state.meta} />
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
+      <FilterBar onQuery={() => {}} onReset={() => { setRange(null); setSupplierKw(''); }}>
+        <FilterField label="入库日期">
           <RangePicker
             style={{ width: 240 }}
-            placeholder={['请选择开始结束日期', '请选择开始结束日期']}
+            placeholder={['请选择开始日期', '请选择结束日期']}
             value={range}
             onChange={setRange}
           />
-          <Input style={{ width: 240 }} placeholder="供应商名称" allowClear value={supplierKw} onChange={e => setSupplierKw(e.target.value)} />
-          <Button onClick={() => { setRange(null); setSupplierKw(''); }}>重置</Button>
-        </Space>
-      </Card>
+        </FilterField>
+        <FilterField label="供应商">
+          <Input style={{ width: 240 }} placeholder="请输入供应商名称" allowClear value={supplierKw} onChange={e => setSupplierKw(e.target.value)} />
+        </FilterField>
+      </FilterBar>
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
           <Button type="primary" icon={<Plus size={14} />} onClick={openForm}>到货入库</Button>

@@ -391,8 +391,8 @@ export function reducer(state, action) {
         if (i.iotDeviceId !== payload.iotDeviceId) return i;
         const metrics = (i.metrics || []).map(m => {
           if (m.metricCode !== payload.metricCode) return m;
-          toggled = !m.monitored;
-          return { ...m, monitored: !m.monitored };
+          toggled = payload.monitored === undefined ? !m.monitored : !!payload.monitored;
+          return { ...m, monitored: toggled };
         });
         return { ...i, metrics };
       });
@@ -412,8 +412,8 @@ export function reducer(state, action) {
         if (i.iotDeviceId !== payload.iotDeviceId) return i;
         const metrics = (i.metrics || []).map(m => {
           if (m.metricCode !== payload.metricCode) return m;
-          toggled = !m.monitored;
-          return { ...m, monitored: !m.monitored };
+          toggled = payload.monitored === undefined ? !m.monitored : !!payload.monitored;
+          return { ...m, monitored: toggled };
         });
         return { ...i, metrics };
       });

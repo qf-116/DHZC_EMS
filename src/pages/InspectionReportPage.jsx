@@ -3,6 +3,7 @@ import { Card, Table, Button, Space, Statistic, App, DatePicker } from 'antd';
 import dayjs from 'dayjs';
 import { Download } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -104,8 +105,8 @@ export default function InspectionReportPage() {
       />
       <DegradedBanner meta={meta} />
 
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space size={40} wrap>
+      <FilterBar onQuery={() => {}} onReset={() => setRange(null)}>
+        <FilterField label="统计日期">
           <RangePicker
             style={{ width: 250 }} allowClear
             value={range} onChange={setRange}
@@ -115,14 +116,13 @@ export default function InspectionReportPage() {
             ]}
             placeholder={['开始日期', '结束日期']}
           />
-          <Statistic title="任务总数" value={totalTasks} />
-          <Statistic title="已完成" value={totalDone} />
-          <Statistic title="完成率" value={pct(totalDone, totalTasks)} />
-          <Statistic title="逾期数" value={totalOverdue} />
-          <Statistic title="计划任务总数" value={inspectionPlans.reduce((s, p) => s + (p.totalTasks || 0), 0)} />
-          <Button onClick={() => setRange(null)}>重置</Button>
-        </Space>
-      </Card>
+        </FilterField>
+        <Statistic title="任务总数" value={totalTasks} />
+        <Statistic title="已完成" value={totalDone} />
+        <Statistic title="完成率" value={pct(totalDone, totalTasks)} />
+        <Statistic title="逾期数" value={totalOverdue} />
+        <Statistic title="计划任务总数" value={inspectionPlans.reduce((s, p) => s + (p.totalTasks || 0), 0)} />
+      </FilterBar>
 
       <Card size="small" style={{ marginBottom: 12 }}>
         <Space wrap style={{ marginBottom: 12 }}>

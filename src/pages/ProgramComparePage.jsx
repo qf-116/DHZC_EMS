@@ -11,6 +11,7 @@ import { Button, Card, Select, Space, Table, Tag, Typography, Input } from 'antd
 import { useNavigate } from 'react-router-dom';
 import { ArrowRight, FileSearch } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import { useDemoState } from '../state/DemoStore.jsx';
 import { selectProgramCompare } from '../state/selectors.js';
 
@@ -68,16 +69,15 @@ export default function ProgramComparePage() {
     <>
       <PageHeader title="程序参数比对" />
       {/* 筛选卡：查询条件独立在列表卡上方 */}
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap>
-          <Select style={{ width: 220 }} placeholder="设备" allowClear showSearch optionFilterProp="label"
-            value={qDevice} onChange={setQDevice} options={deviceOptions} />
-          <Select style={{ width: 140 }} placeholder="比对结果" allowClear value={qResult} onChange={setQResult}
+      <FilterBar onQuery={() => {}} onReset={() => { setQDevice(null); setQResult(null); }} extra={<span style={{ fontSize: 12, color: '#8a97a3' }}>共 {filteredRows.length} 条</span>}>
+        <FilterField label="设备">
+          <Select style={{ width: 220 }} placeholder="请选择" allowClear showSearch optionFilterProp="label" value={qDevice} onChange={setQDevice} options={deviceOptions} />
+        </FilterField>
+        <FilterField label="比对结果">
+          <Select style={{ width: 140 }} placeholder="请选择" allowClear value={qResult} onChange={setQResult}
             options={['一致', '参数不一致', '比对失败', '不适用'].map((v) => ({ value: v, label: v }))} />
-          <Button onClick={() => { setQDevice(null); setQResult(null); }}>重置</Button>
-          <span style={{ fontSize: 12, color: '#8a97a3' }}>共 {filteredRows.length} 条</span>
-        </Space>
-      </Card>
+        </FilterField>
+      </FilterBar>
       {/* 列表卡（只读页，无操作工具栏） */}
       <Card size="small">
         <Table

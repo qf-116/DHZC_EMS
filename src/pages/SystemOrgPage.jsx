@@ -13,6 +13,7 @@ import { Building2, Plus } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import { useDemoState } from '../state/DemoStore.jsx';
 import { sysOrgTree, sysUsers } from '../data/systemConfig.js';
 
@@ -202,19 +203,15 @@ export default function SystemOrgPage() {
 
         {/* 右：部门人员 */}
         <Card size="small" style={{ flex: 1, minWidth: 0 }}
-          title={`部门人员 —— ${selectedDept === 'DHZC' ? '全部部门' : currentDept?.title || '--'}`}
-          extra={<Space size={12}>
-            <Space size={6}>
-              <Switch size="small" checked={includeChild} onChange={setIncludeChild} />
-              <Typography.Text type="secondary" style={{ fontSize: 12 }}>含子部门</Typography.Text>
-            </Space>
-            <Input.Search size="small" style={{ width: 180 }} placeholder="姓名 / 账号 / 角色" allowClear
-              onSearch={setMemberKw} onChange={(e) => { if (!e.target.value) setMemberKw(''); }} />
+          title={`部门人员 —— ${selectedDept === 'DHZC' ? '全部部门' : currentDept?.title || '--'}`}>
+          <FilterBar onQuery={() => {}} onReset={() => setMemberKw('')} extra={<Space size={6}>
+            <Switch size="small" checked={includeChild} onChange={setIncludeChild} />
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>含子部门</Typography.Text>
           </Space>}>
-          <Space wrap style={{ marginBottom: 12 }}>
-            <Button type="primary" icon={<Plus size={14} />} onClick={openMemberCreate} disabled={currentDept?.status === '停用'}>新增人员</Button>
-            {currentDept?.status === '停用' && <span style={{ fontSize: 12, color: '#8a97a3' }}>部门已停用，不能新增人员</span>}
-          </Space>
+            <FilterField label="关键词">
+              <Input style={{ width: 180 }} placeholder="姓名 / 账号 / 角色" allowClear value={memberKw} onChange={(e) => setMemberKw(e.target.value)} />
+            </FilterField>
+          </FilterBar>
           <Table
             rowKey="userId" size="small"
             dataSource={members}

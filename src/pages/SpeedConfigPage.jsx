@@ -4,6 +4,7 @@ import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import { selectOeeRecomputeLog } from '../state/selectors.js';
 import PageHeader from '../components/PageHeader.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
+import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 
 // 理想生产速度配置：设备 × 物料的性能率基准（性能率 = 实际速度 / 理想速度）。
 // 数据来自 store（speedConfigsById）；保存走 actions.saveSpeedConfig：版本 +1、
@@ -52,14 +53,17 @@ export default function SpeedConfigPage() {
     <>
       <DegradedBanner meta={state.meta} />
       <PageHeader title="理想生产速度配置" />
-      <Card size="small" style={{ marginBottom: 12 }}>
-        <Space wrap size={8}>
-          <Input.Search allowClear placeholder="设备名称 / 编号" style={{ width: 240 }} value={filters.deviceCode} onChange={setF('deviceCode')} />
-          <Input.Search allowClear placeholder="物料编码" style={{ width: 180 }} value={filters.materialCode} onChange={setF('materialCode')} />
-          <Input.Search allowClear placeholder="物料名称" style={{ width: 180 }} value={filters.materialName} onChange={setF('materialName')} />
-          <Button onClick={() => setFilters({ deviceCode: '', materialCode: '', materialName: '' })}>重置</Button>
-        </Space>
-      </Card>
+      <FilterBar onQuery={() => {}} onReset={() => setFilters({ deviceCode: '', materialCode: '', materialName: '' })}>
+        <FilterField label="设备">
+          <Input allowClear placeholder="设备名称 / 编号" style={{ width: 240 }} value={filters.deviceCode} onChange={setF('deviceCode')} />
+        </FilterField>
+        <FilterField label="物料编码">
+          <Input allowClear placeholder="请输入物料编码" style={{ width: 180 }} value={filters.materialCode} onChange={setF('materialCode')} />
+        </FilterField>
+        <FilterField label="物料名称">
+          <Input allowClear placeholder="请输入物料名称" style={{ width: 180 }} value={filters.materialName} onChange={setF('materialName')} />
+        </FilterField>
+      </FilterBar>
       <Table
         rowKey="id" size="small" scroll={{ x: 1100 }}
         dataSource={filtered}

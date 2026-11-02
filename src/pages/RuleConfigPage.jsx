@@ -544,7 +544,7 @@ export default function RuleConfigPage() {
                 )}
                 {currentTarget && form.type !== 'quality' && (
                   <div style={hint}>
-                    指标：{currentTarget.metric.name}（{currentTarget.metricCode} {currentTarget.metricVersion}）· 单位 {currentTarget.metric.unit || '--'} · {currentTarget.metric.enumValues ? `取值 ${currentTarget.metric.enumValues.join(' / ')}` : `量程 ${currentTarget.metric.range ? `${currentTarget.metric.range.min} ~ ${currentTarget.metric.range.max}` : '--'}`}
+                    指标：{currentTarget.metric.name}（{currentTarget.metricCode}）· 单位 {currentTarget.metric.unit || '--'} · {currentTarget.metric.enumValues ? `取值 ${currentTarget.metric.enumValues.join(' / ')}` : `量程 ${currentTarget.metric.range ? `${currentTarget.metric.range.min} ~ ${currentTarget.metric.range.max}` : '--'}`}
                   </div>
                 )}
                 {importedTpl && (

@@ -417,7 +417,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
                     const def = state.entities.metricsByKey[m.metricCode];
                     return (
                       <Checkbox key={m.metricCode} checked={!!m.monitored} onChange={() => toggleDraftMetric(item, m.metricCode)}>
-                        <span>{def?.name || m.metricCode}（{m.metricCode} · {m.metricVersion}）</span>
+                        <span>{def?.name || m.metricCode}（{m.metricCode}）</span>
                       </Checkbox>
                     );
                   })}
@@ -594,7 +594,7 @@ function MonitorConfigModal({ deviceId, deviceName, open, onClose }) {
                       checked={!!draftFlags[`${item.iotDeviceId}:${m.metricCode}`]}
                       onChange={() => toggle(item, m)}
                     >
-                      <span>{def?.name || m.metricCode}（{m.metricCode} · {m.metricVersion}）</span>
+                      <span>{def?.name || m.metricCode}（{m.metricCode}）</span>
                     </Checkbox>
                   );
                 })}
@@ -618,14 +618,13 @@ function BindingDetailModal({ deviceId, deviceName, open, onClose }) {
     key: `${i.iotDeviceId}:${m.metricCode}`,
     source: `${i.iotDeviceCode} · ${sourceNameOf(i)}`,
     metricCode: m.metricCode,
-    metricVersion: m.metricVersion,
     monitored: m.monitored,
   })));
 
   return (
     <Modal
       title={`绑定详情 · ${deviceName || '--'}（${deviceId || '--'}）`}
-      width={860}
+      width={760}
       open={open}
       onCancel={onClose}
       footer={<Button onClick={onClose}>关闭</Button>}
@@ -638,7 +637,6 @@ function BindingDetailModal({ deviceId, deviceName, open, onClose }) {
           { title: '物联网平台设备', dataIndex: 'source', width: 250 },
           { title: '指标名称', width: 150, render: (_, m) => state.entities.metricsByKey[m.metricCode]?.name || m.metricCode },
           { title: '指标编码', dataIndex: 'metricCode', width: 150 },
-          { title: '指标版本', dataIndex: 'metricVersion', width: 80 },
           { title: '监控状态', width: 90, render: (_, m) => (m.monitored ? <Tag color="blue">监控中</Tag> : <Tag>仅存储</Tag>) },
         ]}
       />

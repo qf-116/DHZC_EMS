@@ -46,7 +46,7 @@ export default function PlatformMetricsPage() {
     <>
       <PageHeader
         title="平台指标清单"
-        subtitle="从 IoT 平台同步的只读指标目录（含版本快照与失效标记）· 指标新增/修改/停用由平台接入服务提供，本页只读"
+        subtitle="从 IoT 平台同步的只读指标目录（含失效标记）· 指标新增/修改/停用由平台接入服务提供，本页只读"
       />
       <FilterBar onQuery={() => {}} onReset={() => { setKeyword(''); setDataType(null); setSyncStatus(null); }} extra={<Typography.Text type="secondary" style={{ fontSize: 12 }}>共 {metricRows.length} / {metrics.length} 项 · 已失效指标不能参与绑定（校验不通过）</Typography.Text>}>
         <FilterField label="指标关键词">
@@ -66,7 +66,6 @@ export default function PlatformMetricsPage() {
           dataSource={metricRows}
           columns={[
             { title: '指标编码', dataIndex: 'metricCode', width: 180 },
-            { title: '指标版本', dataIndex: 'metricVersion', width: 90 },
             { title: '指标名称', dataIndex: 'name', width: 110 },
             { title: '单位', width: 80, render: (_, m) => m.unit || '--' },
             { title: '数据类型', dataIndex: 'dataType', width: 90, render: (v) => <Tag color={dataTypeColor[v] || 'default'}>{v}</Tag> },

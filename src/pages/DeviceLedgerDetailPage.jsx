@@ -182,7 +182,6 @@ export function DeviceLedgerDetailContent({ state, deviceId: suppliedDeviceId, e
     },
     { title: '采集时间', dataIndex: 'sourceTime', width: 140, render: v => v || '--' },
     { title: '接收时间', dataIndex: 'receiveTime', width: 140, render: v => v || '--' },
-    { title: '指标版本', dataIndex: 'metricVersion', width: 90, render: v => v || '--' },
   ];
 
   // ===== Tab 结构：栏目顺序固定；联网设备追加监测类栏目，未联网设备到联网配置为止 =====
@@ -420,7 +419,7 @@ export function DeviceLedgerDetailContent({ state, deviceId: suppliedDeviceId, e
                   title: '接入指标（蓝色 = 监控中）', render: (_, r) => (
                     <Space size={4} wrap>
                       {(r.metrics || []).map(m => (
-                        <Tag key={m.metricCode} color={m.monitored ? 'blue' : 'default'}>{m.metricCode}{m.metricVersion ? ` · ${m.metricVersion}` : ''}</Tag>
+                        <Tag key={m.metricCode} color={m.monitored ? 'blue' : 'default'}>{m.metricCode}</Tag>
                       ))}
                       {(r.metrics || []).length === 0 && <span style={{ color: '#8a97a3', fontSize: 12 }}>--</span>}
                     </Space>

@@ -262,7 +262,7 @@ export default function RuleConfigPage() {
   });
 
   // 列表读模型：chain 由 canonical 目标生成；legacy 规则回退 deviceScope + metricCode；
-  // 分组列 = 指标 + 数据类型 + 单位 + 量程 + 设备型号（与批量创建/批量编辑同组口径）
+  // 分组 = 指标 + 数据类型 + 单位 + 量程 + 设备型号（与批量创建/批量编辑同组口径），仅用于筛选与同分组批量编辑，不作列表列展示
   const allRows = Object.values(E.alarmRulesById).map((r) => {
     const deviceName = r.target?.deviceId ? E.devicesById[r.target.deviceId]?.name || r.target.deviceId : null;
     const chain = r.target
@@ -277,10 +277,9 @@ export default function RuleConfigPage() {
       versionText: r.status === '已发布' ? `${r.publishedVersion || r.version}${r.draftConfig ? '（有待发布草稿）' : ''}` : r.version || '待发布',
     };
   });
-  // 分组色板：同组同色
   const groupKeys = [...new Set(allRows.map((r) => r.groupKey).filter(Boolean))].sort();
-  const GROUP_COLORS = ['blue', 'cyan', 'geekblue', 'purple', 'magenta', 'orange'];
-  const groupColorOf = (key) => GROUP_COLORS[Math.max(0, groupKeys.indexOf(key)) % GROUP_COLORS.length];
+  const groupLabelOf = (key) => allRows.find((r) => r.groupKey === key)?.groupLabel || key;
+
   // 查询条件（前端过滤，演示数据量级适用）
   const kw = qKw.trim();
   const rows = allRows.filter((r) => {
@@ -354,7 +353,7 @@ export default function RuleConfigPage() {
         </FilterField>
         <FilterField label="分组">
           <Select style={{ width: 260 }} placeholder="指标 · 量程 · 型号" allowClear value={qGroup} onChange={setQGroup}
-            options={groupKeys.map((k) => ({ value: k, label: allRows.find((r) => r.groupKey === k)?.groupLabel || k }))}
+            options={groupKeys.map((k) => ({ value: k, label: groupLabelOf(k) }))}
             showSearch optionFilterProp="label" maxTagCount="responsive" />
         </FilterField>
       </FilterBar>
@@ -384,7 +383,6 @@ export default function RuleConfigPage() {
             getCheckboxProps: (r) => ({ disabled: !r.groupKey }),
           }}
           columns={[
-            { title: '分组', dataIndex: 'groupLabel', width: 210, render: (v, r) => (v ? <Tag color={groupColorOf(r.groupKey)} style={{ marginInlineEnd: 0 }}>{v}</Tag> : <span style={{ color: '#8a97a3' }}>--</span>) },
             { title: '规则编号', dataIndex: 'code', width: 110 },
             { title: '规则名称', dataIndex: 'name', width: 170 },
             { title: '类型', dataIndex: 'type', width: 70, render: (v) => <Tag color={LEGACY_BUSINESS_RULE_TYPES.includes(v) ? 'default' : 'blue'}>{v}</Tag> },
@@ -414,7 +412,7 @@ export default function RuleConfigPage() {
               </div>
             ) },
           ]}
-          scroll={{ x: 1900 }}
+          scroll={{ x: 1690 }}
         />
         {batches.length > 0 && (
           <>

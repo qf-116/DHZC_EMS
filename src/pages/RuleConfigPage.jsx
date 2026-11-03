@@ -46,7 +46,6 @@ export default function RuleConfigPage() {
   const [qKw, setQKw] = React.useState('');
   const [qType, setQType] = React.useState(null);
   const [qStatus, setQStatus] = React.useState(null);
-  const [qGroup, setQGroup] = React.useState(null);
   const [selectedRowKeys, setSelectedRowKeys] = React.useState([]);
   const [beOpen, setBeOpen] = React.useState(false);
   const [beForm, setBeForm] = React.useState({});
@@ -262,7 +261,7 @@ export default function RuleConfigPage() {
   });
 
   // 列表读模型：chain 由 canonical 目标生成；legacy 规则回退 deviceScope + metricCode；
-  // 分组 = 指标 + 数据类型 + 单位 + 量程 + 设备型号（与批量创建/批量编辑同组口径），仅用于筛选与同分组批量编辑，不作列表列展示
+  // 分组 = 指标 + 数据类型 + 单位 + 量程 + 设备型号（与批量创建/批量编辑同组口径），仅用于同分组批量编辑的内部判定，不在界面展示
   const allRows = Object.values(E.alarmRulesById).map((r) => {
     const deviceName = r.target?.deviceId ? E.devicesById[r.target.deviceId]?.name || r.target.deviceId : null;
     const chain = r.target
@@ -277,16 +276,12 @@ export default function RuleConfigPage() {
       versionText: r.status === '已发布' ? `${r.publishedVersion || r.version}${r.draftConfig ? '（有待发布草稿）' : ''}` : r.version || '待发布',
     };
   });
-  const groupKeys = [...new Set(allRows.map((r) => r.groupKey).filter(Boolean))].sort();
-  const groupLabelOf = (key) => allRows.find((r) => r.groupKey === key)?.groupLabel || key;
-
   // 查询条件（前端过滤，演示数据量级适用）
   const kw = qKw.trim();
   const rows = allRows.filter((r) => {
     if (kw && ![r.code, r.name, r.metricCode, r.target?.deviceId].some((v) => String(v || '').includes(kw))) return false;
     if (qType && r.type !== qType) return false;
     if (qStatus && r.status !== qStatus) return false;
-    if (qGroup && r.groupKey !== qGroup) return false;
     return true;
   });
   // 勾选批量编辑：同分组（≥2 条）才可编辑；无分组（旧结构）不可勾入
@@ -339,7 +334,7 @@ export default function RuleConfigPage() {
       )}
 
       {/* 筛选卡（规范 §1/§4：查询条件独立在列表卡上方） */}
-      <FilterBar onQuery={() => {}} onReset={() => { setQKw(''); setQType(null); setQStatus(null); setQGroup(null); }} extra={<span style={{ fontSize: 12, color: '#8a97a3' }}>共 {rows.length} 条</span>}>
+      <FilterBar onQuery={() => {}} onReset={() => { setQKw(''); setQType(null); setQStatus(null); }} extra={<span style={{ fontSize: 12, color: '#8a97a3' }}>共 {rows.length} 条</span>}>
         <FilterField label="关键词">
           <Input style={{ width: 240 }} allowClear placeholder="规则编号 / 名称 / 指标 / 设备" value={qKw} onChange={(e) => setQKw(e.target.value)} />
         </FilterField>
@@ -350,11 +345,6 @@ export default function RuleConfigPage() {
         <FilterField label="状态">
           <Select style={{ width: 110 }} placeholder="请选择" allowClear value={qStatus} onChange={setQStatus}
             options={['草稿', '已发布', '已停用'].map((v) => ({ value: v, label: v }))} />
-        </FilterField>
-        <FilterField label="分组">
-          <Select style={{ width: 260 }} placeholder="指标 · 量程 · 型号" allowClear value={qGroup} onChange={setQGroup}
-            options={groupKeys.map((k) => ({ value: k, label: groupLabelOf(k) }))}
-            showSearch optionFilterProp="label" maxTagCount="responsive" />
         </FilterField>
       </FilterBar>
       {/* 列表卡：操作工具栏（左上第一行）→ 表格 */}

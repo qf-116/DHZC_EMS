@@ -16,7 +16,9 @@ const { RangePicker } = DatePicker;
 
 const fmt = v => (v === null || v === undefined || v === '' ? '--' : v);
 
-// 生产产出报表：产量 · 合格数量 · 合格率 · 加工节拍
+// 生产产出报表（2026-11-04 口径）：统计日期范围内各台设备的报工生产数量汇总——
+//   一台设备一行，产量/加工/合格/不合格逐日求和，合格率按汇总数量重算（非各日平均），
+//   平均加工节拍按产量加权平均；列表不展示「日期」列，默认统计范围最近 7 天（锚定数据最后日期）。
 // 数据来源：selectReportRows(state, 'production', filters)；空值统一显示 '--'
 export default function ProductionReportPage() {
   const { message } = App.useApp();
@@ -27,8 +29,7 @@ export default function ProductionReportPage() {
   // UI 层筛选，不进入业务快照
   const [workshop, setWorkshop] = useState('all');
   const [device, setDevice] = useState('all');
-  const [date, setDate] = useState('all');
-  const [range, setRange] = useState(null);
+  const [range, setRange] = useState(null); // 默认最近 7 天（锚定演示数据最后日期，见下方 effect）
 
   // 日期范围过滤助手（按前 10 位日期字符串比较）
   const inRange = (d) => {
@@ -50,20 +51,47 @@ export default function ProductionReportPage() {
   const deviceOptions = useMemo(() => devices.map(d => ({ value: d.name, label: d.name })), [devices]);
 
   const allThemeRows = useMemo(() => selectReportRows(state, THEME), [state]);
-  const dateOptions = useMemo(
-    () => [...new Set(allThemeRows.map(r => r.date).filter(Boolean))].map(d => ({ value: d, label: d })),
+  // 数据覆盖的最后日期：默认范围与快捷预设锚定它（演示数据停在 2026-09-16，锚定真实日期才能出数）
+  const dataMax = useMemo(
+    () => allThemeRows.map(r => r.date).filter(Boolean).sort().pop() || null,
     [allThemeRows],
   );
+  const preset7 = useMemo(() => (dataMax ? [dayjs(dataMax).subtract(6, 'day'), dayjs(dataMax)] : null), [dataMax]);
+  const preset30 = useMemo(() => (dataMax ? [dayjs(dataMax).subtract(29, 'day'), dayjs(dataMax)] : null), [dataMax]);
+  React.useEffect(() => { if (preset7) setRange(preset7); }, [preset7]);
 
   const rows = useMemo(() => {
     const base = selectReportRows(state, THEME, {
       device: device === 'all' ? '' : device,
-      date: date === 'all' ? '' : date,
     });
-    // 统计日期范围：按行日期过滤后再出表
-    const byRange = base.filter(r => inRange(r.date));
-    return workshop === 'all' ? byRange : byRange.filter(r => workshopOf[r.device] === workshop);
-  }, [state, device, date, workshop, workshopOf, range]);
+    // 日期范围过滤后按设备聚合（2026-11-04 口径：范围内逐日求和，一台设备一行）
+    const byRange = base.filter(r => inRange(r.date))
+      .filter(r => workshop === 'all' || workshopOf[r.device] === workshop);
+    const byDevice = new Map();
+    for (const r of byRange) {
+      if (!byDevice.has(r.device)) {
+        byDevice.set(r.device, { device: r.device, output: 0, processed: 0, qualified: 0, unqualified: 0, beatNum: 0, beatW: 0 });
+      }
+      const a = byDevice.get(r.device);
+      a.output += Number(r.output) || 0;
+      a.processed += Number(r.processed) || 0;
+      a.qualified += Number(r.qualified) || 0;
+      a.unqualified += Number(r.unqualified) || 0;
+      // 节拍 '2.4 s/件' → 按产量加权
+      const beat = parseFloat(String(r.beat || ''));
+      const out = Number(r.output) || 0;
+      if (!Number.isNaN(beat) && out > 0) { a.beatNum += beat * out; a.beatW += out; }
+    }
+    return [...byDevice.values()].map((a) => ({
+      device: a.device,
+      output: a.output,
+      processed: a.processed || '--',
+      qualified: a.qualified || '--',
+      unqualified: a.unqualified || '--',
+      passRate: a.processed > 0 ? `${((a.qualified / a.processed) * 100).toFixed(1)}%` : '--',
+      beat: a.beatW > 0 ? `${(a.beatNum / a.beatW).toFixed(1)} s/件` : '--',
+    })).sort((x, y) => (y.output ?? 0) - (x.output ?? 0));
+  }, [state, device, workshop, workshopOf, range]);
 
   const exportTasks = useMemo(
     () => selectExportTasks(state).filter(t => t.theme === THEME),
@@ -72,15 +100,15 @@ export default function ProductionReportPage() {
 
   const currentFilters = {
     device: device === 'all' ? '' : device,
-    date: date === 'all' ? '' : date,
     workshop: workshop === 'all' ? '' : workshop,
+    range: range && range[0] ? `${range[0].format('YYYY-MM-DD')}~${range[1].format('YYYY-MM-DD')}` : '',
   };
 
   const handleQuery = () => {
     const res = actions.runReport(THEME, currentFilters);
     res.ok ? message.success(res.message) : message.error(res.message);
   };
-  const handleReset = () => { setWorkshop('all'); setDevice('all'); setDate('all'); setRange(null); };
+  const handleReset = () => { setWorkshop('all'); setDevice('all'); setRange(preset7); };
   const handleExport = () => {
     const res = actions.createExportTask(THEME, currentFilters);
     res.ok ? message.success(res.message) : message.error(res.message);
@@ -90,7 +118,6 @@ export default function ProductionReportPage() {
   };
 
   const columns = [
-    { title: '日期', dataIndex: 'date', width: 110 },
     { title: '设备', dataIndex: 'device', width: 150 },
     { title: '车间', dataIndex: 'device', width: 110, render: v => workshopOf[v] || '--' },
     { title: '产量', dataIndex: 'output', width: 90, sorter: (a, b) => (a.output ?? -1) - (b.output ?? -1), render: fmt },
@@ -114,8 +141,8 @@ export default function ProductionReportPage() {
             style={{ width: 250 }} allowClear
             value={range} onChange={setRange}
             presets={[
-              { label: '最近7天', value: [dayjs().subtract(6, 'day'), dayjs()] },
-              { label: '最近30天', value: [dayjs().subtract(29, 'day'), dayjs()] },
+              { label: '最近7天', value: preset7 },
+              { label: '最近30天', value: preset30 },
             ]}
             placeholder={['开始日期', '结束日期']}
           />
@@ -125,9 +152,6 @@ export default function ProductionReportPage() {
         </FilterField>
         <FilterField label="设备">
           <Select value={device} onChange={setDevice} style={{ width: 170 }} showSearch optionFilterProp="label" options={[{ value: 'all', label: '全部设备' }, ...deviceOptions]} />
-        </FilterField>
-        <FilterField label="日期">
-          <Select value={date} onChange={setDate} style={{ width: 140 }} options={[{ value: 'all', label: '全部日期' }, ...dateOptions]} />
         </FilterField>
       </FilterBar>
       <Space wrap style={{ marginBottom: 12 }}>
@@ -142,7 +166,7 @@ export default function ProductionReportPage() {
           onNext={handleReset}
         />
       ) : (
-        <Table rowKey={r => r.date + r.device} size="small" scroll={{ x: 1000 }} dataSource={rows} columns={columns} />
+        <Table rowKey="device" size="small" scroll={{ x: 900 }} dataSource={rows} columns={columns} />
       )}
       {exportTasks.length > 0 && (
         <Card size="small" title="导出任务" style={{ marginTop: 12 }}>

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, Steps, Space, Select, Table, Tag, Button, Alert, App } from 'antd';
+import { Modal, Steps, Space, Select, Table, Tag, Button, Alert, App, Input } from 'antd';
 import { Plus } from 'lucide-react';
 import {
   createEmptyRuleForm, switchRuleFormType, formToRule, validateRuleDraft,
@@ -10,12 +10,12 @@ import { metricAlarmTemplates } from '../data/demoData.js';
 import { iotProducts } from '../data/demo/bindings.js';
 import RuleFormBody from './RuleFormBody.jsx';
 
-// 新增报警规则向导（2026-11-03 合并「新增规则」与「批量新建」；2026-11-04 简化为两步，预览确认步骤删除）：
-// ① 选目标：产品 → 该产品下的物联网平台设备（多选，反查绑定台账设备）
-// ② 配参数：指标（下拉选项带「数值 / 状态」类型标注）→ 规则类型（按指标类型自动带出，可改）→ 名称/等级/判定/恢复/治理参数
-//    提交即一次性创建并发布（无草稿态）；同目标已存在的条目跳过，结果逐条提示
-// 规则类型：阈值 / 状态 按「设备 + 指标」批量生成（1 设备 1 规则，N 对 N）；
-//           质量 按设备通信健康批量生成（不需要指标）；组合为单设备多子条件规则。
+// 新增报警规则向导（2026-11-04 定稿为三步）：
+// ① 选设备：产品 → 该产品下的物联网平台设备（多选，反查绑定台账设备）
+// ② 选指标：表格列出所选设备共同接入的指标（列：指标名称 / 编码 / 类型〔数值|状态〕/ 覆盖台数），
+//    支持按指标名称关键词与类型（数值 / 状态）筛选，单选一个指标
+// ③ 配条件：规则类型（按指标类型自动带出，可改）→ 名称格式 / 等级 → 判定 / 恢复 / 治理参数；
+//    提交即一次性创建并发布（无草稿态），同目标已存在的条目跳过、结果逐条提示
 const NAME_TEMPLATES = [
   { value: '{device}{metric}超限报警', label: '{设备}{指标}超限报警' },
   { value: '{device}{metric}报警', label: '{设备}{指标}报警' },
@@ -31,6 +31,8 @@ const RULE_TYPES = [
   { value: 'combo', label: '组合规则（多子条件）' },
 ];
 
+const METRIC_TYPE_LABEL = { number: '数值', state: '状态' };
+
 export default function RuleNewWizard({ open, onClose, state, actions, onDone }) {
   const { message } = App.useApp();
   const E = state.entities;
@@ -39,6 +41,9 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
   const [product, setProduct] = React.useState(null);
   const [selectedKeys, setSelectedKeys] = React.useState([]);
   const [metricCode, setMetricCode] = React.useState(null);
+  // ② 选指标的筛选条件（页面内实时过滤）
+  const [metricKw, setMetricKw] = React.useState('');
+  const [metricType, setMetricType] = React.useState('all');
   const [form, setForm] = React.useState(() => createEmptyRuleForm());
   const [submitAttempted, setSubmitAttempted] = React.useState(false);
 
@@ -48,6 +53,8 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
     setProduct(null);
     setSelectedKeys([]);
     setMetricCode(null);
+    setMetricKw('');
+    setMetricType('all');
     setForm(createEmptyRuleForm());
     setSubmitAttempted(false);
   };
@@ -71,8 +78,7 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
     });
   };
 
-  // ① 选目标：产品 → 物联网设备（反查台账设备）
-  // 产品下拉 = 来源设备上的产品 ∪ 物联网平台产品目录（合并去重、按来源设备数降序）——目录产品即使暂无来源设备也可见
+  // ① 选设备：产品下拉 = 来源设备上的产品 ∪ 物联网平台产品目录（合并去重、按来源设备数降序）
   const products = React.useMemo(() => {
     const map = new Map(listRuleProducts(state).map((p) => [p.product, p]));
     iotProducts.forEach((p) => { if (!map.has(p.product)) map.set(p.product, { product: p.product, sourceCount: 0 }); });
@@ -82,13 +88,12 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
     () => (product ? resolveProductSources(state, product) : []),
     [state, product]
   );
-  // 可选（绑定已启用且来源项启用）的物联网设备
   const selectableRows = React.useMemo(() => sourceRows.filter((r) => r.enabled), [sourceRows]);
   const selectedRows = React.useMemo(
     () => selectedKeys.map((k) => selectableRows.find((r) => r.key === k)).filter(Boolean),
     [selectedKeys, selectableRows]
   );
-  // 指标候选：所选设备已接入指标的交集（同一产品物模型一致，交集即真正可批量配置的指标）；带「数值 / 状态」类型
+  // ② 选指标：所选设备已接入指标的交集（同一产品物模型一致）；带「数值 / 状态」类型
   const metricOptions = React.useMemo(() => {
     if (selectedRows.length === 0) return [];
     const counts = new Map();
@@ -100,6 +105,13 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
       })
       .sort((a, b) => b.count - a.count);
   }, [selectedRows, E.metricsByKey]);
+  // 指标筛选：名称 / 编码关键词 + 类型（数值 / 状态）
+  const filteredMetricOptions = React.useMemo(() => metricOptions.filter((m) => {
+    const k = metricKw.trim().toLowerCase();
+    if (k && !`${m.metric?.name || ''} ${m.code}`.toLowerCase().includes(k)) return false;
+    if (metricType !== 'all' && m.dataType !== metricType) return false;
+    return true;
+  }), [metricOptions, metricKw, metricType]);
   const selectedMetric = metricCode ? normalizeMetricMeta(E.metricsByKey[metricCode]) : null;
   // 组合规则的子条件可选目标（全站启用绑定下的可用目标）
   const allTargets = React.useMemo(() => resolveRuleTargets(state), [state]);
@@ -195,7 +207,6 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
     };
     let targets;
     if (ruleType === 'quality') {
-      // 质量规则按设备通信健康判定：不需要指标，一台台账设备一条
       targets = selectedRows.map((r) => ({
         deviceId: r.deviceId,
         deviceName: r.deviceName,
@@ -206,7 +217,6 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
         bindingVersion: r.bindingVersion,
       }));
     } else if (ruleType === 'combo') {
-      // 组合规则：单设备多子条件，生成 1 条
       targets = comboPrimary ? [{
         deviceId: comboPrimary.deviceId,
         deviceName: allTargets.find((t) => t.deviceId === comboPrimary.deviceId)?.deviceName || comboPrimary.deviceId,
@@ -272,15 +282,19 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
       if (!product) { message.warning('请先选择产品'); return; }
       if (selectedRows.length === 0) { message.warning('请至少勾选一台物联网设备'); return; }
       setStep(1);
+      return;
+    }
+    if (step === 1) {
+      if (!metricCode) { message.warning('请选择一个指标'); return; }
+      setStep(2);
     }
   };
 
-  // 提交前统一校验：指标必选（阈值/状态）、类型与指标匹配、参数校验
+  // 提交前校验：类型与指标匹配、参数校验
   const preSubmitCheck = () => {
-    if (needMetric && !metricCode) { message.warning('请先选择指标'); return false; }
     const meta = metricCode ? normalizeMetricMeta(E.metricsByKey[metricCode]) : null;
-    if (metricCode && ruleType === 'threshold' && meta?.dataType !== 'number') { message.warning('阈值规则需要数值类指标，请重新选择指标或调整规则类型'); return false; }
-    if (metricCode && ruleType === 'state' && meta?.dataType !== 'state') { message.warning('状态规则需要状态类指标（S.*），请重新选择指标或调整规则类型'); return false; }
+    if (metricCode && ruleType === 'threshold' && meta?.dataType !== 'number') { message.warning('阈值规则需要数值类指标，请返回第二步重新选择指标或调整规则类型'); return false; }
+    if (metricCode && ruleType === 'state' && meta?.dataType !== 'state') { message.warning('状态规则需要状态类指标（S.*），请返回第二步重新选择指标或调整规则类型'); return false; }
     return true;
   };
 
@@ -345,7 +359,7 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
         <Button key="cancel" onClick={() => { if (step === 0) onClose(); else setStep(step - 1); }}>
           {step === 0 ? '取消' : '上一步'}
         </Button>,
-        step < 1
+        step < 2
           ? <Button key="next" type="primary" onClick={goNext}>下一步</Button>
           : <Button key="submit" type="primary" icon={<Plus size={14} />} onClick={submit} disabled={creatable === 0}>
             {creatable === 0 ? '无可创建规则' : `创建并发布 ${creatable} 条规则`}
@@ -356,7 +370,7 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
         current={step}
         size="small"
         style={{ marginBottom: 16 }}
-        items={[{ title: '① 选目标' }, { title: '② 配参数' }]}
+        items={[{ title: '① 选设备' }, { title: '② 选指标' }, { title: '③ 配条件' }]}
       />
       <div style={{ maxHeight: '62vh', overflowY: 'auto', paddingRight: 6 }}>
         {step === 0 && (
@@ -377,7 +391,6 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
               <>
                 <div style={{ fontSize: 12, color: '#5d6b78' }}>
                   该产品下的物联网平台设备（勾选后按「物联网设备 → 绑定台账设备」反查，确定是哪台设备在报警）
-                  {ruleType === 'combo' ? '；组合规则一次只针对一台设备' : ''}
                 </div>
                 <Table
                   rowKey="key"
@@ -387,7 +400,7 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
                   rowSelection={{
                     selectedRowKeys: selectedKeys,
                     onChange: setSelectedKeys,
-                    getCheckboxProps: (r) => ({ disabled: !r.enabled || (ruleType === 'combo' && selectedRows.length > 0 && selectedRows[0].key !== r.key) }),
+                    getCheckboxProps: (r) => ({ disabled: !r.enabled }),
                   }}
                   columns={[
                     { title: '物联网设备编码', dataIndex: 'sourceCode', width: 150 },
@@ -399,7 +412,7 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
                   ]}
                 />
                 <div style={{ fontSize: 12, color: '#8a97a3' }}>
-                  已选 {selectedRows.length} 台物联网设备；指标与判定参数在下一步配置
+                  已选 {selectedRows.length} 台物联网设备；指标在下一步选择
                 </div>
               </>
             )}
@@ -408,26 +421,67 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
 
         {step === 1 && (
           <Space direction="vertical" style={{ width: '100%' }} size={12}>
+            <div style={{ fontSize: 12, color: '#5d6b78' }}>
+              列出已选 {selectedRows.length} 台设备共同接入的指标，选择一个作为报警判定指标（可按名称 / 类型筛选）
+            </div>
             <Space wrap>
-              <span>指标</span>
-              <Select
-                style={{ width: 330 }}
-                placeholder={selectedRows.length === 0 ? '请返回上一步勾选设备' : '选择一个指标（仅列出所选设备都接入的指标）'}
-                value={metricCode || undefined}
-                onChange={setMetricCode}
-                options={metricOptions.map((m) => ({
-                  value: m.code,
-                  label: `${m.metric?.name || m.code}（${m.code}）· ${m.dataType === 'state' ? '状态' : '数值'} · 覆盖 ${m.count}/${selectedRows.length} 台`,
-                }))}
-                showSearch
-                optionFilterProp="label"
+              <Input
+                allowClear
+                style={{ width: 220 }}
+                placeholder="指标名称 / 编码"
+                value={metricKw}
+                onChange={(e) => setMetricKw(e.target.value)}
               />
+              <Select
+                style={{ width: 130 }}
+                value={metricType}
+                onChange={setMetricType}
+                options={[
+                  { value: 'all', label: '全部类型' },
+                  { value: 'number', label: '数值' },
+                  { value: 'state', label: '状态' },
+                ]}
+              />
+              <Button onClick={() => { setMetricKw(''); setMetricType('all'); }}>重置</Button>
+            </Space>
+            <Table
+              rowKey="code"
+              size="small"
+              pagination={false}
+              dataSource={filteredMetricOptions}
+              locale={{ emptyText: '没有符合筛选条件的指标' }}
+              rowSelection={{
+                type: 'radio',
+                selectedRowKeys: metricCode ? [metricCode] : [],
+                onChange: (keys) => setMetricCode(keys[0] || null),
+              }}
+              columns={[
+                { title: '指标名称', width: 170, render: (_, m) => m.metric?.name || m.code },
+                { title: '指标编码', dataIndex: 'code', width: 160 },
+                { title: '类型', width: 90, render: (_, m) => (m.dataType === 'state' ? <Tag color="processing">状态</Tag> : <Tag color="success">数值</Tag>) },
+                { title: '覆盖台数', width: 100, align: 'center', render: (_, m) => `${m.count}/${selectedRows.length} 台` },
+                { title: '单位', width: 80, render: (_, m) => m.metric?.unit || '--' },
+              ]}
+            />
+          </Space>
+        )}
+
+        {step === 2 && (
+          <Space direction="vertical" style={{ width: '100%' }} size={12}>
+            <Space wrap>
               <span>规则类型</span>
               <Select
                 style={{ width: 200 }}
                 value={ruleType}
                 onChange={changeRuleType}
                 options={RULE_TYPES}
+              />
+              <span>规则名称格式</span>
+              <Select
+                style={{ width: 260 }}
+                value={nameTemplate}
+                onChange={setNameTemplate}
+                options={NAME_TEMPLATES.map((t) => ({ value: t.value, label: t.label }))}
               />
               <span>等级</span>
               <Select

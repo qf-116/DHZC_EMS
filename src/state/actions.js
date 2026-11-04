@@ -331,25 +331,12 @@ export function createDemoActions(state, dispatch) {
 
     // 规则动作（M0 Action 结果契约）：act 返回 dispatch 的真实结果（meta.lastAction），
     // 页面据此提示成功/失败；保存、发布、批量提交统一此方式。
-    saveRuleDraft(rule) {
-      const code = (rule.code || '').trim();
-      const name = (rule.name || '').trim();
-      if (!code) return fail('规则编号必填');
-      if (!name) return fail('规则名称必填');
-      return act('alarm/rule/saveDraft', { rule: { ...rule, code, name } });
-    },
     saveAndPublishRule(rule) {
       const code = (rule.code || '').trim();
       const name = (rule.name || '').trim();
       if (!code) return fail('规则编号必填');
       if (!name) return fail('规则名称必填');
       return act('alarm/rule/saveAndPublish', { rule: { ...rule, code, name } });
-    },
-    publishRule(ruleCode) {
-      const rule = E.alarmRulesById[ruleCode];
-      if (!rule) return fail('规则不存在');
-      if (rule.status !== '草稿' && !rule.draftConfig) return fail(`当前状态「${rule.status}」，只有草稿或存在待发布草稿时可发布`);
-      return act('alarm/rule/publish', { ruleCode });
     },
     disableRule(ruleCode, reason = '') {
       const rule = E.alarmRulesById[ruleCode];
@@ -358,61 +345,7 @@ export function createDemoActions(state, dispatch) {
       return act('alarm/rule/disable', { ruleCode, reason }, `alarm-rule-disable:${ruleCode}`);
     },
 
-    // ---------- 批量创建（M3-M4） ----------
-    // 预览为纯计算（不改状态）：按 canonical 目标逐条校验并分组，返回 rows/summary/groups
-    previewBatchRules(request) {
-      if (!request?.targets?.length) return fail('请先选择要批量创建的目标');
-      if (!request.triggerConfig || request.triggerConfig.threshold === null || request.triggerConfig.threshold === undefined || request.triggerConfig.threshold === '') {
-        return fail('触发阈值必填');
-      }
-      const rules = E.alarmRulesById || {};
-      const rows = request.targets.map((target) => {
-        const device = E.devicesById[target.deviceId];
-        const binding = E.bindingsByDeviceId[target.deviceId];
-        if (!device || !binding || binding.configStatus !== '已启用') {
-          return { targetKey: target.key, deviceId: target.deviceId, deviceName: target.deviceName, metricCode: target.metricCode, result: 'blocked', reason: !device ? '设备不存在' : !binding ? '设备尚未创建绑定' : `绑定状态「${binding.configStatus}」` };
-        }
-        const stillBound = (binding.items || []).some(i => i.enabled && (i.metrics || []).some(m => m.metricCode === target.metricCode));
-        if (!stillBound) return { targetKey: target.key, deviceId: target.deviceId, deviceName: target.deviceName, metricCode: target.metricCode, result: 'blocked', reason: '指标未在当前启用绑定中' };
-        const existing = Object.values(rules).find((r) => r.type === '阈值'
-          && ['草稿', '已发布'].includes(r.status)
-          && ((r.target?.deviceId === target.deviceId && r.target?.metricCode === target.metricCode)
-            || (!r.target && r.metricCode === target.metricCode)));
-        if (existing) return { targetKey: target.key, deviceId: target.deviceId, deviceName: target.deviceName, metricCode: target.metricCode, result: 'skipped', reason: `已存在${existing.status}规则 ${existing.code}` };
-        return { targetKey: target.key, deviceId: target.deviceId, deviceName: target.deviceName, metricCode: target.metricCode, result: 'creatable', reason: '可创建' };
-      });
-      const summary = {
-        total: rows.length,
-        creatable: rows.filter((r) => r.result === 'creatable').length,
-        skipped: rows.filter((r) => r.result === 'skipped').length,
-        blocked: rows.filter((r) => r.result === 'blocked').length,
-      };
-      return {
-        ok: true,
-        message: `预览完成：可创建 ${summary.creatable}，已存在跳过 ${summary.skipped}，阻断 ${summary.blocked}`,
-        rows,
-        summary,
-        refs: { summary },
-      };
-    },
-    // 提交批量草稿：单批次、逐目标隔离；重复 clientRequestId 由 reducer 幂等登记返回原结果
-    commitBatchDraft(request) {
-      if (!request?.targets?.length) return fail('请先选择要批量创建的目标');
-      const batchId = `BATCH-${String(state.meta.demoDay || '20260916').replaceAll('-', '')}-${String(Object.keys(E.alarmBatchesById || {}).length + 1).padStart(3, '0')}`;
-      const clientRequestId = [
-        request.metricCode, request.triggerConfig?.mode, request.triggerConfig?.threshold,
-        request.triggerConfig?.durationSec, request.recoveryConfig?.condition?.deadband ?? request.recoveryConfig?.condition?.recoveryValue,
-        request.targets.map((t) => t.key).sort().join(','),
-      ].join(':');
-      const res = act('alarm/rule/batchCommit', {
-        request,
-        batchId,
-        clientRequestId,
-        batchName: request.name || `${request.metricCode} 批量创建`,
-      }, `batch-commit:${clientRequestId}`);
-      return res;
-    },
-    // 同分组批量编辑（P2）：逐条生成/更新待发布草稿；重复提交同一内容幂等
+    // 批量编辑：可跨产品勾选，逐条校验（阈值按各自指标量程）后直接发布新版本；重复提交同一内容幂等
     batchEditRules(ruleCodes, patch) {
       if (!Array.isArray(ruleCodes) || ruleCodes.length === 0) return fail('请先勾选要批量编辑的规则');
       if (!patch || Object.values(patch).every((v) => v === null || v === undefined || v === '')) return fail('请至少填写一个要修改的字段');
@@ -422,14 +355,21 @@ export function createDemoActions(state, dispatch) {
       ].join('|');
       return act('alarm/rule/batchEdit', { ruleCodes, patch }, `batch-edit:${clientRequestId}`);
     },
-    // 批量发布（P2）：批次内草稿逐条发布（独立校验与版本快照，部分成功）
-    publishBatch(batchId) {
-      const batch = (E.alarmBatchesById || {})[batchId];
-      if (!batch) return fail('批次不存在');
-      if (batch.status === '已发布') return { ok: true, idempotent: true, message: `批次 ${batchId} 已发布，重复请求忽略`, refs: { batchId } };
-      const draftCount = Object.values(E.alarmRulesById || {}).filter((r) => r.batchId === batchId && r.status === '草稿').length;
-      if (draftCount === 0) return fail('批次内没有可发布的草稿规则');
-      return act('alarm/rule/batchPublish', { batchId }, `batch-publish:${batchId}:${draftCount}`);
+    // 批量创建并直接发布（产品 → 多设备 → 单指标 → N 条规则）：逐条隔离，失败不影响其余条目
+    createRules(rules) {
+      if (!Array.isArray(rules) || rules.length === 0) return fail('没有要创建的规则');
+      const clientRequestId = rules.map((r) => r.code).sort().join(',');
+      return act('alarm/rule/batchCreate', { rules }, `batch-create:${clientRequestId}`);
+    },
+    // 批量停用：仅已发布规则可停用
+    disableRules(ruleCodes) {
+      if (!Array.isArray(ruleCodes) || ruleCodes.length === 0) return fail('请先勾选要停用的规则');
+      return act('alarm/rule/disableBatch', { ruleCodes }, `rule-disable-batch:${[...ruleCodes].sort().join(',')}`);
+    },
+    // 批量删除规则：删除规则定义与版本快照，历史报警事件保留
+    deleteRules(ruleCodes) {
+      if (!Array.isArray(ruleCodes) || ruleCodes.length === 0) return fail('请先勾选要删除的规则');
+      return act('alarm/rule/delete', { ruleCodes }, `rule-delete:${[...ruleCodes].sort().join(',')}`);
     },
     // 版本回滚（P2）：按历史快照内容发布为新版本，历史快照不变
     rollbackRule(ruleCode, version) {
@@ -441,17 +381,6 @@ export function createDemoActions(state, dispatch) {
       if (rule.publishedVersion === version) return fail(`当前发布版本即为 ${version}，无需回滚`);
       return act('alarm/rule/rollback', { ruleCode, version }, `rollback:${ruleCode}:${version}:${(rule.publishedVersion || '') + 1}`);
     },
-    // 模板持久化（P2）：存为模板真实落库；应用模板只生成草稿
-    saveRuleTemplate(template) {
-      if (!(template.name || '').trim()) return fail('模板名称必填');
-      if (!template.triggerConfig) return fail('模板缺少触发配置');
-      return act('alarm/template/save', { template });
-    },
-    deleteRuleTemplate(templateId) {
-      if (!(E.ruleTemplatesById || {})[templateId]) return fail('模板不存在');
-      return act('alarm/template/delete', { templateId });
-    },
-
     // ---------- 维修 ----------
     createRepairReport(payload) {
       const { deviceId, faultDesc, level, faultType, title } = payload;

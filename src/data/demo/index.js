@@ -16,9 +16,8 @@ import { downtimeFacts } from './downtime.js';
 import { materialPool, speedConfigs, oeeTargets, shiftCalendar, oeeInputs, oeeEligibility, oeeRecomputeLog } from './oee.js';
 import { programCompare, programBaselines, programHandles } from './programCompare.js';
 import { lifecycleTasks, assetChangeRecords, idleApplications, scrapApplications } from './lifecycle.js';
-import { ruleTemplateSeeds } from './ruleTemplates.js';
 
-export const STORE_VERSION = 11; // 快照结构版本：绑定/监控拆分（binding metrics 标志 selected → monitored）
+export const STORE_VERSION = 12; // 快照结构版本：报警规则无草稿态（去掉模板/批次容器，清理历史草稿规则）
 
 export const DEMO_META = {
   mode: 'demo',
@@ -83,8 +82,6 @@ export function createDemoState() {
       assetChangeRecordsById: Object.fromEntries(assetChangeRecords.map(r => [r.changeId, r])),
       idleApplicationsById: Object.fromEntries(idleApplications.map(r => [r.idleId, r])),
       scrapApplicationsById: Object.fromEntries(scrapApplications.map(r => [r.scrapId, r])),
-      alarmBatchesById: {},      // 批量创建批次（M3-M4：逐目标结果 + clientRequestId 幂等）
-      ruleTemplatesById: Object.fromEntries(ruleTemplateSeeds.map((t) => [t.templateId, t])), // P2 模板持久化
     },
     ui: {
       filtersByRoute: {},

@@ -1,28 +1,25 @@
 import React from 'react';
-import { Card, Table, Tag, Button, Space, Select, App, Input, InputNumber, Switch, Alert, Modal, Statistic, Tooltip, Cascader, Radio } from 'antd';
-import { Plus, TestTube2, Zap, Copy, Layers } from 'lucide-react';
+import { Card, Table, Tag, Button, Space, Select, App, Input, InputNumber, Alert, Modal, Statistic, Tooltip, Descriptions } from 'antd';
+import { Plus, TestTube2, Zap, Trash2, PowerOff, Pencil } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
-import { metricAlarmTemplates, ruleTemplates } from '../data/demoData.js';
+import { metricAlarmTemplates } from '../data/demoData.js';
+import { iotProducts } from '../data/demo/bindings.js';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import {
   resolveRuleTargets, createEmptyRuleForm, ruleToForm, formToRule, switchRuleFormType,
-  validateRuleDraft, conditionTextOf, replayTrend, ruleGroupInfo,
-  LEGACY_BUSINESS_RULE_TYPES, NUMERIC_TRIGGER_MODES,
+  validateRuleDraft, conditionTextOf, replayTrend, ruleProductOf, nextRuleCode,
+  LEGACY_BUSINESS_RULE_TYPES,
 } from '../domain/alarmRule.js';
-import RuleBatchModal from '../components/RuleBatchModal.jsx';
+import RuleFormBody from '../components/RuleFormBody.jsx';
+import RuleNewWizard from '../components/RuleNewWizard.jsx';
 import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 
-// 报警规则配置 V4（方案 V1.2 M1-M4）：
-// - 受控表单统一模型（createEmptyRuleForm / ruleToForm / formToRule），保存内容全部来自表单状态；
-// - 规则目标使用 DemoStore 正式绑定事实（canonical deviceId + sourceId + metricCode），
-//   不再读取 standardData 静态绑定；
-// - 原子「保存并发布」（单个 reducer 动作，发布失败弹窗保留、草稿不丢失）；
-// - MVP 仅开放数值阈值（越上限/越下限）；区间/状态/质量/组合为 P2，
-//   治理参数（抑制/风暴/静默）保留展示但标注演示占位；
-// - 批量新建：同类指标逐目标预览，只生成草稿（见 RuleBatchModal）。
+// 报警规则配置 V5（2026-11-03 合并「新增规则」与「批量新建」）：
+// - 新增规则走三步向导（产品 → 物联网设备多选 → 单指标 → 参数 → 预览），N 台设备生成 N 条规则，直接发布、无草稿态；
+// - 列表保留产品列与产品查询（产品 = 物联网平台产品目录，同产品物模型一致）；
+// - 支持单条停用、批量停用、单条删除、批量删除（历史报警事件保留）。
+// - 规则编辑：受控表单，保存即发布新版本。
 const hint = { fontSize: 12, color: '#5d6b78', lineHeight: 1.7 };
-
-const RULE_TYPE_LABEL = { threshold: '阈值规则', state: '状态规则', quality: '质量规则', combo: '组合规则' };
 
 export default function RuleConfigPage() {
   const { message, modal } = App.useApp();
@@ -30,27 +27,24 @@ export default function RuleConfigPage() {
   const actions = useDemoActions();
   const E = state.entities;
 
-  const [open, setOpen] = React.useState(false);
+  const [wizardOpen, setWizardOpen] = React.useState(false);
   // 校验提示只在提交后才出现：新建空表单时直接报「名称必填/必须选设备」没有意义
   const [submitAttempted, setSubmitAttempted] = React.useState(false);
-  const [editing, setEditing] = React.useState(null);          // 编辑中的规则（新增为 null）
+  const [editing, setEditing] = React.useState(null);          // 编辑中的规则
   const [form, setForm] = React.useState(() => createEmptyRuleForm());
   const [testOpen, setTestOpen] = React.useState(false);
   const [testRule, setTestRule] = React.useState(null);
-  const [batchOpen, setBatchOpen] = React.useState(false);
-  const [importedTpl, setImportedTpl] = React.useState(null);
-  const [saveTplOpen, setSaveTplOpen] = React.useState(false);
-  const [saveTplName, setSaveTplName] = React.useState('');
-  const [saveTplScope, setSaveTplScope] = React.useState('');
-  // 查询条件 + 勾选批量编辑
+  const [detailRule, setDetailRule] = React.useState(null);
+  // 查询条件 + 勾选批量操作
   const [qKw, setQKw] = React.useState('');
   const [qType, setQType] = React.useState(null);
   const [qStatus, setQStatus] = React.useState(null);
+  const [qProduct, setQProduct] = React.useState(null);
   const [selectedRowKeys, setSelectedRowKeys] = React.useState([]);
   const [beOpen, setBeOpen] = React.useState(false);
   const [beForm, setBeForm] = React.useState({});
 
-  // canonical 目标（启用绑定 + 勾选指标 + 未失效），级联与展示都从这里取
+  // canonical 目标（启用绑定 + 已接入指标），级联与展示都从这里取
   const targets = React.useMemo(() => resolveRuleTargets(state), [state]);
   const cascadeOptions = React.useMemo(() => {
     const devMap = new Map();
@@ -84,61 +78,32 @@ export default function RuleConfigPage() {
     [currentTarget]
   );
 
-  // 2026-10-27 范围调整：报警规则不再配置通知策略，规则保存不含 notificationConfig（历史种子规则保留原快照）
-
   const patch = (p) => setForm((f) => ({ ...f, ...p }));
   const patchTrigger = (p) => setForm((f) => ({ ...f, triggerConfig: { ...f.triggerConfig, ...p } }));
   const patchRecoveryCondition = (p) => setForm((f) => ({ ...f, recoveryConfig: { ...f.recoveryConfig, condition: { ...f.recoveryConfig.condition, ...p } } }));
-  // 规则类型切换：重建触发/恢复结构（质量规则不需要指标目标；P2 开放区间/状态/质量/组合）
-  const changeRuleType = (t) => {
-    setImportedTpl(null);
-    setForm((f) => switchRuleFormType(f, t));
-  };
+  const changeRuleType = (t) => setForm((f) => switchRuleFormType(f, t));
 
-  // legacy 判定：业务事件类规则（程序/备件等）或无法解析出结构化触发的旧规则 → 只读查看。
-  // P2 起区间/状态/质量/组合均可结构化编辑（种子规则已由 normalizeLegacyRule 补齐结构）。
+  // legacy 判定：业务事件类规则（程序/备件等）或无法解析出结构化触发的旧规则 → 只读查看
   const legacyLocked = React.useMemo(() => {
     if (!editing) return false;
     if (LEGACY_BUSINESS_RULE_TYPES.includes(editing.type)) return true;
     return !editing.triggerConfig;
   }, [editing]);
-  const editingFromDraft = !!(editing?.draftConfig);
 
-  const openCreate = () => {
-    setEditing(null);
-    setImportedTpl(null);
-    setSubmitAttempted(false);
-    setForm(createEmptyRuleForm());
-    setOpen(true);
-  };
   const openEdit = (r) => {
     setEditing(r);
-    setImportedTpl(null);
     setSubmitAttempted(false);
-    // 待发布草稿优先回填；legacy 规则经 adapter 解析，解析不出则保持默认并只读展示
-    const src = r.draftConfig || r;
-    setForm(ruleToForm(src));
-    setOpen(true);
+    setForm(ruleToForm(r));
   };
   const [testForm, setTestForm] = React.useState(null);
   const openTest = (r, cfgForm) => {
     setTestRule(r);
-    // 回测使用当前表单配置（未保存也可）；列表入口使用该规则当前生效/草稿配置
-    setTestForm(formToRule(cfgForm || ruleToForm(r.draftConfig || r)));
+    // 回测使用当前表单配置（未保存也可）；列表入口使用该规则当前生效配置
+    setTestForm(formToRule(cfgForm || ruleToForm(r)));
     setTestOpen(true);
   };
-  // 真实回测（P2）：按触发配置对目标指标最近趋势采样点回放（60s 间隔），
-  // 持续时间 / 无效数据 / 抑制口径与执行层一致；无趋势数据时退回种子统计并明示。
-  const backtest = React.useMemo(() => {
-    if (!testRule || !testForm) return null;
-    const key = `${testForm.target?.deviceId}|${testForm.target?.metricCode}`;
-    const values = state.entities.trends[key];
-    const replay = replayTrend(testForm.triggerConfig, Array.isArray(values) ? values : [], { stepSec: 60 });
-    return { key, hasTrend: Array.isArray(values) && values.length > 0, replay };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [testRule, testForm, state.entities.trends]);
 
-  // 指标特征模板：选择数值指标后自动带出推荐判定模式与参数（用户可修改；仅阈值规则应用）
+  // 指标特征模板：选择数值指标后自动带出推荐判定模式与参数（用户可修改）
   const applyMetricTemplate = (metricCode) => {
     const t = metricAlarmTemplates[metricCode];
     if (!t || form.type !== 'threshold') return;
@@ -151,64 +116,22 @@ export default function RuleConfigPage() {
   const changeTarget = ([deviceId, sourceId, metricCode]) => {
     const t = targets.find((x) => x.deviceId === deviceId && x.sourceId === sourceId && x.metricCode === metricCode) || null;
     patch({ target: { deviceId: deviceId || null, sourceId: sourceId || null, metricCode: metricCode || null } });
-    if (metricCode && !importedTpl) applyMetricTemplate(metricCode);
+    if (metricCode) applyMetricTemplate(metricCode);
     // 名称自动建议（留空时）
     if (t && !form.name.trim()) {
       patch({ target: { deviceId, sourceId, metricCode }, name: `${t.deviceName}${t.metric.name}${(metricAlarmTemplates[metricCode]?.mode) === 'lower' ? '过低' : '超限'}报警` });
     }
   };
 
-  // 从规则模板导入参数（P2 模板持久化：模板实体存于 DemoStore，应用 = 参数整体带入，可修改）
-  const applyRuleTemplate = (templateId) => {
-    const t = Object.values(state.entities.ruleTemplatesById || {}).find((x) => x.templateId === templateId);
-    if (!t) { setImportedTpl(null); return; }
-    setImportedTpl(t);
-    setForm((f) => ({
-      ...f,
-      triggerConfig: structuredClone(t.triggerConfig),
-      recoveryConfig: structuredClone(t.recoveryConfig),
-      suppressionConfig: t.suppressionConfig ? structuredClone(t.suppressionConfig) : f.suppressionConfig,
-      stormConfig: t.stormConfig ? structuredClone(t.stormConfig) : f.stormConfig,
-      silenceConfig: t.silenceConfig ? structuredClone(t.silenceConfig) : f.silenceConfig,
-      templateId: t.templateId,
-      templateVersion: null,
-    }));
-    message.success(`已从模板「${t.name}」导入参数（触发/恢复/治理），请继续选择目标（个别目标可微调）`);
-  };
-  // 存为模板（P2 模板持久化）：写入 DemoStore 模板实体，不包含设备目标
-  const submitSaveTemplate = () => {
-    const name = (saveTplName || '').trim();
-    if (name.length < 2) { message.warning('模板名称至少 2 个字'); return; }
-    const rule = buildRule();
-    const res = actions.saveRuleTemplate({
-      name,
-      metricType: saveTplScope || currentTarget?.metric?.name || '通用指标',
-      applicableMetricCodes: form.target.metricCode ? [form.target.metricCode] : [],
-      status: '启用',
-      remark: `由规则 ${form.code || '（新建）'} 配置沉淀于 ${state.meta.demoDay}`,
-      triggerConfig: rule.triggerConfig,
-      recoveryConfig: rule.recoveryConfig,
-      suppressionConfig: rule.suppressionConfig,
-      stormConfig: rule.stormConfig,
-      silenceConfig: rule.silenceConfig,
-    });
-    if (!res.ok) { message.error(res.message); return; }
-    message.success(res.message);
-    setSaveTplOpen(false);
-    setSaveTplName('');
-    setSaveTplScope('');
-  };
-
   // 客户端预校验（与 reducer 同一领域函数）：阻断错误红色展示，发布前必须清零
-  const buildRule = () => formToRule(form, { code: form.code || nextRuleCode() });
-  const nextRuleCode = () => `R-NEW-${String(Object.keys(E.alarmRulesById).length + 1).padStart(3, '0')}`;
+  const buildRule = () => formToRule(form, { code: form.code || nextRuleCode(E.alarmRulesById) });
   const validation = React.useMemo(() => {
-    if (!open || legacyLocked) return { errors: [], warnings: [] };
+    if (!editing || legacyLocked) return { errors: [], warnings: [] };
     return validateRuleDraft(buildRule(), {
       devicesById: E.devicesById, bindingsByDeviceId: E.bindingsByDeviceId, metricsByKey: E.metricsByKey, alarmRulesById: E.alarmRulesById,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form, open, legacyLocked]);
+  }, [form, editing, legacyLocked]);
 
   const saveRule = () => {
     setSubmitAttempted(true);
@@ -220,34 +143,7 @@ export default function RuleConfigPage() {
       return;
     }
     message.success(res.message);
-    setOpen(false);
-  };
-  const confirmPublish = () => {
-    if (editing?.status === '已发布') {
-      const fromV = editing.publishedVersion || editing.version;
-      modal.confirm({
-        title: '发布新版本',
-        content: `规则「${editing.code}」当前发布版本 ${fromV}，发布后历史报警仍按原版本快照解释，新报警按新版本判定。`,
-        okText: '发布新版本', cancelText: '取消',
-        onOk: () => saveRule(),
-      });
-      return;
-    }
-    saveRule();
-  };
-
-  // 批量发布（P2）：批次内草稿逐条发布（独立校验与版本快照，部分成功语义）
-  const confirmBatchPublish = (batch) => {
-    const draftCount = Object.values(E.alarmRulesById).filter((x) => x.batchId === batch.batchId && x.status === '草稿').length;
-    modal.confirm({
-      title: '批量发布批次草稿',
-      content: `批次「${batch.batchId}」内有 ${draftCount} 条草稿规则，发布后每条生成独立版本快照并开始判定报警；校验失败的条目将保留原因不发布。确认发布？`,
-      okText: '批量发布', cancelText: '取消',
-      onOk: () => {
-        const res = actions.publishBatch(batch.batchId);
-        message[res.ok ? 'success' : 'error'](res.message);
-      },
-    });
+    setEditing(null);
   };
 
   const confirmStop = (r) => modal.confirm({
@@ -260,44 +156,111 @@ export default function RuleConfigPage() {
     },
   });
 
-  // 列表读模型：chain 由 canonical 目标生成；legacy 规则回退 deviceScope + metricCode；
-  // 分组 = 指标 + 数据类型 + 单位 + 量程 + 设备型号（与批量创建/批量编辑同组口径），仅用于同分组批量编辑的内部判定，不在界面展示
+  const confirmDelete = (r) => modal.confirm({
+    title: '删除报警规则',
+    content: `确定删除报警规则「${r.name}（${r.code}）」吗？规则定义与版本快照一并删除，历史报警事件保留。`,
+    okText: '删除', cancelText: '取消',
+    okButtonProps: { danger: true },
+    onOk: () => {
+      const res = actions.deleteRules([r.code]);
+      message[res.ok ? 'success' : 'error'](res.message);
+      setSelectedRowKeys((k) => k.filter((x) => x !== r.code));
+    },
+  });
+
+  const confirmBatchStop = () => {
+    const names = selectedRowKeys.map((k) => E.alarmRulesById[k]?.code || k).join('、');
+    modal.confirm({
+      title: '批量停用报警规则',
+      content: `确定停用已勾选的 ${selectedRowKeys.length} 条规则（${names}）吗？停用后不再触发新报警，历史报警与版本快照保留。`,
+      okText: '批量停用', cancelText: '取消',
+      onOk: () => {
+        const res = actions.disableRules(selectedRowKeys);
+        message[res.ok ? 'success' : 'error'](res.message);
+        setSelectedRowKeys([]);
+      },
+    });
+  };
+
+  const confirmBatchDelete = () => {
+    const names = selectedRowKeys.map((k) => E.alarmRulesById[k]?.code || k).join('、');
+    modal.confirm({
+      title: '批量删除报警规则',
+      content: `确定删除已勾选的 ${selectedRowKeys.length} 条规则（${names}）吗？规则定义与版本快照一并删除，历史报警事件保留。`,
+      okText: '批量删除', cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: () => {
+        const res = actions.deleteRules(selectedRowKeys);
+        message[res.ok ? 'success' : 'error'](res.message);
+        setSelectedRowKeys([]);
+      },
+    });
+  };
+
+  // 真实回测（P2）：按触发配置对目标指标最近趋势采样点回放（60s 间隔）
+  const backtest = React.useMemo(() => {
+    if (!testRule || !testForm) return null;
+    const key = `${testForm.target?.deviceId}|${testForm.target?.metricCode}`;
+    const values = state.entities.trends[key];
+    const replay = replayTrend(testForm.triggerConfig, Array.isArray(values) ? values : [], { stepSec: 60 });
+    return { key, hasTrend: Array.isArray(values) && values.length > 0, replay };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [testRule, testForm, state.entities.trends]);
+
+  // 列表读模型：chain 由 canonical 目标生成；legacy 规则回退 deviceScope + metricCode
+  // 产品 = 物联网平台产品目录（canonical 目标按来源设备取；旧种子规则按指标物模型回退）
+  const metricProductByCode = React.useMemo(() => {
+    const map = new Map();
+    iotProducts.forEach((p) => p.metrics.forEach((m) => {
+      const code = typeof m === 'string' ? m : m.metricCode;
+      if (code && !map.has(code)) map.set(code, p.product);
+    }));
+    return map;
+  }, []);
   const allRows = Object.values(E.alarmRulesById).map((r) => {
     const deviceName = r.target?.deviceId ? E.devicesById[r.target.deviceId]?.name || r.target.deviceId : null;
-    const chain = r.target
-      ? [`${r.target.deviceId} ${deviceName || ''}`.trim(), r.target.sourceCode || r.target.sourceId || '--', r.target.metricCode]
-      : [r.deviceScope || '--', r.metricCode || '--'];
-    const group = ruleGroupInfo(r, targets);
+    const product = ruleProductOf(r, E.sourceDevicesById)
+      || (r.metricCode ? metricProductByCode.get(r.metricCode) || null : null);
+    const metricName = r.target?.metricCode
+      ? E.metricsByKey[r.target.metricCode]?.name
+      : (r.metricCode ? E.metricsByKey[r.metricCode]?.name : null);
     return {
       ...r,
-      chain,
-      groupKey: group?.groupKey || null,
-      groupLabel: group?.label || null,
-      versionText: r.status === '已发布' ? `${r.publishedVersion || r.version}${r.draftConfig ? '（有待发布草稿）' : ''}` : r.version || '待发布',
+      product,
+      productName: product || '--',
+      deviceText: r.target?.deviceId ? `${r.target.deviceId}${deviceName ? ` ${deviceName}` : ''}` : (r.deviceScope || '--'),
+      sourceText: r.target?.sourceCode || r.target?.sourceId || '--',
+      metricText: r.target?.metricCode ? `${r.metricCode}${metricName ? ` ${metricName}` : ''}` : (r.metricCode || '--'),
+      versionText: r.status === '已发布' ? (r.publishedVersion || r.version) : (r.version || '--'),
     };
   });
   // 查询条件（前端过滤，演示数据量级适用）
   const kw = qKw.trim();
   const rows = allRows.filter((r) => {
-    if (kw && ![r.code, r.name, r.metricCode, r.target?.deviceId].some((v) => String(v || '').includes(kw))) return false;
+    if (kw && ![r.code, r.name, r.metricCode, r.target?.deviceId, r.deviceText].some((v) => String(v || '').includes(kw))) return false;
     if (qType && r.type !== qType) return false;
     if (qStatus && r.status !== qStatus) return false;
+    if (qProduct && r.product !== qProduct) return false;
     return true;
   });
-  // 勾选批量编辑：同分组（≥2 条）才可编辑；无分组（旧结构）不可勾入
+  const productOptions = React.useMemo(() => {
+    const set = new Set();
+    allRows.forEach((r) => { if (r.product) set.add(r.product); });
+    return [...set].map((p) => ({ value: p, label: p }));
+  }, [allRows]);
+
   const selectedRules = selectedRowKeys.map((k) => allRows.find((r) => r.code === k)).filter(Boolean);
-  const selectedGroupKeys = [...new Set(selectedRules.map((r) => r.groupKey))];
-  const selectionReady = selectedRules.length >= 2 && selectedGroupKeys.length === 1 && selectedGroupKeys[0] !== null;
+  const editableSelected = selectedRules.filter((r) => !LEGACY_BUSINESS_RULE_TYPES.includes(r.type) && r.triggerConfig);
   const selectionHint = selectedRules.length === 0 ? ''
-    : selectedRules.some((r) => !r.groupKey) ? '已选含不可分组规则（旧结构），不能批量编辑'
-      : selectedGroupKeys.length > 1 ? `已选 ${selectedRules.length} 条，跨 ${selectedGroupKeys.length} 个分组，不能批量编辑`
-        : selectedRules.length < 2 ? `已选 ${selectedRules.length} 条：同分组批量编辑至少需勾选 2 条`
-          : `已选 ${selectedRules.length} 条，同分组「${selectedRules[0].groupLabel}」，可批量编辑`;
+    : editableSelected.length < selectedRules.length ? `已选 ${selectedRules.length} 条，其中 ${selectedRules.length - editableSelected.length} 条为旧业务规则，不参与批量编辑`
+      : `已选 ${selectedRules.length} 条，可批量编辑 / 批量停用 / 批量删除`;
+
   const submitBatchEdit = () => {
-    const patch = {};
-    Object.entries(beForm).forEach(([k, v]) => { if (v !== null && v !== undefined && v !== '') patch[k] = v; });
-    if (Object.keys(patch).length === 0) { message.warning('请至少填写一个要修改的字段'); return; }
-    const res = actions.batchEditRules(selectedRowKeys, patch);
+    const patchObj = {};
+    Object.entries(beForm).forEach(([k, v]) => { if (v !== null && v !== undefined && v !== '') patchObj[k] = v; });
+    if (Object.keys(patchObj).length === 0) { message.warning('请至少填写一个要修改的字段'); return; }
+    const codes = editableSelected.map((r) => r.code);
+    const res = actions.batchEditRules(codes, patchObj);
     if (!res.ok) { message.error(res.message); return; }
     message.success(res.message);
     setBeOpen(false);
@@ -319,7 +282,6 @@ export default function RuleConfigPage() {
     setSelectedRowKeys([]);
   };
   const chattering = rows.filter((r) => (r.supp7d || 0) > (r.trig7d || 0));
-  const batches = Object.values(E.alarmBatchesById || {}).sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1));
 
   return (
     <>
@@ -334,7 +296,7 @@ export default function RuleConfigPage() {
       )}
 
       {/* 筛选卡（规范 §1/§4：查询条件独立在列表卡上方） */}
-      <FilterBar onQuery={() => {}} onReset={() => { setQKw(''); setQType(null); setQStatus(null); }} extra={<span style={{ fontSize: 12, color: '#8a97a3' }}>共 {rows.length} 条</span>}>
+      <FilterBar onQuery={() => {}} onReset={() => { setQKw(''); setQType(null); setQStatus(null); setQProduct(null); }} extra={<span style={{ fontSize: 12, color: '#8a97a3' }}>共 {rows.length} 条</span>}>
         <FilterField label="关键词">
           <Input style={{ width: 240 }} allowClear placeholder="规则编号 / 名称 / 指标 / 设备" value={qKw} onChange={(e) => setQKw(e.target.value)} />
         </FilterField>
@@ -344,107 +306,92 @@ export default function RuleConfigPage() {
         </FilterField>
         <FilterField label="状态">
           <Select style={{ width: 110 }} placeholder="请选择" allowClear value={qStatus} onChange={setQStatus}
-            options={['草稿', '已发布', '已停用'].map((v) => ({ value: v, label: v }))} />
+            options={['已发布', '已停用'].map((v) => ({ value: v, label: v }))} />
+        </FilterField>
+        <FilterField label="产品">
+          <Select style={{ width: 200 }} placeholder="请选择" allowClear value={qProduct} onChange={setQProduct}
+            options={productOptions} showSearch optionFilterProp="label" />
         </FilterField>
       </FilterBar>
       {/* 列表卡：操作工具栏（左上第一行）→ 表格 */}
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
-          <Button type="primary" icon={<Plus size={14} />} onClick={openCreate}>新增规则</Button>
-          <Button icon={<Layers size={14} />} onClick={() => setBatchOpen(true)}>批量新建（同类指标）</Button>
-          <Tooltip title={selectionReady ? `对同分组 ${selectedRules.length} 条规则统一调整参数（生成待发布草稿）` : (selectionHint || '勾选同一分组的至少 2 条规则后可批量编辑')}>
-            <Button
-              icon={<Copy size={14} />}
-              disabled={!selectionReady}
-              onClick={() => setBeOpen(true)}
-            >
-              批量编辑（同分组）
-            </Button>
-          </Tooltip>
-          {selectionHint && <span style={{ fontSize: 12, color: selectionReady ? '#00b8d4' : '#8a97a3' }}>{selectionHint}</span>}
+          <Button type="primary" icon={<Plus size={14} />} onClick={() => setWizardOpen(true)}>新增规则</Button>
+          <Button
+            icon={<Pencil size={14} />}
+            disabled={editableSelected.length === 0}
+            onClick={() => setBeOpen(true)}
+          >
+            批量编辑
+          </Button>
+          <Button
+            icon={<PowerOff size={14} />}
+            disabled={selectedRowKeys.length === 0}
+            onClick={confirmBatchStop}
+          >
+            批量停用
+          </Button>
+          <Button
+            icon={<Trash2 size={14} />}
+            danger
+            disabled={selectedRowKeys.length === 0}
+            onClick={confirmBatchDelete}
+          >
+            批量删除
+          </Button>
+          {selectionHint && <span style={{ fontSize: 12, color: '#8a97a3' }}>{selectionHint}</span>}
         </Space>
         <Table
           rowKey="code"
           size="small"
           dataSource={rows}
-          rowSelection={{
-            selectedRowKeys,
-            onChange: setSelectedRowKeys,
-            getCheckboxProps: (r) => ({ disabled: !r.groupKey }),
-          }}
+          rowSelection={{ selectedRowKeys, onChange: setSelectedRowKeys }}
           columns={[
-            { title: '规则编号', dataIndex: 'code', width: 110 },
-            { title: '规则名称', dataIndex: 'name', width: 170 },
-            { title: '类型', dataIndex: 'type', width: 70, render: (v) => <Tag color={LEGACY_BUSINESS_RULE_TYPES.includes(v) ? 'default' : 'blue'}>{v}</Tag> },
-            { title: '目标链路（设备 → 子设备 → 指标）', dataIndex: 'chain', width: 280, render: (v) => v.join(' → ') },
+            { title: '产品', dataIndex: 'productName', width: 150 },
+            { title: '规则编号', dataIndex: 'code', width: 100 },
+            { title: '规则名称', dataIndex: 'name', width: 200 },
+            { title: '台账设备', dataIndex: 'deviceText', width: 190 },
+            { title: 'IoT来源', dataIndex: 'sourceText', width: 130 },
+            { title: '指标', dataIndex: 'metricText', width: 170 },
             { title: '触发条件', dataIndex: 'condition', width: 180 },
             { title: '恢复条件（迟滞）', dataIndex: 'recovery', width: 230 },
-            { title: '重复抑制 / 风暴保护', dataIndex: 'suppress', width: 190, render: (v, r) => (
-              <div style={{ fontSize: 12, lineHeight: 1.7 }}>
-                <div>{v}</div>
-                <div style={{ color: '#8a97a3' }}>风暴限流 {r.storm}</div>
-              </div>
-            ) },
-            { title: '近7天 触发/抑制', width: 110, render: (_, r) => (
-              <span style={{ fontVariantNumeric: 'tabular-nums' }}>
-                {r.trig7d || 0} / <span style={{ color: (r.supp7d || 0) > (r.trig7d || 0) ? '#d97706' : undefined }}>{r.supp7d || 0}</span>
-              </span>
-            ) },
             { title: '等级', dataIndex: 'severity', width: 70, render: (v) => v === '紧急' ? <Tag color="error">{v}</Tag> : v === '重要' ? <Tag color="warning">{v}</Tag> : <Tag color="gold">{v || '--'}</Tag> },
-            { title: '版本', dataIndex: 'versionText', width: 130 },
-            { title: '状态', dataIndex: 'status', width: 80, render: (v) => <Tag color={v === '已发布' ? 'success' : v === '草稿' ? 'processing' : 'default'}>{v}</Tag> },
-            { title: '操作', width: 150, fixed: 'right', render: (_, r) => (
+            { title: '版本', dataIndex: 'versionText', width: 80 },
+            { title: '状态', dataIndex: 'status', width: 80, render: (v) => <Tag color={v === '已发布' ? 'success' : 'default'}>{v}</Tag> },
+            { title: '操作', width: 190, fixed: 'right', render: (_, r) => (
               <div className="list-actions">
-                <a onClick={() => openEdit(r)}>{r.draftConfig ? '编辑草稿' : '编辑'}</a>
+                <a onClick={() => setDetailRule(r)}>详情</a>
+                {!LEGACY_BUSINESS_RULE_TYPES.includes(r.type) && r.triggerConfig && <a onClick={() => openEdit(r)}>编辑</a>}
                 <a onClick={() => openTest(r)}>测试</a>
                 {r.status === '已发布' && <a style={{ color: '#d97706' }} onClick={() => confirmStop(r)}>停用</a>}
-                {r.status === '草稿' && <a style={{ color: '#00b8d4' }} onClick={() => { openEdit(r); }}>发布</a>}
+                <a style={{ color: '#d64545' }} onClick={() => confirmDelete(r)}>删除</a>
               </div>
             ) },
           ]}
-          scroll={{ x: 1690 }}
+          scroll={{ x: 1720 }}
         />
-        {batches.length > 0 && (
-          <>
-            <div style={{ margin: '16px 0 8px', fontWeight: 600, fontSize: 13 }}>批量创建批次记录</div>
-            <Table
-              rowKey="batchId"
-              size="small"
-              dataSource={batches}
-              pagination={false}
-              columns={[
-                { title: '批次号', dataIndex: 'batchId', width: 170 },
-                { title: '名称', dataIndex: 'name' },
-                { title: '指标', dataIndex: 'metricCode', width: 150 },
-                { title: '目标数', dataIndex: 'targetCount', width: 70 },
-                { title: '草稿 / 跳过 / 阻断 / 失败', width: 150, render: (_, r) => `${r.result.created} / ${r.result.skipped} / ${r.result.blocked} / ${r.result.failed}` },
-                { title: '状态', dataIndex: 'status', width: 100, render: (v) => <Tag color={v === '已发布' ? 'success' : v === '发布失败' ? 'error' : 'processing'}>{v}</Tag> },
-                { title: '发布结果', width: 140, render: (_, r) => (r.publishResult ? `成功 ${r.publishResult.published} / 失败 ${r.publishResult.failed}` : '--') },
-                { title: '创建人', dataIndex: 'creator', width: 80 },
-                { title: '创建时间', dataIndex: 'createdAt', width: 170 },
-                { title: '操作', width: 100, render: (_, r) => (['草稿已生成', '部分发布', '发布失败'].includes(r.status)
-                  ? <a onClick={() => confirmBatchPublish(r)}>批量发布</a>
-                  : <span style={{ color: '#8a97a3' }}>已发布 {r.publishedAt || ''}</span>) },
-              ]}
-            />
-          </>
-        )}
       </Card>
 
-      {/* 新增 / 编辑规则弹窗：受控表单，保存失败弹窗保留 */}
+      {/* 新增规则向导：产品 → 物联网设备多选 → 单指标 → 参数 → 预览 → 创建并发布 N 条 */}
+      <RuleNewWizard
+        open={wizardOpen}
+        onClose={() => setWizardOpen(false)}
+        state={state}
+        actions={actions}
+        onDone={() => setSelectedRowKeys([])}
+      />
+
+      {/* 编辑规则弹窗：受控表单，保存即发布新版本 */}
       <Modal
-        title={editing
-          ? `编辑报警规则（${editing.code} / ${editing.status === '已发布' ? `当前发布 ${editing.publishedVersion || editing.version}` : editing.status}）`
-          : '新增报警规则'}
+        title={editing ? `编辑报警规则（${editing.code} / 当前发布 ${editing.publishedVersion || editing.version}）` : ''}
         width={780}
-        open={open}
-        onCancel={() => setOpen(false)}
+        open={!!editing}
+        onCancel={() => setEditing(null)}
         footer={legacyLocked
-          ? [<Button key="close" type="primary" onClick={() => setOpen(false)}>知道了</Button>]
+          ? [<Button key="close" type="primary" onClick={() => setEditing(null)}>知道了</Button>]
           : [
-            <Button key="cancel" onClick={() => setOpen(false)}>取消</Button>,
-            <Button key="savetpl" onClick={() => { setSaveTplName(form.name ? `${form.name} 模板` : ''); setSaveTplScope(currentTarget?.metric?.name || ''); setSaveTplOpen(true); }}>存为模板</Button>,
-            <Button key="pub" type="primary" onClick={confirmPublish}>{editing?.status === '已发布' ? '发布新版本' : '保存并发布'}</Button>,
+            <Button key="cancel" onClick={() => setEditing(null)}>取消</Button>,
+            <Button key="pub" type="primary" onClick={saveRule}>发布新版本</Button>,
           ]}
       >
         <div style={{ maxHeight: '66vh', overflowY: 'auto', paddingRight: 8 }}>
@@ -454,9 +401,6 @@ export default function RuleConfigPage() {
                 message="旧版业务规则仅可查看，不能修改。"
                 description={editing ? `规则类型：${editing.type}；触发条件：${editing.condition || '--'}` : ''}
               />
-            )}
-            {editingFromDraft && !legacyLocked && (
-              <Alert type="info" showIcon message={`当前编辑的是待发布草稿；已发布版本 ${editing.publishedVersion || editing.version} 不受影响，发布后生成新版本。`} />
             )}
             {submitAttempted && validation.errors.length > 0 && (
               <Alert type="error" showIcon message={<>保存前需修正以下问题：<br />{validation.errors.map((e, i) => <div key={i}>· {e}</div>)}</>} />
@@ -471,341 +415,21 @@ export default function RuleConfigPage() {
               disabled={legacyLocked}
               onChange={(e) => patch({ name: e.target.value })}
             />
-            <Space wrap>
-              {!editing && (
-                <Select
-                  allowClear placeholder="从模板导入（触发/恢复/治理参数）" style={{ width: 280 }}
-                  value={importedTpl?.templateId || undefined}
-                  onChange={(v) => (v ? applyRuleTemplate(v) : setImportedTpl(null))}
-                  options={Object.values(state.entities.ruleTemplatesById || {}).filter((t) => t.status === '启用').map((t) => ({ value: t.templateId, label: `${t.name}` }))}
-                />
-              )}
-              <Select value={form.type} disabled={legacyLocked} onChange={changeRuleType} style={{ width: 130 }} options={[{ value: 'threshold', label: '阈值' }, { value: 'state', label: '状态' }, { value: 'quality', label: '质量' }, { value: 'combo', label: '组合' }]} />
-              <Select value={form.severity} disabled={legacyLocked} onChange={(v) => patch({ severity: v })} style={{ width: 100 }} options={['紧急', '重要', '一般', '提示'].map((v) => ({ value: v, label: v }))} />
-            </Space>
-
-            <Card size="small" title="规则目标">
-              <Space direction="vertical" style={{ width: '100%' }}>
-                {form.type === 'quality' ? (
-                  <Select
-                    placeholder="选择质量监控设备（启用绑定中的设备）"
-                    style={{ width: '100%' }}
-                    disabled={legacyLocked}
-                    value={form.target.deviceId || undefined}
-                    onChange={(v) => patch({ target: { deviceId: v || null, sourceId: null, metricCode: null } })}
-                    options={deviceOptions}
-                    showSearch
-                    optionFilterProp="label"
-                  />
-                ) : (
-                  <Cascader
-                    style={{ width: '100%' }}
-                    className="rule-target-cascader"
-                    disabled={legacyLocked}
-                    value={[form.target.deviceId, form.target.sourceId, form.target.metricCode].filter(Boolean)}
-                    options={form.type === 'state' ? cascadeStateOptions : cascadeOptions}
-                    onChange={changeTarget}
-                    placeholder={form.type === 'state' ? '① 系统设备 → ② 子设备 → ③ 状态类指标（S.*）' : '① 系统设备 → ② 子设备（主设备 / 传感器）→ ③ 已勾选指标'}
-                    showSearch
-                  />
-                )}
-                {currentTarget && form.type !== 'quality' && (
-                  <div style={hint}>
-                    指标：{currentTarget.metric.name}（{currentTarget.metricCode}）· 单位 {currentTarget.metric.unit || '--'} · {currentTarget.metric.enumValues ? `取值 ${currentTarget.metric.enumValues.join(' / ')}` : `量程 ${currentTarget.metric.range ? `${currentTarget.metric.range.min} ~ ${currentTarget.metric.range.max}` : '--'}`}
-                  </div>
-                )}
-              </Space>
-            </Card>
-
-            <Card
-              size="small"
-              title="① 触发条件"
-              extra={<Tag color="blue">{RULE_TYPE_LABEL[form.type]}配置方式</Tag>}
-            >
-              <Space direction="vertical" style={{ width: '100%' }} size={8}>
-                {form.type === 'threshold' && (
-                  <>
-                    <Space wrap>
-                      <span>判定模式</span>
-                      <Select
-                        value={form.triggerConfig.mode}
-                        disabled={legacyLocked}
-                        onChange={(v) => patchTrigger({ mode: v, operator: v === 'lower' ? '<' : '>' })}
-                        style={{ width: 250 }}
-                        options={[
-                          { value: 'upper', label: '越上限（值 > 阈值 为异常）' },
-                          { value: 'lower', label: '越下限（值 < 阈值 为异常）' },
-                          { value: 'rangeOut', label: '区间外（超出正常区间 为异常）' },
-                          { value: 'rangeIn', label: '区间内（落入区间 为异常）' },
-                        ]}
-                      />
-                    </Space>
-                    {['rangeOut', 'rangeIn'].includes(form.triggerConfig.mode) ? (
-                      <Space wrap>
-                        <span>{form.triggerConfig.mode === 'rangeOut' ? '正常区间' : '异常区间'}</span>
-                        <InputNumber value={form.triggerConfig.low} disabled={legacyLocked} step={currentTarget?.metricCode === 'M.air_pressure' ? 0.05 : 1} onChange={(v) => patchTrigger({ low: v })} />
-                        <span>~</span>
-                        <InputNumber value={form.triggerConfig.high} disabled={legacyLocked} step={currentTarget?.metricCode === 'M.air_pressure' ? 0.05 : 1} onChange={(v) => patchTrigger({ high: v })} />
-                        <span>{currentTarget?.metric.unit || ''}</span>
-                        <span>持续</span>
-                        <InputNumber value={form.triggerConfig.durationSec} disabled={legacyLocked} min={0} onChange={(v) => patchTrigger({ durationSec: v ?? 0 })} />
-                        <span>秒 才触发</span>
-                      </Space>
-                    ) : (
-                      <Space wrap>
-                        <span>{form.triggerConfig.mode === 'lower' ? '低于' : '高于'}</span>
-                        <InputNumber value={form.triggerConfig.threshold} disabled={legacyLocked} onChange={(v) => patchTrigger({ threshold: v })} step={currentTarget?.metricCode === 'M.air_pressure' ? 0.05 : 1} />
-                        <span>{currentTarget?.metric.unit || ''}</span>
-                        <span>持续</span>
-                        <InputNumber value={form.triggerConfig.durationSec} disabled={legacyLocked} min={0} onChange={(v) => patchTrigger({ durationSec: v ?? 0 })} />
-                        <span>秒 才触发</span>
-                      </Space>
-                    )}
-                  </>
-                )}
-                {form.type === 'state' && (
-                  <>
-                    <Space wrap>
-                      <span>异常状态（落入即立即触发）</span>
-                      <Select
-                        mode="multiple" placeholder="选择异常枚举，如：故障 / 无数据"
-                        value={form.triggerConfig.abnormalValues} disabled={legacyLocked}
-                        onChange={(v) => patchTrigger({ abnormalValues: v })}
-                        options={enumOptions} style={{ minWidth: 280 }}
-                        maxTagCount="responsive"
-                      />
-                    </Space>
-                    <Space wrap>
-                      <span>正常状态（用于恢复判定）</span>
-                      <Select
-                        mode="multiple" placeholder="选择正常枚举，如：运行 / 待机"
-                        value={form.triggerConfig.normalValues} disabled={legacyLocked}
-                        onChange={(v) => patchTrigger({ normalValues: v })}
-                        options={enumOptions} style={{ minWidth: 280 }}
-                        maxTagCount="responsive"
-                      />
-                    </Space>
-                  </>
-                )}
-                {form.type === 'quality' && (
-                  <>
-                    <Space wrap>
-                      <span>质量规则类型</span>
-                      <Select
-                        value={form.triggerConfig.mode} disabled={legacyLocked}
-                        onChange={(v) => patchTrigger({ mode: v })}
-                        style={{ width: 260 }}
-                        options={[
-                          { value: 'outage', label: '数据中断（订阅断开 / 拉取超时）' },
-                          { value: 'invalidRate', label: '无效率超限（BAD 占比）' },
-                          { value: 'delay', label: '采集延迟超限' },
-                        ]}
-                      />
-                    </Space>
-                    <Space wrap>
-                      <span>持续</span>
-                      <InputNumber value={form.triggerConfig.durationMin} disabled={legacyLocked} min={1} onChange={(v) => patchTrigger({ durationMin: v ?? 5 })} />
-                      <span>分钟未恢复即产生质量报警</span>
-                      {form.triggerConfig.mode === 'invalidRate' && (
-                        <>
-                          <span>；无效率阈值</span>
-                          <InputNumber value={form.triggerConfig.invalidRatePercent} disabled={legacyLocked} min={0} max={100} onChange={(v) => patchTrigger({ invalidRatePercent: v })} />
-                          <span>%</span>
-                        </>
-                      )}
-                      {form.triggerConfig.mode === 'delay' && (
-                        <>
-                          <span>；最大允许延迟</span>
-                          <InputNumber value={form.triggerConfig.delaySec} disabled={legacyLocked} min={1} onChange={(v) => patchTrigger({ delaySec: v })} />
-                          <span>秒</span>
-                        </>
-                      )}
-                    </Space>
-                  </>
-                )}
-                {form.type === 'combo' && (
-                  <>
-                    <Space wrap>
-                      <span>组合关系</span>
-                      <Select
-                        value={form.triggerConfig.operator} disabled={legacyLocked}
-                        onChange={(v) => patchTrigger({ operator: v })}
-                        style={{ width: 180 }}
-                        options={[{ value: 'AND', label: '全部满足（AND）' }, { value: 'OR', label: '任一满足（OR）' }]}
-                      />
-                      <span>时间窗口</span>
-                      <InputNumber value={form.triggerConfig.windowSec} disabled={legacyLocked} min={1} onChange={(v) => patchTrigger({ windowSec: v ?? 300 })} />
-                      <span>秒</span>
-                    </Space>
-                    {form.triggerConfig.conditions.map((c, idx) => (
-                      <Space key={idx} wrap style={{ width: '100%', justifyContent: 'space-between' }}>
-                        <Space wrap>
-                          <span>子条件 {String.fromCharCode(65 + idx)}</span>
-                          <Cascader
-                            style={{ width: 320 }}
-                            className="rule-target-cascader"
-                            disabled={legacyLocked}
-                            value={[c.target?.deviceId, c.target?.sourceId, c.target?.metricCode].filter(Boolean)}
-                            options={cascadeOptions}
-                            onChange={(path) => {
-                              const [deviceId, sourceId, metricCode] = path;
-                              const t = targets.find((x) => x.deviceId === deviceId && x.sourceId === sourceId && x.metricCode === metricCode);
-                              const conditions = [...form.triggerConfig.conditions];
-                              conditions[idx] = { ...c, target: { deviceId: deviceId || null, sourceId: sourceId || null, metricCode: metricCode || null }, unit: t?.metric.unit || '' };
-                              patchTrigger({ conditions });
-                            }}
-                            placeholder="目标（设备 → 子设备 → 指标）"
-                            showSearch
-                          />
-                          <Select value={c.operator} disabled={legacyLocked} onChange={(v) => { const conditions = [...form.triggerConfig.conditions]; conditions[idx] = { ...c, operator: v }; patchTrigger({ conditions }); }} style={{ width: 70 }} options={[{ value: '>', label: '>' }, { value: '<', label: '<' }]} />
-                          <InputNumber value={c.value} disabled={legacyLocked} onChange={(v) => { const conditions = [...form.triggerConfig.conditions]; conditions[idx] = { ...c, value: v }; patchTrigger({ conditions }); }} step={0.1} />
-                          <span>持续</span>
-                          <InputNumber value={c.durationSec} disabled={legacyLocked} min={0} onChange={(v) => { const conditions = [...form.triggerConfig.conditions]; conditions[idx] = { ...c, durationSec: v ?? 0 }; patchTrigger({ conditions }); }} />
-                          <span>秒</span>
-                        </Space>
-                        <a style={{ color: '#d64545' }} disabled={legacyLocked} onClick={() => patchTrigger({ conditions: form.triggerConfig.conditions.filter((_, i) => i !== idx) })}>删除</a>
-                      </Space>
-                    ))}
-                    <Button
-                      type="dashed" block disabled={legacyLocked}
-                      onClick={() => patchTrigger({ conditions: [...form.triggerConfig.conditions, { target: { deviceId: null, sourceId: null, metricCode: null }, operator: '>', value: null, durationSec: 60 }] })}
-                    >
-                      + 添加子条件（至少 2 个）
-                    </Button>
-                  </>
-                )}
-              </Space>
-            </Card>
-
-            <Card
-              size="small"
-              title="② 恢复条件"
-              extra={<Tag color="blue">{RULE_TYPE_LABEL[form.type]}恢复口径</Tag>}
-            >
-              <Space direction="vertical" style={{ width: '100%' }} size={8}>
-                <Space wrap>
-                  <span>恢复方式</span>
-                  <Select value="auto" disabled style={{ width: 190 }} options={[{ value: 'auto', label: '自动恢复（满足条件）' }, { value: 'business', label: '恢复后业务闭环（随维修验收）' }, { value: 'manual', label: '人工确认关闭' }]} />
-                </Space>
-                {form.type === 'threshold' && ['rangeOut', 'rangeIn'].includes(form.triggerConfig.mode) && (
-                  <Space wrap>
-                    <span>恢复区间 = [下限 +</span>
-                    <InputNumber value={form.recoveryConfig.condition.lowDeadband ?? 0} disabled={legacyLocked} step={currentTarget?.metricCode === 'M.air_pressure' ? 0.01 : 1} min={0} onChange={(v) => patchRecoveryCondition({ lowDeadband: v ?? 0 })} />
-                    <span>, 上限 −</span>
-                    <InputNumber value={form.recoveryConfig.condition.highDeadband ?? 0} disabled={legacyLocked} step={currentTarget?.metricCode === 'M.air_pressure' ? 0.01 : 1} min={0} onChange={(v) => patchRecoveryCondition({ highDeadband: v ?? 0 })} />
-                    <span>]（独立回差）持续</span>
-                    <InputNumber value={form.recoveryConfig.stabilize.durationSec} disabled={legacyLocked} min={0} onChange={(v) => patch({ recoveryConfig: { ...form.recoveryConfig, stabilize: { ...form.recoveryConfig.stabilize, durationSec: v ?? 0 } } })} />
-                    <span>秒</span>
-                  </Space>
-                )}
-                {form.type === 'threshold' && !['rangeOut', 'rangeIn'].includes(form.triggerConfig.mode) && (
-                  <>
-                    <Space wrap>
-                      <span>恢复阈值</span>
-                      <Radio.Group
-                        value={form.recoveryConfig.condition.thresholdMode}
-                        disabled={legacyLocked}
-                        onChange={(e) => patchRecoveryCondition({ thresholdMode: e.target.value })}
-                        options={[{ value: 'deadband', label: '按回差' }, { value: 'explicit', label: '直接指定' }]}
-                        optionType="button"
-                      />
-                      {form.recoveryConfig.condition.thresholdMode === 'deadband' ? (
-                        <>
-                          <span>= 触发阈值 {form.triggerConfig.mode === 'lower' ? '+' : '−'}</span>
-                          <InputNumber value={form.recoveryConfig.condition.deadband} disabled={legacyLocked} min={0} onChange={(v) => patchRecoveryCondition({ deadband: v ?? 0 })} step={currentTarget?.metricCode === 'M.air_pressure' ? 0.01 : 1} />
-                          <span>（回差）</span>
-                        </>
-                      ) : (
-                        <InputNumber value={form.recoveryConfig.condition.recoveryValue} disabled={legacyLocked} onChange={(v) => patchRecoveryCondition({ recoveryValue: v })} step={currentTarget?.metricCode === 'M.air_pressure' ? 0.01 : 1} placeholder="恢复阈值" />
-                      )}
-                      <span>{currentTarget?.metric.unit || ''}</span>
-                    </Space>
-                    <Space wrap>
-                      <span>恢复稳定</span>
-                      <InputNumber value={form.recoveryConfig.stabilize.durationSec} disabled={legacyLocked} min={0} onChange={(v) => patch({ recoveryConfig: { ...form.recoveryConfig, stabilize: { ...form.recoveryConfig.stabilize, durationSec: v ?? 0 } } })} />
-                      <span>秒（GOOD 数据持续；无效数据保持报警，再次超限计时归零）</span>
-                    </Space>
-                  </>
-                )}
-              </Space>
-            </Card>
-
-            <Card
-              size="small"
-              title="③ 重复报警抑制"
-            >
-              <Space direction="vertical" size={8}>
-                <Switch disabled checkedChildren="活动事件未关闭期间抑制重复触发（系统统一口径）" checked />
-                <Space wrap>
-                  <Switch
-                    checked={form.suppressionConfig.remindEnabled} disabled={legacyLocked}
-                    checkedChildren="重复提醒开启" unCheckedChildren="不重复提醒"
-                    onChange={(v) => patch({ suppressionConfig: { ...form.suppressionConfig, remindEnabled: v } })}
-                  />
-                  <span>抑制期间每</span>
-                  <InputNumber value={form.suppressionConfig.remindIntervalMin} disabled={legacyLocked} min={1} onChange={(v) => patch({ suppressionConfig: { ...form.suppressionConfig, remindIntervalMin: v ?? 5 } })} />
-                  <span>分钟重复提醒一次（不新建事件）</span>
-                </Space>
-              </Space>
-            </Card>
-
-            <Card
-              size="small"
-              title="④ 报警风暴保护（限流合并）"
-            >
-              <Space direction="vertical" size={8}>
-                <Space wrap>
-                  <Switch
-                    checked={form.stormConfig.enabled} disabled={legacyLocked}
-                    checkedChildren="风暴保护开启" unCheckedChildren="关闭"
-                    onChange={(v) => patch({ stormConfig: { ...form.stormConfig, enabled: v } })}
-                  />
-                  <span>统计窗口</span>
-                  <InputNumber value={form.stormConfig.windowMin} disabled={legacyLocked || !form.stormConfig.enabled} min={1} addonAfter="分钟" onChange={(v) => patch({ stormConfig: { ...form.stormConfig, windowMin: v ?? 60 } })} />
-                  <span>内最多新建</span>
-                  <InputNumber value={form.stormConfig.maxEvents} disabled={legacyLocked || !form.stormConfig.enabled} min={1} addonAfter="条" onChange={(v) => patch({ stormConfig: { ...form.stormConfig, maxEvents: v ?? 3 } })} />
-                </Space>
-                {form.stormConfig.enabled && (
-                  <Space wrap>
-                    <span>统计范围</span>
-                    <Select value={form.stormConfig.scope} disabled={legacyLocked} style={{ width: 170 }} onChange={(v) => patch({ stormConfig: { ...form.stormConfig, scope: v } })} options={[{ value: 'sameRule', label: '同规则' }, { value: 'sameDevice', label: '同设备' }, { value: 'sameMetric', label: '同指标' }]} />
-                    <span>超限动作</span>
-                    <Select value={form.stormConfig.overflowAction} disabled={legacyLocked} style={{ width: 170 }} onChange={(v) => patch({ stormConfig: { ...form.stormConfig, overflowAction: v } })} options={[{ value: 'merge', label: '合并到首条事件' }, { value: 'downgrade', label: '降级为提示' }, { value: 'pauseNew', label: '暂停新建事件' }]} />
-                  </Space>
-                )}
-              </Space>
-            </Card>
-
-            <Card
-              size="small"
-              title="⑤ 静默时段（规则级）"
-            >
-              <Space direction="vertical" size={8} style={{ width: '100%' }}>
-                <Space wrap>
-                  <Switch
-                    checked={form.silenceConfig.enabled} disabled={legacyLocked}
-                    checkedChildren="本规则静默已启用" unCheckedChildren="未启用规则级静默"
-                    onChange={(v) => patch({ silenceConfig: { ...form.silenceConfig, enabled: v, source: v ? 'override' : 'template' } })}
-                  />
-                  <Switch disabled checkedChildren="计划停机期间静默" checked />
-                </Space>
-                {form.silenceConfig.enabled && (
-                  <>
-                    {form.silenceConfig.windows.map((w, idx) => (
-                      <Space key={idx} wrap>
-                        <span>静默 {idx + 1}</span>
-                        <Input style={{ width: 110 }} value={w.start} disabled={legacyLocked} placeholder="22:00" onChange={(e) => { const windows = [...form.silenceConfig.windows]; windows[idx] = { ...w, start: e.target.value }; patch({ silenceConfig: { ...form.silenceConfig, windows } }); }} />
-                        <span>~</span>
-                        <Input style={{ width: 110 }} value={w.end} disabled={legacyLocked} placeholder="07:00" onChange={(e) => { const windows = [...form.silenceConfig.windows]; windows[idx] = { ...w, end: e.target.value }; patch({ silenceConfig: { ...form.silenceConfig, windows } }); }} />
-                        <a style={{ color: '#d64545' }} onClick={() => patch({ silenceConfig: { ...form.silenceConfig, windows: form.silenceConfig.windows.filter((_, i) => i !== idx) } })}>删除</a>
-                      </Space>
-                    ))}
-                    <Button type="dashed" block disabled={legacyLocked} onClick={() => patch({ silenceConfig: { ...form.silenceConfig, windows: [...form.silenceConfig.windows, { start: '22:00', end: '07:00' }] } })}>+ 添加静默时段</Button>
-                  </>
-                )}
-              </Space>
-            </Card>
-
+            <RuleFormBody
+              form={form}
+              patch={patch}
+              patchTrigger={patchTrigger}
+              patchRecoveryCondition={patchRecoveryCondition}
+              changeRuleType={changeRuleType}
+              changeTarget={changeTarget}
+              currentTarget={currentTarget}
+              cascadeOptions={cascadeOptions}
+              cascadeStateOptions={cascadeStateOptions}
+              enumOptions={enumOptions}
+              deviceOptions={deviceOptions}
+              targets={targets}
+              disabled={legacyLocked}
+            />
             {!legacyLocked && (
               <Button icon={<TestTube2 size={14} />} onClick={() => openTest(editing || { code: '当前配置', name: form.name || '未命名规则', trig7d: 23, supp7d: 31 }, form)}>
                 历史数据回测（按当前配置真实回放）
@@ -813,6 +437,47 @@ export default function RuleConfigPage() {
             )}
           </Space>
         </div>
+      </Modal>
+
+      {/* 规则详情：触发/恢复 + 治理参数（重复抑制、风暴保护、静默）+ 近 7 天统计 */}
+      <Modal
+        title={detailRule ? `规则详情 · ${detailRule.code} ${detailRule.name}` : '规则详情'}
+        width={720}
+        open={!!detailRule}
+        onCancel={() => setDetailRule(null)}
+        footer={<Button type="primary" onClick={() => setDetailRule(null)}>关闭</Button>}
+      >
+        {detailRule && (
+          <Space direction="vertical" style={{ width: '100%' }} size={12}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+              <Statistic title="近7天触发" value={detailRule.trig7d || 0} suffix="次" />
+              <Statistic title="近7天重复抑制" value={detailRule.supp7d || 0} suffix="次" valueStyle={{ color: (detailRule.supp7d || 0) > (detailRule.trig7d || 0) ? '#d97706' : undefined }} />
+              <Statistic title="等级" value={detailRule.severity || '--'} />
+              <Statistic title="发布版本" value={detailRule.versionText || '--'} />
+            </div>
+            <Descriptions size="small" bordered column={2} items={[
+              { key: 'p', label: '产品', children: detailRule.productName },
+              { key: 's', label: '状态', children: <Tag color={detailRule.status === '已发布' ? 'success' : 'default'}>{detailRule.status}</Tag> },
+              { key: 'd', label: '台账设备', children: detailRule.deviceText },
+              { key: 'io', label: 'IoT来源', children: detailRule.sourceText },
+              { key: 'm', label: '指标', children: detailRule.metricText },
+              { key: 't', label: '类型', children: detailRule.type },
+              { key: 'c', label: '触发条件', children: detailRule.condition || '--', span: 2 },
+              { key: 'r', label: '恢复条件', children: detailRule.recovery || '--', span: 2 },
+              { key: 'sup', label: '重复抑制', children: detailRule.suppress || '--', span: 2 },
+              { key: 'st', label: '风暴保护', children: detailRule.storm || '--', span: 2 },
+            ]} />
+            {detailRule.silenceConfig?.enabled && (
+              <div style={hint}>
+                静默时段：{(detailRule.silenceConfig.windows || []).map((w) => `${w.start} ~ ${w.end}`).join('、') || '--'}
+              </div>
+            )}
+            <div style={hint}>
+              更新时间 {detailRule.updatedAt || '--'} · 更新人 {detailRule.updatedBy || '--'}
+              {detailRule.effectiveFrom ? ` · 生效自 ${detailRule.effectiveFrom}` : ''}
+            </div>
+          </Space>
+        )}
       </Modal>
 
       {/* 历史数据回测弹窗（P2）：按当前配置对趋势采样点真实回放；无趋势数据时明示退回种子统计 */}
@@ -849,18 +514,18 @@ export default function RuleConfigPage() {
         )}
       </Modal>
 
-      {/* 同分组批量编辑：统一调整参数 → 逐条生成待发布草稿（各规则保持自身触发模式） */}
+      {/* 批量编辑：可跨产品勾选，逐条校验（阈值按各自指标量程）后直接发布新版本 */}
       <Modal
-        title={`批量编辑（同分组 ${selectedRules.length} 条 · ${selectedRules[0]?.groupLabel || ''}）`}
+        title={`批量编辑（${editableSelected.length} 条）`}
         width={640}
         open={beOpen}
         onOk={submitBatchEdit}
         onCancel={() => setBeOpen(false)}
-        okText="批量保存为草稿" cancelText="取消"
+        okText="批量发布新版本" cancelText="取消"
       >
         <Space direction="vertical" style={{ width: '100%' }} size={10}>
           <Alert type="info" showIcon
-            message={<>将修改：{selectedRules.map((r) => r.code).join('、')}。留空的字段不修改；保存后逐条生成<b>待发布草稿</b>，需发布后生效。</>} />
+            message={<>将修改：{editableSelected.map((r) => r.code).join('、')}。留空的字段不修改；保存后逐条校验并<b>直接发布新版本</b>（校验不通过的条目保留原因不影响其余条目）。</>} />
           <Space wrap>
             <div><div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>报警等级</div>
               <Select allowClear placeholder="不修改" style={{ width: 120 }} value={beForm.severity} onChange={(v) => setBeForm({ ...beForm, severity: v ?? null })}
@@ -892,34 +557,6 @@ export default function RuleConfigPage() {
           </Space>
         </Space>
       </Modal>
-
-      {/* 存为模板（P2 模板持久化）：写入 DemoStore 模板实体，不包含设备目标 */}
-      <Modal
-        title="存为规则模板"
-        width={480}
-        open={saveTplOpen}
-        onOk={submitSaveTemplate}
-        onCancel={() => setSaveTplOpen(false)}
-        okText="保存模板" cancelText="取消"
-      >
-        <Space direction="vertical" style={{ width: '100%' }} size={10}>
-          <div>
-            <div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>模板名称（必填）</div>
-            <Input value={saveTplName} onChange={(e) => setSaveTplName(e.target.value)} placeholder="如：温度类越上限通用模板" />
-          </div>
-          <div>
-            <div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>适用指标说明</div>
-            <Input value={saveTplScope} onChange={(e) => setSaveTplScope(e.target.value)} placeholder={currentTarget ? `如：${currentTarget.metric.name}类指标` : '如：温度类指标'} />
-          </div>
-        </Space>
-      </Modal>
-
-      <RuleBatchModal
-        open={batchOpen}
-        onClose={() => setBatchOpen(false)}
-        targets={targets}
-        onCommitted={() => message.success('批量草稿已生成，可在规则列表中逐条编辑后发布')}
-      />
     </>
   );
 }

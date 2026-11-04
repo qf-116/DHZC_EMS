@@ -34,7 +34,7 @@ const routes = [
   '/program-compare', '/program-handle-record',
   '/monitor-overview', '/realtime', '/device/DEV-001', '/device/DEV-005',
   '/oee-realtime', '/oee-history', '/oee-history/detail/DEV-001', '/oee-speed-config', '/planned-downtime', '/screen/device',
-  '/alarm-center', '/alarm-rules', '/alarm-rule-templates',
+  '/alarm-center', '/alarm-rules',
   '/report/runtime', '/report/status', '/report/production', '/report/mttr', '/report/comprehensive',
   '/report/alarm', '/report/program',
   '/report/inspection', '/report/patrol', '/report/maintenance', '/report/repair', '/report/sparepart',

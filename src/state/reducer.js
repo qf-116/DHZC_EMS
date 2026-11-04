@@ -118,7 +118,6 @@ function publishRuleCore(state0, draft, at, actor) {
     status: '已发布',
     version,
     publishedVersion: version,
-    draftConfig: null,
     effectiveFrom: prev?.effectiveFrom || at,
     updatedBy: actor.userName, updatedAt: at,
     condition: conditionTextOf(draft.triggerConfig),
@@ -712,34 +711,6 @@ export function reducer(state, action) {
       return next;
     }
 
-    case 'alarm/rule/saveDraft': {
-      const payloadRule = payload.rule || {};
-      if (!(payloadRule.code || '').trim() || !(payloadRule.name || '').trim()) return reject(state, action, '规则编号与名称必填');
-      const prev = E.alarmRulesById[payloadRule.code];
-      if (prev && prev.status === '已发布') {
-        // 已发布规则编辑 → 草稿独立保存，不覆盖当前发布内容与版本快照（M2 契约 2）
-        let next = setE(state, 'alarmRulesById', payloadRule.code, {
-          ...prev,
-          draftConfig: structuredClone(payloadRule),
-          updatedBy: actor.userName, updatedAt: at,
-        });
-        next = addHistory(next, at, 'alarm-rule', payloadRule.code, `保存规则 ${payloadRule.code} 草稿（待发布）`, {});
-        return finish(next, action, true, `规则 ${payloadRule.code} 草稿已保存：当前发布版本 ${prev.publishedVersion || prev.version} 不受影响，发布后生成新版本`, { ruleCode: payloadRule.code }, false, at);
-      }
-      // 新规则/已停用草稿：草稿保存不消耗发布版本号（M2 契约 4）
-      const rule = {
-        ...(prev || { trig7d: 0, supp7d: 0, storm: '≤ 3 条/小时' }),
-        ...payloadRule,
-        status: '草稿',
-        publishedVersion: prev?.publishedVersion || null,
-        version: prev?.publishedVersion || '待发布',
-        draftConfig: null,
-        updatedBy: actor.userName, updatedAt: at,
-      };
-      let next = setE(state, 'alarmRulesById', rule.code, rule);
-      next = addHistory(next, at, 'alarm-rule', rule.code, `保存规则草稿 ${rule.code}`, {});
-      return finish(next, action, true, `规则 ${rule.code} 草稿已保存`, { ruleCode: rule.code }, false, at);
-    }
     case 'alarm/rule/saveAndPublish': {
       // 原子保存并发布（M2）：校验 → 落库 → 版本递增 → 不可变快照 → 历史，单个 reducer case 内完成
       const payloadRule = payload.rule || {};
@@ -748,122 +719,17 @@ export function reducer(state, action) {
       if (!result.ok) return reject(state, action, `规则校验未通过：${result.message}`);
       return finish(next, action, true, `规则 ${result.code} 已发布为 ${result.version}`, { ruleCode: result.code, version: result.version }, false, at);
     }
-    case 'alarm/rule/publish': {
-      const rule = E.alarmRulesById[payload.ruleCode];
-      if (!rule) return reject(state, action, '规则不存在');
-      // 已发布规则存在待发布草稿 → 应用草稿并发布为新版本
-      if (rule.draftConfig) {
-        return reducer(state, { ...action, type: 'alarm/rule/saveAndPublish', payload: { rule: rule.draftConfig }, internal: true });
-      }
-      if (rule.status !== '草稿') return reject(state, action, `规则 ${rule.code} 当前状态「${rule.status}」，只有草稿或存在待发布草稿时可发布`);
-      return reducer(state, { ...action, type: 'alarm/rule/saveAndPublish', payload: { rule }, internal: true });
-    }
     case 'alarm/rule/disable': {
       const rule = E.alarmRulesById[payload.ruleCode];
       if (!rule) return reject(state, action, '规则不存在');
       if (rule.status !== '已发布') return reject(state, action, `规则 ${rule.code} 当前状态「${rule.status}」，不能停用`);
-      let next = setE(state, 'alarmRulesById', rule.code, { ...rule, status: '已停用', draftConfig: null });
+      let next = setE(state, 'alarmRulesById', rule.code, { ...rule, status: '已停用' });
       next = addHistory(next, at, 'alarm-rule', rule.code, `停用规则 ${rule.code}${payload.reason ? `：${payload.reason}` : ''}`, {});
       return finish(next, action, true, `规则 ${rule.code} 已停用，不再触发新报警（历史报警与版本快照保留）`, { ruleCode: rule.code }, false, at);
     }
-    case 'alarm/rule/batchCommit': {
-      // 批量创建（M3-M4）：单批次、逐目标隔离的部分成功语义。
-      // 每个目标先完成校验：失败目标不写实体；合法目标生成独立草稿；重复 clientRequestId 由幂等登记拦截。
-      const { request, batchId, clientRequestId, batchName } = payload;
-      const targets = request?.targets || [];
-      if (!batchId || !clientRequestId) return reject(state, action, '批次缺少 batchId / clientRequestId');
-      if (targets.length === 0) return reject(state, action, '批量请求没有任何目标');
-      const rows = [];
-      const result = { created: 0, skipped: 0, blocked: 0, failed: 0 };
-      let next = state;
-      let batchSeq = 0;
-      targets.forEach((target) => {
-        const ctx = ruleContext(next.entities);
-        const device = ctx.devicesById[target.deviceId];
-        const binding = ctx.bindingsByDeviceId[target.deviceId];
-        const targetKey = `${target.deviceId}|${target.sourceId}|${target.metricCode}`;
-        const rowBase = { targetKey, deviceId: target.deviceId, deviceName: target.deviceName, metricCode: target.metricCode, ruleCode: null, result: 'failed', reason: '' };
-        // 阻断：设备 / 绑定 / 指标事实不成立（逐目标隔离，不影响其它目标）
-        if (!device || !binding || binding.configStatus !== '已启用') {
-          result.blocked += 1;
-          rows.push({ ...rowBase, result: 'blocked', reason: !device ? '设备不存在' : !binding ? '设备尚未创建绑定' : `绑定状态「${binding.configStatus}」，必须为已启用` });
-          return;
-        }
-        const stillBound = (binding.items || []).some(i => i.enabled && (i.metrics || []).some(m => m.metricCode === target.metricCode));
-        if (!stillBound) {
-          result.blocked += 1;
-          rows.push({ ...rowBase, result: 'blocked', reason: `指标 ${target.metricCode} 未在当前启用绑定中` });
-          return;
-        }
-        // 已有同类规则默认跳过，不覆盖（同设备同指标：结构化目标或旧种子 metricCode 均计入）
-        const existing = Object.values(ctx.alarmRulesById).find((r) => r.type === '阈值'
-          && ['草稿', '已发布'].includes(r.status)
-          && ((r.target?.deviceId === target.deviceId && r.target?.metricCode === target.metricCode)
-            || (!r.target && r.metricCode === target.metricCode)));
-        if (existing) {
-          result.skipped += 1;
-          rows.push({ ...rowBase, result: 'skipped', reason: `已存在${existing.status}规则 ${existing.code}（${existing.name}），默认不覆盖` });
-          return;
-        }
-        // 目标级校验失败不写半条规则
-        const ruleForm = {
-          code: `R-B${batchId.replace(/[^0-9]/g, '')}-${String(++batchSeq).padStart(3, '0')}`,
-          name: `${target.deviceName}${target.metric?.name || target.metricCode}${request.triggerConfig?.mode === 'lower' ? '过低' : '超限'}报警`,
-          type: '阈值',
-          severity: request.severity || '重要',
-          target: { deviceId: target.deviceId, bindingId: target.bindingId, bindingVersion: target.bindingVersion, sourceId: target.sourceId, sourceCode: target.sourceCode, metricCode: target.metricCode, metricVersion: target.metricVersion },
-          triggerConfig: request.triggerConfig,
-          recoveryConfig: request.recoveryConfig,
-          notificationConfig: request.notificationConfig,
-          suppressionConfig: request.suppressionConfig || null,
-          stormConfig: request.stormConfig || null,
-          silenceConfig: request.silenceConfig || null,
-          qualityPolicy: request.qualityPolicy || null,
-        };
-        const candidate = { ...ruleForm, policyCode: request.notificationConfig?.policyCode || null };
-        const validation = validateRuleDraft(candidate, ctx);
-        if (validation.errors.length) {
-          result.failed += 1;
-          rows.push({ ...rowBase, result: 'failed', reason: validation.errors.join('；') });
-          return;
-        }
-        const rule = {
-          ...candidate,
-          status: '草稿',
-          version: '待发布',
-          publishedVersion: null,
-          batchId,
-          templateId: request.templateId || null,
-          trig7d: 0, supp7d: 0,
-          createdBy: actor.userName, createdAt: at,
-          updatedBy: actor.userName, updatedAt: at,
-          condition: conditionTextOf(request.triggerConfig),
-          recovery: recoveryTextOf(request.recoveryConfig, request.triggerConfig),
-        };
-        next = setE(next, 'alarmRulesById', rule.code, rule);
-        result.created += 1;
-        rows.push({ ...rowBase, ruleCode: rule.code, result: 'created', reason: '已生成草稿' });
-      });
-      const batch = {
-        batchId,
-        type: 'alarm-rule-create',
-        name: batchName || `批量创建 ${at}`,
-        metricCode: request.metricCode || (targets[0] && targets[0].metricCode) || '--',
-        clientRequestId,
-        status: '草稿已生成',
-        creator: actor.userName,
-        createdAt: at,
-        targetCount: targets.length,
-        result,
-        rows,
-      };
-      next = setE(next, 'alarmBatchesById', batchId, batch);
-      next = addHistory(next, at, 'alarm-rule', batchId, `批量生成报警规则草稿：创建 ${result.created} / 跳过 ${result.skipped} / 阻断 ${result.blocked} / 失败 ${result.failed}`, {});
-      return finish(next, action, true, `批次 ${batchId} 完成：生成草稿 ${result.created} 条，跳过 ${result.skipped}，阻断 ${result.blocked}，失败 ${result.failed}`, { batchId, ...result, rows }, false, at);
-    }
     case 'alarm/rule/batchEdit': {
-      // 同分组批量编辑（P2）：勾选同组规则统一调整参数，逐条生成/更新待发布草稿。
-      // 逐条隔离：旧业务规则、已停用、结构不符的目标跳过并说明；更新后逐条校验，失败保留原因。
+      // 批量编辑：勾选规则统一调整参数，逐条直接发布为新版本（无草稿态）。
+      // 逐条隔离：旧业务规则、已停用、结构不符的目标跳过并说明；逐条校验（阈值按各自指标量程校验），失败保留原因。
       const { ruleCodes, patch } = payload;
       if (!Array.isArray(ruleCodes) || ruleCodes.length === 0) return reject(state, action, '未选择要批量编辑的规则');
       if (!patch || Object.keys(patch).length === 0) return reject(state, action, '没有要修改的字段');
@@ -883,57 +749,105 @@ export function reducer(state, action) {
           rows.push({ code, result: 'skipped', reason: applied.error });
           return;
         }
-        const validation = validateRuleDraft(applied.draft, ruleContext(next.entities));
+        const validation = validateRuleDraft(applied.next, ruleContext(next.entities));
         if (validation.errors.length) {
           result.failed += 1;
           rows.push({ code, result: 'failed', reason: validation.errors.join('；') });
           return;
         }
-        if (rule.status === '已发布') {
-          // 已发布规则：草稿独立保存，当前发布内容与版本快照不受影响
-          next = setE(next, 'alarmRulesById', code, { ...rule, draftConfig: applied.draft, updatedBy: actor.userName, updatedAt: at });
-          result.updated += 1;
-          rows.push({ code, result: 'updated', reason: `已生成待发布草稿（当前发布版本 ${rule.publishedVersion || rule.version} 不受影响）` });
-        } else {
-          // 草稿规则：直接更新草稿字段
-          next = setE(next, 'alarmRulesById', code, { ...rule, ...applied.draft, status: '草稿', updatedBy: actor.userName, updatedAt: at });
-          result.updated += 1;
-          rows.push({ code, result: 'updated', reason: '草稿已更新' });
+        const [n, pub] = publishRuleCore(next, applied.next, at, actor);
+        if (!pub.ok) {
+          result.failed += 1;
+          rows.push({ code, result: 'failed', reason: pub.message });
+          return;
         }
+        next = n;
+        result.updated += 1;
+        rows.push({ code, result: 'updated', reason: `已发布新版本 ${pub.version}` });
       });
-      next = addHistory(next, at, 'alarm-rule', (ruleCodes[0] || '--'), `批量编辑 ${ruleCodes.length} 条规则：更新 ${result.updated} / 失败 ${result.failed} / 跳过 ${result.skipped}`, {});
-      return finish(next, action, true, `批量编辑完成：更新 ${result.updated} 条草稿${result.failed ? `，失败 ${result.failed} 条（见明细）` : ''}${result.skipped ? `，跳过 ${result.skipped} 条` : ''}；草稿需发布后生效`, { ...result, rows }, false, at);
+      next = addHistory(next, at, 'alarm-rule', (ruleCodes[0] || '--'), `批量编辑 ${ruleCodes.length} 条规则：发布 ${result.updated} / 失败 ${result.failed} / 跳过 ${result.skipped}`, {});
+      return finish(next, action, result.updated > 0, `批量编辑完成：发布 ${result.updated} 条新版本${result.failed ? `，失败 ${result.failed} 条（见明细）` : ''}${result.skipped ? `，跳过 ${result.skipped} 条` : ''}`, { ...result, rows }, false, at);
     }
-    case 'alarm/rule/batchPublish': {
-      // 批量发布（P2）：批次内草稿逐条走发布核心（独立校验、独立版本快照）；
-      // 校验失败条目保留原因不发布，其余照常发布（部分成功语义）。
-      const batch = E.alarmBatchesById[payload.batchId];
-      if (!batch) return reject(state, action, '批次不存在');
-      if (batch.status === '已发布') return finish(state, action, true, `批次 ${batch.batchId} 已发布，重复请求忽略（幂等）`, { batchId: batch.batchId, published: batch.publishResult?.published ?? 0 }, true, at);
-      const draftRules = Object.values(E.alarmRulesById).filter((r) => r.batchId === batch.batchId && r.status === '草稿');
-      if (draftRules.length === 0) return reject(state, action, '批次内没有可发布的草稿规则');
+    case 'alarm/rule/batchCreate': {
+      // 批量创建并直接发布（产品 → 多设备 → 单指标 → N 条规则）：
+      // 逐条隔离，校验失败/重复的条目保留原因不影响其余条目发布成功。
+      const rules = Array.isArray(payload.rules) ? payload.rules : [];
+      if (rules.length === 0) return reject(state, action, '没有要创建的规则');
       let next = state;
-      let published = 0;
-      const failures = [];
-      draftRules.forEach((r) => {
-        const [n, result] = publishRuleCore(next, r, at, actor);
-        if (result.ok) {
-          next = n;
-          published += 1;
-        } else {
-          failures.push({ ruleCode: r.code, reason: result.message });
+      const result = { created: 0, skipped: 0, failed: 0 };
+      const rows = [];
+      rules.forEach((rule) => {
+        const validation = validateRuleDraft(rule, ruleContext(next.entities));
+        if (validation.errors.length) {
+          result.failed += 1;
+          rows.push({ code: rule.code, result: 'failed', reason: validation.errors.join('；') });
+          return;
         }
+        const [n, pub] = publishRuleCore(next, rule, at, actor);
+        if (!pub.ok) {
+          result.failed += 1;
+          rows.push({ code: rule.code, result: 'failed', reason: pub.message });
+          return;
+        }
+        next = n;
+        result.created += 1;
+        rows.push({ code: rule.code, result: 'created', reason: `已发布 ${pub.version}` });
       });
-      const updatedBatch = {
-        ...batch,
-        status: failures.length ? (published > 0 ? '部分发布' : '发布失败') : '已发布',
-        publishedAt: at,
-        publisher: actor.userName,
-        publishResult: { published, failed: failures.length, failures },
-      };
-      next = setE(next, 'alarmBatchesById', batch.batchId, updatedBatch);
-      next = addHistory(next, at, 'alarm-rule', batch.batchId, `批量发布批次 ${batch.batchId}：成功 ${published}，失败 ${failures.length}`, {});
-      return finish(next, action, published > 0, `批次 ${batch.batchId} 批量发布完成：成功 ${published} 条${failures.length ? `，失败 ${failures.length} 条（${failures.map((f) => f.ruleCode).join('、')}，原因见批次详情）` : ''}`, { batchId: batch.batchId, published, failed: failures.length, failures }, false, at);
+      next = addHistory(next, at, 'alarm-rule', (rules[0]?.code || '--'), `批量创建报警规则 ${rules.length} 条：发布 ${result.created} / 失败 ${result.failed}`, {});
+      return finish(next, action, result.created > 0, `批量创建完成：已发布 ${result.created} 条规则${result.failed ? `，失败 ${result.failed} 条（见明细）` : ''}`, { ...result, rows }, false, at);
+    }
+    case 'alarm/rule/disableBatch': {
+      // 批量停用：仅已发布规则可停用，其余逐条说明原因；历史报警与版本快照保留。
+      const ruleCodes = Array.isArray(payload.ruleCodes) ? payload.ruleCodes : [];
+      if (ruleCodes.length === 0) return reject(state, action, '未选择要停用的规则');
+      let next = state;
+      const result = { disabled: 0, skipped: 0 };
+      const rows = [];
+      ruleCodes.forEach((code) => {
+        const rule = next.entities.alarmRulesById[code];
+        if (!rule) {
+          result.skipped += 1;
+          rows.push({ code, result: 'skipped', reason: '规则不存在' });
+          return;
+        }
+        if (rule.status !== '已发布') {
+          result.skipped += 1;
+          rows.push({ code, result: 'skipped', reason: `当前状态「${rule.status}」，不能停用` });
+          return;
+        }
+        next = setE(next, 'alarmRulesById', code, { ...rule, status: '已停用', updatedBy: actor.userName, updatedAt: at });
+        next = addHistory(next, at, 'alarm-rule', code, `停用规则 ${code}`, {});
+        result.disabled += 1;
+        rows.push({ code, result: 'disabled', reason: '已停用，不再触发新报警' });
+      });
+      return finish(next, action, result.disabled > 0, `已停用 ${result.disabled} 条规则${result.skipped ? `，跳过 ${result.skipped} 条（见明细）` : ''}`, { ...result, rows }, false, at);
+    }
+    case 'alarm/rule/delete': {
+      // 批量删除规则：删除规则定义与其版本快照；历史报警事件保留（事件内已记录规则名与版本号）。
+      const ruleCodes = Array.isArray(payload.ruleCodes) ? payload.ruleCodes : [];
+      if (ruleCodes.length === 0) return reject(state, action, '未选择要删除的规则');
+      let next = state;
+      const result = { deleted: 0, skipped: 0 };
+      const rows = [];
+      ruleCodes.forEach((code) => {
+        const rule = next.entities.alarmRulesById[code];
+        if (!rule) {
+          result.skipped += 1;
+          rows.push({ code, result: 'skipped', reason: '规则不存在' });
+          return;
+        }
+        const rulesMap = { ...next.entities.alarmRulesById };
+        delete rulesMap[code];
+        next = setEnt(next, 'alarmRulesById', rulesMap);
+        // 版本快照随规则一并删除（键形如 `${code}|${version}`）
+        const versions = { ...next.entities.alarmRuleVersionsById };
+        Object.keys(versions).filter((k) => k.startsWith(`${code}|`)).forEach((k) => { delete versions[k]; });
+        next = setEnt(next, 'alarmRuleVersionsById', versions);
+        next = addHistory(next, at, 'alarm-rule', code, `删除规则 ${code}（历史报警事件保留）`, {});
+        result.deleted += 1;
+        rows.push({ code, result: 'deleted', reason: '已删除规则定义与版本快照' });
+      });
+      return finish(next, action, result.deleted > 0, `已删除 ${result.deleted} 条规则${result.skipped ? `，跳过 ${result.skipped} 条` : ''}；历史报警事件保留`, { ...result, rows }, false, at);
     }
     case 'alarm/rule/rollback': {
       // 版本回滚（P2）：读取历史版本快照内容，作为新版本发布（Vn+1），不改写任何历史快照。
@@ -963,35 +877,6 @@ export function reducer(state, action) {
       if (!result.ok) return reject(state, action, `回滚发布未通过校验：${result.message}`);
       const nextWithHistory = addHistory(next, at, 'alarm-rule', ruleCode, `回滚规则 ${ruleCode} 至 ${version} 内容，发布为 ${result.version}`, {});
       return finish(nextWithHistory, action, true, `已按 ${version} 快照内容回滚并发布为 ${result.version}（历史快照不变）`, { ruleCode, fromVersion: version, version: result.version }, false, at);
-    }
-
-    // ================= 规则模板（P2 模板持久化） =================
-    case 'alarm/template/save': {
-      const tpl = payload.template || {};
-      if (!(tpl.name || '').trim()) return reject(state, action, '模板名称必填');
-      const templates = state.entities.ruleTemplatesById || {};
-      const prev = templates[tpl.templateId];
-      const record = {
-        ...prev,
-        ...tpl,
-        templateId: tpl.templateId || `RT-${Object.keys(templates).length + 101}`,
-        refs: prev?.refs ?? 0,
-        updatedBy: actor.userName, updatedAt: at,
-        createdBy: prev?.createdBy || actor.userName,
-        createdAt: prev?.createdAt || at,
-      };
-      let next = setE(state, 'ruleTemplatesById', record.templateId, record);
-      next = addHistory(next, at, 'alarm-rule-template', record.templateId, `${prev ? '更新' : '创建'}规则模板「${record.name}」`, {});
-      return finish(next, action, true, `模板「${record.name}」已${prev ? '更新' : '保存'}，可在新增规则时导入或应用到设备`, { templateId: record.templateId }, false, at);
-    }
-    case 'alarm/template/delete': {
-      const templates = state.entities.ruleTemplatesById || {};
-      const tpl = templates[payload.templateId];
-      if (!tpl) return reject(state, action, '模板不存在');
-      let next = { ...state, entities: { ...state.entities, ruleTemplatesById: { ...templates } } };
-      delete next.entities.ruleTemplatesById[payload.templateId];
-      next = addHistory(next, at, 'alarm-rule-template', payload.templateId, `删除规则模板「${tpl.name}」（不影响已发布规则与版本快照）`, {});
-      return finish(next, action, true, `模板「${tpl.name}」已删除；已发布规则与版本快照不受影响`, {}, false, at);
     }
 
     // ================= 维修 =================

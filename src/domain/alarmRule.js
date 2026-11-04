@@ -48,6 +48,7 @@ export function resolveRuleTargets(state) {
   const bindings = state?.entities?.bindingsByDeviceId || {};
   const metricsByKey = state?.entities?.metricsByKey || {};
   const devicesById = state?.entities?.devicesById || {};
+  const sourceDevicesById = state?.entities?.sourceDevicesById || {};
   Object.values(bindings).forEach((b) => {
     if (b.configStatus !== '已启用') return;
     (b.items || []).filter((i) => i.enabled).forEach((item) => {
@@ -67,6 +68,8 @@ export function resolveRuleTargets(state) {
           sourceCode: item.iotDeviceCode,
           sourceRole: item.role || '--',
           sensorType: item.sensorType || '--',
+          // 产品 = 物联网平台产品目录（同一产品下所有设备物模型一致）
+          product: sourceDevicesById[item.iotDeviceId]?.product || null,
           metricCode: sel.metricCode,
           metricVersion: sel.metricVersion || metric.metricVersion,
           metric,
@@ -240,41 +243,178 @@ export function finalizeRuleConfigs(triggerConfig, recoveryConfig) {
   }
 }
 
-// ---------- 分组信息（列表分组列 / 批量编辑同组校验） ----------
-// 有 canonical 目标：按目标设备型号精确分组；无目标但有指标编码的旧种子规则：
-// 按指标元数据归入「全型号」组（型号维度记 *，不与精确分组混组）。
-// 返回 { groupKey, label } 或 null（业务事件类等无法定位指标的规则不参与分组）。
-export function ruleGroupInfo(rule, targets) {
+// ---------- 规则产品归属（列表展示 / 查询筛选） ----------
+// 产品来自物联网平台产品目录（sourceDevicesById）；旧版业务规则无来源设备 → 无产品。
+export function ruleProductOf(rule, sourceDevicesById) {
   if (!rule) return null;
-  let t = null;
-  let byTarget = false;
-  if (rule.target?.deviceId && rule.target.metricCode) {
-    t = (targets || []).find((x) => x.deviceId === rule.target.deviceId
-      && x.metricCode === rule.target.metricCode
-      && (!rule.target.sourceId || x.sourceId === rule.target.sourceId));
-    byTarget = !!t;
-  } else if (rule.metricCode) {
-    t = (targets || []).find((x) => x.metricCode === rule.metricCode);
-  }
-  if (!t) return null;
-  const m = t.metric;
-  const modelDim = byTarget ? (t.deviceModel || '--') : '*';
-  const key = [t.metricCode, m.dataType || 'other', m.unit || '', m.range ? `${m.range.min}:${m.range.max}` : 'no-range', modelDim].join('|');
-  const r = m.range;
-  const label = `${m.name} ${m.unit || ''} ${r ? `${r.min}~${r.max}` : ''} · ${byTarget ? (t.deviceModel || '--') : '全型号'}`.replace(/\s+/g, ' ').trim();
-  return { groupKey: key, label };
+  const sourceId = rule.target?.sourceId;
+  if (!sourceId) return null;
+  return sourceDevicesById?.[sourceId]?.product || null;
 }
 
-// ---------- 批量编辑 patch 应用（P2：同分组勾选批量编辑） ----------
+// 新规则编号：R- + 三位序号（不再按指标分段），跳过已占用编号
+export function nextRuleCode(alarmRulesById) {
+  const used = new Set(Object.keys(alarmRulesById || {}));
+  let n = 1;
+  let code = `R-${String(n).padStart(3, '0')}`;
+  while (used.has(code)) {
+    n += 1;
+    code = `R-${String(n).padStart(3, '0')}`;
+  }
+  return code;
+}
+
+// ---------- 选目标：产品 → 物联网设备 → 反查台账设备 ----------
+// 新增规则的第 1 步：先选产品（物联网平台产品目录），再选该产品下的物联网设备；
+// 每个物联网设备通过绑定反查所属台账设备（DEV-*），并带出该设备当前已接入的指标。
+// 返回行结构：
+// { key, sourceId, sourceCode, sourceName, product, deviceId, deviceName,
+//   bindingId, bindingVersion, bindingStatus, enabled, metrics: [metricCode] }
+// enabled = 绑定已启用且来源项启用；metrics = 该来源项当前已接入的指标编码。
+export function resolveProductSources(state, product) {
+  const E = state?.entities || {};
+  const sourceDevicesById = E.sourceDevicesById || {};
+  const bindingsByDeviceId = E.bindingsByDeviceId || {};
+  const devicesById = E.devicesById || {};
+  // 来源设备 → 绑定引用（一个来源设备理论上可被多条绑定引用）
+  const linksBySource = new Map();
+  Object.values(bindingsByDeviceId).forEach((b) => {
+    (b.items || []).forEach((item) => {
+      if (!linksBySource.has(item.iotDeviceId)) linksBySource.set(item.iotDeviceId, []);
+      linksBySource.get(item.iotDeviceId).push({ binding: b, item });
+    });
+  });
+  const rows = [];
+  Object.values(sourceDevicesById).forEach((s) => {
+    if (!product || s.product !== product) return;
+    const links = linksBySource.get(s.iotDeviceId) || [];
+    if (links.length === 0) {
+      rows.push({
+        key: `${s.iotDeviceId}|--`, sourceId: s.iotDeviceId, sourceCode: s.iotDeviceCode, sourceName: s.name,
+        product: s.product, deviceId: null, deviceName: null, bindingId: null, bindingVersion: null,
+        bindingStatus: '未绑定', enabled: false, metrics: [], reason: '尚未绑定台账设备',
+      });
+      return;
+    }
+    links.forEach(({ binding, item }) => {
+      const device = devicesById[binding.deviceId];
+      const enabled = binding.configStatus === '已启用' && !!item.enabled;
+      rows.push({
+        key: `${s.iotDeviceId}|${binding.deviceId}`,
+        sourceId: s.iotDeviceId,
+        sourceCode: s.iotDeviceCode,
+        sourceName: s.name,
+        product: s.product,
+        deviceId: binding.deviceId,
+        deviceName: device?.name || binding.deviceId,
+        deviceModel: device?.model || '--',
+        bindingId: binding.bindingId,
+        bindingVersion: binding.version,
+        bindingStatus: binding.configStatus,
+        enabled,
+        metrics: (item.metrics || []).map((m) => m.metricCode),
+        reason: enabled ? '' : (binding.configStatus !== '已启用' ? `绑定状态「${binding.configStatus}」` : '来源项未启用'),
+      });
+    });
+  });
+  return rows;
+}
+
+// 产品目录（供新增规则第 1 步下拉）：只列出存在绑定来源的产品
+export function listRuleProducts(state) {
+  const E = state?.entities || {};
+  const sourceDevicesById = E.sourceDevicesById || {};
+  const products = new Map();
+  Object.values(sourceDevicesById).forEach((s) => {
+    if (s.product && !products.has(s.product)) products.set(s.product, { product: s.product, sourceCount: 0 });
+    if (s.product) products.get(s.product).sourceCount += 1;
+  });
+  return [...products.values()];
+}
+
+// ---------- 批量创建（产品 → 多设备 → 单指标 → N 条规则直接发布） ----------
+// 纯计算（不改状态）：页面第 3 步预览与 reducer 提交共用同一份逻辑，保证预览与实际一致。
+// request: { nameTemplate, severity, triggerConfig, recoveryConfig, suppressionConfig, stormConfig, silenceConfig, qualityPolicy }
+// targets: [{ deviceId, deviceName, sourceId, sourceCode, metricCode, bindingId, bindingVersion, metricVersion }]
+// 返回 { rows, summary }；rows[i].result ∈ creatable | skipped | blocked
+export function planRuleBatch(state, request, targets) {
+  const E = state?.entities || {};
+  const devicesById = E.devicesById || {};
+  const bindingsByDeviceId = E.bindingsByDeviceId || {};
+  const metricsByKey = E.metricsByKey || {};
+  const rules = E.alarmRulesById || {};
+  const usedCodes = new Set(Object.keys(rules));
+  const rows = [];
+  (targets || []).forEach((t) => {
+    const device = devicesById[t.deviceId];
+    const binding = bindingsByDeviceId[t.deviceId];
+    const metric = metricsByKey[t.metricCode];
+    const rowBase = {
+      deviceId: t.deviceId,
+      deviceName: t.deviceName || device?.name || t.deviceId || '--',
+      sourceId: t.sourceId,
+      sourceCode: t.sourceCode || t.sourceId || '--',
+      metricCode: t.metricCode,
+      metricName: metric?.name || t.metricCode || '--',
+      code: null,
+      name: '',
+      result: 'blocked',
+      reason: '',
+    };
+    if (!device) { rows.push({ ...rowBase, reason: '台账设备不存在' }); return; }
+    if (!binding) { rows.push({ ...rowBase, reason: '台账设备尚未创建绑定' }); return; }
+    if (binding.configStatus !== '已启用') { rows.push({ ...rowBase, reason: `绑定状态「${binding.configStatus}」，不能创建规则` }); return; }
+    const item = (binding.items || []).find((i) => i.iotDeviceId === t.sourceId && i.enabled);
+    if (!item) { rows.push({ ...rowBase, reason: '物联网设备未在当前启用绑定中' }); return; }
+    if (!(item.metrics || []).some((m) => m.metricCode === t.metricCode)) {
+      rows.push({ ...rowBase, reason: `指标 ${t.metricCode} 未接入该物联网设备` });
+      return;
+    }
+    const existing = Object.values(rules).find((r) => r.type === '阈值'
+      && r.status === '已发布'
+      && r.target?.deviceId === t.deviceId
+      && r.target?.metricCode === t.metricCode);
+    if (existing) {
+      rows.push({ ...rowBase, code: existing.code, result: 'skipped', reason: `已存在已发布规则 ${existing.code}（${existing.name}），默认不覆盖` });
+      return;
+    }
+    // 规则编号：R- + 三位序号，跳过已占用
+    let n = 1;
+    let code = `R-${String(n).padStart(3, '0')}`;
+    while (usedCodes.has(code)) { n += 1; code = `R-${String(n).padStart(3, '0')}`; }
+    usedCodes.add(code);
+    const mode = request?.triggerConfig?.mode;
+    const tpl = request?.nameTemplate || '{device}{metric}报警';
+    rows.push({
+      ...rowBase,
+      code,
+      name: tpl
+        .replace('{device}', rowBase.deviceName)
+        .replace('{metric}', rowBase.metricName)
+        .replace('{mode}', mode === 'lower' ? '过低' : mode === 'rangeOut' ? '区间异常' : '超限'),
+      result: 'creatable',
+      reason: '可创建',
+    });
+  });
+  const summary = {
+    total: rows.length,
+    creatable: rows.filter((r) => r.result === 'creatable').length,
+    skipped: rows.filter((r) => r.result === 'skipped').length,
+    blocked: rows.filter((r) => r.result === 'blocked').length,
+  };
+  return { rows, summary };
+}
+
+// ---------- 批量编辑 patch 应用 ----------
 // patch 字段留空（null/undefined）= 不修改；各规则保持自身触发模式：
 // upper/lower 应用 threshold，rangeOut/rangeIn 应用 low/high；回差按各自恢复模式应用。
-// 返回 { draft } 或 { error }；只处理结构化数值阈值规则，已停用/旧业务规则跳过。
+// 返回 { next }（待发布的新规则内容）或 { error }；只处理结构化数值阈值规则，已停用/旧业务规则跳过。
 export function applyBatchEditPatch(rule, patch) {
   if (!rule || !rule.code) return { error: '规则不存在' };
   if (rule.legacyOnly) return { error: '旧业务规则不支持结构化批量编辑' };
   if (!rule.triggerConfig || rule.triggerConfig.type !== 'threshold') return { error: '仅数值阈值规则支持批量编辑' };
   if (rule.status === '已停用') return { error: '已停用规则不参与批量编辑' };
-  const base = rule.draftConfig ? structuredClone(rule.draftConfig) : { ...rule };
+  const base = { ...rule };
   delete base.draftConfig;
   const triggerConfig = structuredClone(base.triggerConfig);
   const recoveryConfig = structuredClone(base.recoveryConfig || {});
@@ -300,7 +440,7 @@ export function applyBatchEditPatch(rule, patch) {
   let notificationConfig = base.notificationConfig ? structuredClone(base.notificationConfig) : null;
   if (p.notificationConfig) notificationConfig = structuredClone(p.notificationConfig);
   finalizeRuleConfigs(triggerConfig, recoveryConfig);
-  const draft = {
+  const next = {
     ...base,
     severity: has(p.severity) ? p.severity : base.severity,
     triggerConfig,
@@ -310,7 +450,7 @@ export function applyBatchEditPatch(rule, patch) {
     condition: conditionTextOf(triggerConfig),
     recovery: recoveryTextOf(recoveryConfig, triggerConfig),
   };
-  return { draft };
+  return { next };
 }
 
 // ---------- 展示文本由结构生成 ----------
@@ -823,27 +963,6 @@ export function comboRecovered(triggerConfig, conditionSamples) {
     if (!provided) return false;
     return !sampleTriggered({ type: 'threshold', mode: cond.operator === '<' ? 'lower' : 'upper', threshold: cond.value }, provided.sample);
   });
-}
-
-// ---------- 批量分组（M3） ----------
-export function batchGroupKey(target) {
-  return [
-    target.metricCode,
-    target.metric?.dataType || 'other',
-    target.metric?.unit || '',
-    target.metric?.range ? `${target.metric.range.min}:${target.metric.range.max}` : 'no-range',
-    target.deviceModel || '--',
-  ].join('|');
-}
-
-export function groupBatchTargets(targets) {
-  const groups = new Map();
-  targets.forEach((t) => {
-    const key = batchGroupKey(t);
-    if (!groups.has(key)) groups.set(key, { groupKey: key, targets: [] });
-    groups.get(key).targets.push(t);
-  });
-  return [...groups.values()];
 }
 
 // ---------- 历史趋势回测（P2） ----------

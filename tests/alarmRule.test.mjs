@@ -1,7 +1,7 @@
 // ============================================================
 // 报警规则 M0 契约测试（纯 Node，无框架）：node tests/alarmRule.test.mjs
-// 覆盖：元数据归一化 / legacy adapter / 版本号契约 / 草稿校验 / 样本判定 /
-//       批量分组 / reducer 原子发布与触发门禁 / 批量幂等
+// 覆盖：元数据归一化 / legacy adapter / 版本号契约 / 发布校验 / 样本判定 /
+//       产品目标解析 / reducer 原子发布与触发门禁 / 批量直接发布与幂等
 // ============================================================
 
 import assert from 'node:assert/strict';
@@ -10,7 +10,7 @@ import {
   nextPublishVersion, validateRuleDraft, sampleTriggered, sampleRecovered,
   comboTriggered, comboRecovered, qualityTriggerHit, replayTrend,
   createEmptyRuleForm, formToRule, ruleToForm, switchRuleFormType, conditionTextOf, resolveRuleTargets,
-  groupBatchTargets, batchGroupKey, ruleGroupInfo, applyBatchEditPatch,
+  nextRuleCode, resolveProductSources, planRuleBatch, ruleProductOf, applyBatchEditPatch,
 } from '../src/domain/alarmRule.js';
 import { reducer } from '../src/state/reducer.js';
 import { createDemoState } from '../src/data/demo/index.js';
@@ -150,19 +150,38 @@ test('validateRuleDraft：缺通知接收人被阻断', () => {
   assert.ok(res.errors.some((e) => e.includes('接收人')));
 });
 
-// ---------- 域：批量分组 ----------
-test('groupBatchTargets：同指标不同型号拆分', () => {
-  const t = (deviceModel, rangeMin, rangeMax) => ({
-    metricCode: 'M.x', deviceModel, metric: { dataType: 'number', unit: '℃', range: { min: rangeMin, max: rangeMax } },
-  });
-  const groups = groupBatchTargets([t('A型', 0, 150), t('A型', 0, 150), t('B型', 0, 200)]);
-  assert.equal(groups.length, 2);
-  assert.equal(groups[0].targets.length, 2);
-  assert.ok(groups[0].groupKey.includes('M.x'));
+// ---------- 域：产品目标解析 / 批量计划 ----------
+test('nextRuleCode：统一使用 R- 三位序号并跳过已占用编号', () => {
+  assert.equal(nextRuleCode({ 'R-001': {}, 'R-003': {} }), 'R-002');
 });
-test('batchGroupKey：同指标同量程同型号一致', () => {
-  const t = (deviceModel) => ({ metricCode: 'M.x', deviceModel, metric: { dataType: 'number', unit: '℃', range: { min: 0, max: 150 } } });
-  assert.equal(batchGroupKey(t('A')), batchGroupKey(t('A')));
+test('resolveProductSources：产品下来源设备反查台账设备与绑定状态', () => {
+  const rows = resolveProductSources(baseState, '温度传感器 TP08');
+  assert.ok(rows.length > 0);
+  assert.ok(rows.some((r) => r.sourceId === 'iot-s-20012' && r.deviceId === 'DEV-001'));
+  assert.ok(rows.every((r) => r.product === '温度传感器 TP08'));
+});
+test('planRuleBatch：同一指标按设备逐条计划，已发布同目标规则跳过', () => {
+  const target = resolveRuleTargets(baseState).find((t) => t.deviceId === 'DEV-001' && t.metricCode === 'M.bearing_temp');
+  const state = {
+    ...baseState,
+    entities: {
+      ...baseState.entities,
+      alarmRulesById: {
+        ...baseState.entities.alarmRulesById,
+        'R-EXIST-001': {
+          code: 'R-EXIST-001', type: '阈值', status: '已发布',
+          target: { deviceId: target.deviceId, metricCode: target.metricCode },
+        },
+      },
+    },
+  };
+  const result = planRuleBatch(state, { nameTemplate: '{device}{metric}报警', triggerConfig: { mode: 'upper' } }, [target]);
+  assert.equal(result.summary.skipped, 1);
+  assert.equal(result.rows[0].result, 'skipped');
+});
+test('ruleProductOf：canonical 来源设备映射到物联网平台产品', () => {
+  assert.equal(ruleProductOf({ target: { sourceId: 'iot-s-20012' } }, baseState.entities.sourceDevicesById), '温度传感器 TP08');
+  assert.equal(ruleProductOf({ metricCode: 'M.bearing_temp' }, baseState.entities.sourceDevicesById), null);
 });
 
 // ---------- reducer：目标解析 ----------
@@ -201,9 +220,12 @@ test('saveAndPublish：校验失败不落库', () => {
   assert.equal(lastOf(s).ok, false);
   assert.equal(s.entities.alarmRulesById['R-M0-BAD'], undefined);
 });
-test('触发门禁：草稿规则不能触发', () => {
-  let s = baseState;
-  s = reducer(s, { type: 'alarm/rule/saveDraft', payload: { rule: withCode(validForm(), 'R-M0-DRAFT') }, actionId: 'a3' });
+test('触发门禁：规则配置直接发布，旧草稿状态仍不能触发', () => {
+  const draft = { ...withCode(validForm(), 'R-M0-DRAFT'), status: '草稿', version: '待发布' };
+  let s = {
+    ...baseState,
+    entities: { ...baseState.entities, alarmRulesById: { ...baseState.entities.alarmRulesById, [draft.code]: draft } },
+  };
   s = reducer(s, { type: 'alarm/raise', payload: { deviceId: 'DEV-001', ruleCode: 'R-M0-DRAFT', sample: { value: 95, qualityCode: 'GOOD', metricCode: 'M.bearing_temp' } }, actionId: 'a4' });
   assert.equal(lastOf(s).ok, false);
   assert.ok(lastOf(s).message.includes('草稿') || lastOf(s).message.includes('已发布'));
@@ -239,119 +261,79 @@ test('触发门禁：停用规则不能触发', () => {
   s = reducer(s, { type: 'alarm/raise', payload: { deviceId: 'DEV-001', ruleCode: 'R-M0-004', sample: { value: 95, qualityCode: 'GOOD' } }, actionId: 'b3' });
   assert.equal(lastOf(s).ok, false);
 });
-test('版本契约：已发布规则存草稿不改变发布内容；再发布递增为 V2', () => {
+test('版本契约：已发布规则再次配置直接发布 V2，V1 快照不变', () => {
   let s = baseState;
   s = reducer(s, { type: 'alarm/rule/saveAndPublish', payload: { rule: withCode(validForm(), 'R-M0-005') }, actionId: 'c1' });
   const snapV1 = s.entities.alarmRuleVersionsById['R-M0-005|V1'];
   const edited = withCode(validForm(), 'R-M0-005');
   edited.triggerConfig = { ...edited.triggerConfig, threshold: 100 };
-  s = reducer(s, { type: 'alarm/rule/saveDraft', payload: { rule: edited }, actionId: 'c2' });
-  let rule = s.entities.alarmRulesById['R-M0-005'];
-  assert.equal(rule.status, '已发布', '已发布规则保存草稿后状态不变');
-  assert.equal(rule.triggerConfig.threshold, 90, '当前发布内容不被草稿覆盖');
-  assert.equal(rule.draftConfig.triggerConfig.threshold, 100, '草稿独立保存');
-  assert.equal(s.entities.alarmRuleVersionsById['R-M0-005|V1'], snapV1, '版本快照不变');
-  s = reducer(s, { type: 'alarm/rule/publish', payload: { ruleCode: 'R-M0-005' }, actionId: 'c3' });
-  assert.equal(lastOf(s).ok, true, lastOf(s).message);
-  rule = s.entities.alarmRulesById['R-M0-005'];
+  s = reducer(s, { type: 'alarm/rule/saveAndPublish', payload: { rule: edited }, actionId: 'c2' });
+  const rule = s.entities.alarmRulesById['R-M0-005'];
+  assert.equal(rule.status, '已发布');
   assert.equal(rule.version, 'V2');
   assert.equal(rule.triggerConfig.threshold, 100);
-  assert.equal(rule.draftConfig, null);
+  assert.equal(rule.draftConfig, undefined, '新模型不再保存草稿配置');
+  assert.equal(s.entities.alarmRuleVersionsById['R-M0-005|V1'], snapV1, 'V1 快照不可变');
   assert.ok(s.entities.alarmRuleVersionsById['R-M0-005|V2']);
-  assert.equal(s.entities.alarmRuleVersionsById['R-M0-005|V1'].triggerSnapshot.threshold, 90, 'V1 快照不可变');
 });
-test('版本契约：新规则草稿保存不消耗版本号', () => {
+test('版本契约：新规则不存在草稿态，首次直接发布 V1', () => {
   let s = baseState;
-  s = reducer(s, { type: 'alarm/rule/saveDraft', payload: { rule: withCode(validForm(), 'R-M0-D2') }, actionId: 'd1' });
+  s = reducer(s, { type: 'alarm/rule/saveAndPublish', payload: { rule: withCode(validForm(), 'R-M0-D2') }, actionId: 'd1' });
   const rule = s.entities.alarmRulesById['R-M0-D2'];
-  assert.equal(rule.status, '草稿');
-  assert.equal(rule.publishedVersion || null, null);
+  assert.equal(rule.status, '已发布');
+  assert.equal(rule.version, 'V1');
+  assert.equal(rule.publishedVersion, 'V1');
 });
 
-// ---------- reducer：批量提交（M3-M4 契约） ----------
-const batchRequest = (deviceIds, over = {}) => ({
-  metricCode: 'M.bearing_temp',
-  severity: '重要',
-  triggerConfig: { type: 'threshold', mode: 'upper', threshold: 90, unit: '℃', durationSec: 60 },
-  recoveryConfig: {
-    mode: 'auto', closeMode: 'auto',
-    condition: { type: 'hysteresis', direction: 'upper', thresholdMode: 'deadband', triggerValue: 90, recoveryValue: 85, deadband: 5, unit: '℃' },
-    stabilize: { durationSec: 30, qualityRequired: 'GOOD', invalidDataPolicy: 'hold', rebreachPolicy: 'resetTimer' },
-    notifyOnRecover: true,
-  },
-  notificationConfig: { policyCode: 'NP-IMPORTANT', channels: ['站内'], receivers: ['李明'] },
-  targets: deviceIds.map((deviceId) => {
-    const t = resolveRuleTargets(baseState).find((x) => x.deviceId === deviceId && x.metricCode === 'M.bearing_temp');
-    return t;
-  }).filter(Boolean),
-  ...over,
-});
-
-test('batchCommit：逐目标生成独立草稿，结果计数正确', () => {
+// ---------- reducer：批量直接发布（N 对 N） ----------
+const batchRule = (deviceId, metricCode = 'M.bearing_temp', code = `R-B-${deviceId}`) => {
+  const t = resolveRuleTargets(baseState).find((x) => x.deviceId === deviceId && x.metricCode === metricCode);
+  assert.ok(t, `${deviceId}/${metricCode} 必须存在可用目标`);
+  return formToRule({
+    ...createEmptyRuleForm(),
+    name: `${t.deviceName}${t.metric.name}报警`,
+    severity: '重要',
+    target: { deviceId: t.deviceId, sourceId: t.sourceId, metricCode: t.metricCode },
+    triggerConfig: { type: 'threshold', mode: 'upper', operator: '>', threshold: 90, unit: t.metric.unit, durationSec: 60 },
+    recoveryConfig: { ...createEmptyRuleForm().recoveryConfig, condition: { type: 'hysteresis', direction: 'upper', thresholdMode: 'deadband', triggerValue: 90, recoveryValue: null, deadband: 5, unit: t.metric.unit } },
+  }, { code });
+};
+test('batchCreate：N 台设备直接生成 N 条已发布规则与独立 V1 快照', () => {
   let s = baseState;
-  const req = batchRequest(['DEV-001', 'DEV-004']);
-  assert.equal(req.targets.length, 2, 'DEV-001/DEV-004 均有启用轴承温度目标');
-  s = reducer(s, { type: 'alarm/rule/batchCommit', payload: { request: req, batchId: 'BATCH-T1', clientRequestId: 'crq-1', batchName: '轴承温度批量' }, actionId: 'e1' });
+  const rules = [batchRule('DEV-001', 'M.bearing_temp', 'R-B-001'), batchRule('DEV-004', 'M.bearing_temp', 'R-B-002')];
+  s = reducer(s, { type: 'alarm/rule/batchCreate', payload: { rules }, actionId: 'e1' });
   const res = lastOf(s);
   assert.equal(res.ok, true, res.message);
-  const batch = s.entities.alarmBatchesById['BATCH-T1'];
-  assert.ok(batch, '批次实体已写入');
-  assert.equal(batch.result.created, 2);
-  assert.equal(batch.result.skipped, 0);
-  const codes = batch.rows.map((r) => r.ruleCode).filter(Boolean);
-  assert.equal(codes.length, 2);
-  codes.forEach((code) => {
-    const rule = s.entities.alarmRulesById[code];
-    assert.equal(rule.status, '草稿');
-    assert.equal(rule.type, '阈值');
-    assert.equal(rule.batchId, 'BATCH-T1');
-    assert.ok(rule.target.deviceId === 'DEV-001' || rule.target.deviceId === 'DEV-004');
+  assert.equal(res.refs.created, 2);
+  rules.forEach((r) => {
+    assert.equal(s.entities.alarmRulesById[r.code].status, '已发布');
+    assert.equal(s.entities.alarmRulesById[r.code].version, 'V1');
+    assert.ok(s.entities.alarmRuleVersionsById[`${r.code}|V1`]);
   });
-  assert.notEqual(codes[0], codes[1], '每条规则独立 code');
+  assert.equal(s.entities.alarmBatchesById, undefined, '不再创建批次实体');
 });
-test('batchCommit：已有已发布同指标规则的目标跳过（R-TEMP-001 覆盖主轴温度）', () => {
+test('batchCreate：重复 clientRequestId 幂等，不重复生成', () => {
   let s = baseState;
-  const req = batchRequest(['DEV-001', 'DEV-004']);
-  req.metricCode = 'M.spindle_temp';
-  req.targets = resolveRuleTargets(baseState).filter((x) => x.metricCode === 'M.spindle_temp' && ['DEV-001', 'DEV-004'].includes(x.deviceId));
-  s = reducer(s, { type: 'alarm/rule/batchCommit', payload: { request: req, batchId: 'BATCH-T2', clientRequestId: 'crq-2', batchName: '主轴温度批量' }, actionId: 'e2' });
-  const batch = s.entities.alarmBatchesById['BATCH-T2'];
-  assert.equal(batch.result.created, 0);
-  assert.equal(batch.result.skipped, 2);
+  const rules = [batchRule('DEV-004', 'M.bearing_temp', 'R-B-IDEMP')];
+  const action = { type: 'alarm/rule/batchCreate', payload: { rules }, actionId: 'e2', idempotencyKey: 'batch-create:idemp' };
+  s = reducer(s, action);
+  const count = Object.keys(s.entities.alarmRulesById).length;
+  s = reducer(s, { ...action, actionId: 'e3' });
+  assert.equal(lastOf(s).idempotent, true);
+  assert.equal(Object.keys(s.entities.alarmRulesById).length, count);
 });
-test('batchCommit：重复 clientRequestId 幂等，不重复生成', () => {
+test('batchCreate：逐条隔离，非法阈值失败但合法目标照常发布', () => {
   let s = baseState;
-  const req = batchRequest(['DEV-001', 'DEV-004']);
-  const act1 = { type: 'alarm/rule/batchCommit', payload: { request: req, batchId: 'BATCH-T3', clientRequestId: 'crq-dup', batchName: '幂等测试' }, actionId: 'e3', idempotencyKey: 'batch-commit:crq-dup' };
-  s = reducer(s, act1);
-  const first = lastOf(s);
-  assert.equal(first.ok, true);
-  const countAfterFirst = Object.keys(s.entities.alarmRulesById).length;
-  s = reducer(s, { ...act1, actionId: 'e4' });
-  const second = lastOf(s);
-  assert.equal(second.ok, true);
-  assert.equal(second.idempotent, true, '重复请求必须命中幂等登记');
-  assert.equal(Object.keys(s.entities.alarmRulesById).length, countAfterFirst, '规则数量不变');
-});
-test('batchCommit：批量草稿未发布不能触发', () => {
-  let s = baseState;
-  const req = batchRequest(['DEV-001']);
-  req.targets = req.targets.slice(0, 1);
-  s = reducer(s, { type: 'alarm/rule/batchCommit', payload: { request: req, batchId: 'BATCH-T4', clientRequestId: 'crq-4', batchName: '未发布触发测试' }, actionId: 'e5' });
-  const batch = s.entities.alarmBatchesById['BATCH-T4'];
-  const code = batch.rows.find((r) => r.ruleCode)?.ruleCode;
-  s = reducer(s, { type: 'alarm/raise', payload: { deviceId: 'DEV-001', ruleCode: code, sample: { value: 95, qualityCode: 'GOOD' } }, actionId: 'e6' });
-  assert.equal(lastOf(s).ok, false);
+  const good = batchRule('DEV-004', 'M.bearing_temp', 'R-B-GOOD');
+  const bad = { ...batchRule('DEV-001', 'M.bearing_temp', 'R-B-BAD'), triggerConfig: { ...good.triggerConfig, threshold: 999 } };
+  s = reducer(s, { type: 'alarm/rule/batchCreate', payload: { rules: [good, bad] }, actionId: 'e4' });
+  assert.equal(lastOf(s).refs.created, 1);
+  assert.equal(lastOf(s).refs.failed, 1);
+  assert.equal(s.entities.alarmRulesById[good.code].status, '已发布');
+  assert.equal(s.entities.alarmRulesById[bad.code], undefined);
 });
 
 // ---------- reducer：单动作单 tick ----------
-test('单动作单 tick：一次用户动作 tick 只 +1', () => {
-  let s = baseState;
-  const t0 = s.meta.tick || 0;
-  s = reducer(s, { type: 'alarm/rule/saveDraft', payload: { rule: withCode(validForm(), 'R-M0-TICK') }, actionId: 'f1' });
-  assert.equal((s.meta.tick || 0) - t0, 1);
-});
-
 // ---------- 表单模型 ----------
 test('ruleToForm：结构化规则完整回填，formToRule 往返一致', () => {
   const rule = withCode(validForm(), 'R-RT-1');
@@ -606,87 +588,26 @@ test('触发门禁：组合规则 AND 全满足触发、部分满足不触发', 
   assert.equal(Object.keys(s.entities.alarmEventsById).length, before + 1);
 });
 
-// ---------- P2-C：批量发布 ----------
-const publishableBatch = () => {
+// ---------- P2-C：停用与删除 ----------
+test('disableBatch：批量停用已发布规则，历史版本快照保留', () => {
   let s = baseState;
-  const req = batchRequest(['DEV-004']);
-  req.targets = req.targets.slice(0, 1);
-  s = reducer(s, { type: 'alarm/rule/batchCommit', payload: { request: req, batchId: 'BATCH-P2P', clientRequestId: 'crq-p2p', batchName: '批量发布测试' }, actionId: 'g1' });
-  return { s, batchId: 'BATCH-P2P' };
-};
-test('batchPublish：批次内草稿逐条发布，各自独立版本快照', () => {
-  let { s, batchId } = publishableBatch();
-  s = reducer(s, { type: 'alarm/rule/batchPublish', payload: { batchId }, actionId: 'g2' });
-  const res = lastOf(s);
-  assert.equal(res.ok, true, res.message);
-  assert.equal(res.refs.published, 1);
-  const batch = s.entities.alarmBatchesById[batchId];
-  assert.equal(batch.status, '已发布');
-  const rule = Object.values(s.entities.alarmRulesById).find((r) => r.batchId === batchId);
-  assert.equal(rule.status, '已发布');
-  assert.equal(rule.version, 'V1');
-  assert.ok(s.entities.alarmRuleVersionsById[`${rule.code}|V1`].triggerSnapshot);
-  // 幂等：重复发布忽略
-  s = reducer(s, { type: 'alarm/rule/batchPublish', payload: { batchId }, actionId: 'g3' });
-  assert.equal(lastOf(s).idempotent, true);
-});
-test('batchPublish：校验失败条目不发布，部分成功保留原因', () => {
-  let s = baseState;
-  // 真实路径建批次（1 条合法草稿），再追加 1 条不合法草稿挂到同批次（阈值超量程）
-  const req = batchRequest(['DEV-004']);
-  req.targets = req.targets.slice(0, 1);
-  s = reducer(s, { type: 'alarm/rule/batchCommit', payload: { request: req, batchId: 'BATCH-MIX', clientRequestId: 'crq-mix', batchName: '部分成功测试' }, actionId: 'g4' });
-  assert.equal(lastOf(s).refs.created, 1);
-  const badRule = withCode(validForm(), 'R-P2-BAD');
-  badRule.triggerConfig = { ...badRule.triggerConfig, threshold: 999 };
-  badRule.batchId = 'BATCH-MIX';
-  s = reducer(s, { type: 'alarm/rule/saveDraft', payload: { rule: badRule }, actionId: 'g5' });
-  s = reducer(s, { type: 'alarm/rule/batchPublish', payload: { batchId: 'BATCH-MIX' }, actionId: 'g6' });
-  const res = lastOf(s);
-  assert.equal(res.ok, true, '部分成功仍返回成功');
-  assert.equal(res.refs.published, 1);
-  assert.equal(res.refs.failed, 1);
-  const batch = s.entities.alarmBatchesById['BATCH-MIX'];
-  assert.equal(batch.status, '部分发布');
-  assert.equal(batch.publishResult.failures[0].ruleCode, 'R-P2-BAD');
-});
-
-// ---------- P2-C：模板持久化 ----------
-test('template/save + delete：模板实体真实落库与删除', () => {
-  let s = baseState;
-  const tpl = {
-    name: 'P2 测试模板',
-    metricType: '温度类',
-    applicableMetricCodes: ['M.bearing_temp'],
-    status: '启用',
-    triggerConfig: { type: 'threshold', mode: 'upper', threshold: 90, unit: '℃', durationSec: 60 },
-    recoveryConfig: { mode: 'auto', closeMode: 'auto', condition: { type: 'hysteresis', direction: 'upper', thresholdMode: 'deadband', deadband: 5, unit: '℃' }, stabilize: { durationSec: 30, qualityRequired: 'GOOD', invalidDataPolicy: 'hold', rebreachPolicy: 'resetTimer' }, notifyOnRecover: true },
-    notificationConfig: { policyCode: 'NP-IMPORTANT', channels: ['站内'], receivers: ['李明'] },
-  };
-  s = reducer(s, { type: 'alarm/template/save', payload: { template: tpl }, actionId: 'h1' });
-  const res = lastOf(s);
-  assert.equal(res.ok, true, res.message);
-  const id = res.refs.templateId;
-  assert.ok(s.entities.ruleTemplatesById[id], '模板已入库');
-  // 应用模板 → 批量生成草稿并回填 templateId
-  const targets = resolveRuleTargets(s).filter((t) => t.deviceId === 'DEV-004' && t.metricCode === 'M.bearing_temp');
-  s = reducer(s, {
-    type: 'alarm/rule/batchCommit',
-    payload: {
-      request: { metricCode: 'M.bearing_temp', triggerConfig: tpl.triggerConfig, recoveryConfig: tpl.recoveryConfig, notificationConfig: tpl.notificationConfig, templateId: id, targets },
-      batchId: 'BATCH-TPL', clientRequestId: 'crq-tpl', batchName: '模板应用测试',
-    },
-    actionId: 'h2',
-  });
-  const batch = s.entities.alarmBatchesById['BATCH-TPL'];
-  assert.equal(batch.result.created, 1);
-  const draft = Object.values(s.entities.alarmRulesById).find((r) => r.batchId === 'BATCH-TPL');
-  assert.equal(draft.templateId, id, '草稿回填模板引用');
-  // 删除模板不影响已发布规则与草稿
-  s = reducer(s, { type: 'alarm/template/delete', payload: { templateId: id }, actionId: 'h3' });
+  s = reducer(s, { type: 'alarm/rule/saveAndPublish', payload: { rule: withCode(validForm(), 'R-DIS-001') }, actionId: 'g1' });
+  s = reducer(s, { type: 'alarm/rule/disableBatch', payload: { ruleCodes: ['R-DIS-001'] }, actionId: 'g2' });
   assert.equal(lastOf(s).ok, true);
-  assert.equal(s.entities.ruleTemplatesById[id], undefined);
-  assert.ok(s.entities.alarmRulesById[draft.code], '已生成草稿不受模板删除影响');
+  assert.equal(s.entities.alarmRulesById['R-DIS-001'].status, '已停用');
+  assert.ok(s.entities.alarmRuleVersionsById['R-DIS-001|V1']);
+});
+test('delete：删除规则定义与版本快照，但历史报警事件保留', () => {
+  let s = baseState;
+  s = reducer(s, { type: 'alarm/rule/saveAndPublish', payload: { rule: withCode(validForm(), 'R-DEL-001') }, actionId: 'g3' });
+  s = reducer(s, { type: 'alarm/raise', payload: { deviceId: 'DEV-001', ruleCode: 'R-DEL-001', sample: { value: 95, qualityCode: 'GOOD', metricCode: 'M.bearing_temp' } }, actionId: 'g4' });
+  const alarmIds = Object.keys(s.entities.alarmEventsById);
+  assert.ok(alarmIds.some((id) => s.entities.alarmEventsById[id].rule === 'R-DEL-001'));
+  s = reducer(s, { type: 'alarm/rule/delete', payload: { ruleCodes: ['R-DEL-001'] }, actionId: 'g5' });
+  assert.equal(lastOf(s).ok, true);
+  assert.equal(s.entities.alarmRulesById['R-DEL-001'], undefined);
+  assert.equal(s.entities.alarmRuleVersionsById['R-DEL-001|V1'], undefined);
+  assert.ok(alarmIds.some((id) => s.entities.alarmEventsById[id]), '历史报警事件保留');
 });
 
 // ---------- P2-D：版本回滚 ----------
@@ -722,29 +643,12 @@ test('rollback：当前版本无需回滚被拦截', () => {
   assert.equal(lastOf(s).ok, false);
 });
 
-// ---------- P2：分组列 + 同分组批量编辑 ----------
-test('ruleGroupInfo：同设备同指标规则归入同组；无目标种子规则归入「全型号」组', () => {
-  const targets = resolveRuleTargets(baseState);
-  const mk = (deviceId, metricCode) => ({
-    code: 'R-G', type: '阈值', status: '已发布',
-    target: { deviceId, metricCode },
-  });
-  const g1 = ruleGroupInfo(mk('DEV-001', 'M.spindle_temp'), targets);
-  const g2 = ruleGroupInfo(mk('DEV-002', 'M.spindle_temp'), targets);
-  const g3 = ruleGroupInfo(mk('DEV-006', 'M.air_pressure'), targets);
-  assert.ok(g1 && g2 && g3);
-  assert.notEqual(g1.groupKey, g3.groupKey, '不同指标不同组');
-  // 旧种子规则（无 target，有 metricCode）→ 归入「全型号」组，可参与分组展示与勾选
-  const legacy = normalizeLegacyRule({
-    code: 'R-TEMP-001', type: '阈值', status: '已发布', metricCode: 'M.spindle_temp',
-    condition: '> 80℃ 持续 60s',
-  });
-  const gLegacy = ruleGroupInfo(legacy, targets);
-  assert.ok(gLegacy, '种子阈值规则有分组');
-  assert.ok(gLegacy.label.includes('全型号'), gLegacy.label);
-  assert.notEqual(gLegacy.groupKey, g1.groupKey, '全型号组不与精确型号组混组');
-  const biz = ruleGroupInfo({ code: 'R-COMPARE-001', type: '程序', metricCode: '程序比对' }, targets);
-  assert.equal(biz, null, '业务事件类规则指标无法定位 → 无分组');
+// ---------- P2：产品展示 + 批量编辑 ----------
+test('产品展示：来源设备对应产品，旧业务规则无产品', () => {
+  const t = resolveRuleTargets(baseState).find((x) => x.deviceId === 'DEV-001' && x.metricCode === 'M.bearing_temp');
+  assert.equal(t.product, '振动传感器 VB12');
+  assert.equal(ruleProductOf({ target: { sourceId: t.sourceId } }, baseState.entities.sourceDevicesById), '振动传感器 VB12');
+  assert.equal(ruleProductOf({ code: 'R-COMPARE-001', type: '程序' }, baseState.entities.sourceDevicesById), null);
 });
 test('applyBatchEditPatch：同组 upper/lower 各自应用阈值，回差/稳定/等级/通知统一更新', () => {
   const upper = normalizeLegacyRule({
@@ -755,7 +659,7 @@ test('applyBatchEditPatch：同组 upper/lower 各自应用阈值，回差/稳�
     notificationConfig: { policyCode: 'NP-IMPORTANT', channels: ['站内'], receivers: ['李明'] },
   });
   const lower = normalizeLegacyRule({
-    code: 'R-L', name: '下限', type: '阈值', status: '草稿',
+    code: 'R-L', name: '下限', type: '阈值', status: '已发布', version: 'V1', publishedVersion: 'V1',
     target: { deviceId: 'DEV-001', metricCode: 'M.bearing_temp' },
     triggerConfig: { type: 'threshold', mode: 'lower', threshold: 10, unit: '℃', durationSec: 60 },
     recoveryConfig: { mode: 'auto', closeMode: 'auto', condition: { type: 'hysteresis', direction: 'lower', thresholdMode: 'deadband', deadband: 5, unit: '℃' }, stabilize: { durationSec: 30, qualityRequired: 'GOOD', invalidDataPolicy: 'hold', rebreachPolicy: 'resetTimer' }, notifyOnRecover: true },
@@ -763,34 +667,34 @@ test('applyBatchEditPatch：同组 upper/lower 各自应用阈值，回差/稳�
   const patch = { threshold: 95, durationSec: 45, deadband: 8, stabilizeSec: 40, severity: '紧急' };
   const r1 = applyBatchEditPatch(upper, patch);
   assert.ok(!r1.error, r1.error);
-  assert.equal(r1.draft.triggerConfig.threshold, 95);
-  assert.equal(r1.draft.triggerConfig.durationSec, 45);
-  assert.equal(r1.draft.recoveryConfig.condition.deadband, 8);
-  assert.equal(r1.draft.recoveryConfig.condition.recoveryValue, 87, 'deadband 固化恢复值 95-8');
-  assert.equal(r1.draft.recoveryConfig.stabilize.durationSec, 40);
-  assert.equal(r1.draft.severity, '紧急');
-  assert.equal(r1.draft.status, '已发布', '已发布规则生成草稿不改状态');
+  assert.equal(r1.next.triggerConfig.threshold, 95);
+  assert.equal(r1.next.triggerConfig.durationSec, 45);
+  assert.equal(r1.next.recoveryConfig.condition.deadband, 8);
+  assert.equal(r1.next.recoveryConfig.condition.recoveryValue, 87, 'deadband 固化恢复值 95-8');
+  assert.equal(r1.next.recoveryConfig.stabilize.durationSec, 40);
+  assert.equal(r1.next.severity, '紧急');
+  assert.equal(r1.next.status, '已发布', '已发布规则生成草稿不改状态');
   const r2 = applyBatchEditPatch(lower, patch);
-  assert.equal(r2.draft.triggerConfig.threshold, 95, 'lower 规则同样应用统一阈值');
-  assert.equal(r2.draft.recoveryConfig.condition.recoveryValue, 103, 'lower 固化 95+8');
+  assert.equal(r2.next.triggerConfig.threshold, 95, 'lower 规则同样应用统一阈值');
+  assert.equal(r2.next.recoveryConfig.condition.recoveryValue, 103, 'lower 固化 95+8');
 });
 test('applyBatchEditPatch：区间规则应用上下限与独立回差；留空字段不修改', () => {
   const range = {
-    code: 'R-RANGE', name: '区间', type: '阈值', status: '草稿',
+    code: 'R-RANGE', name: '区间', type: '阈值', status: '已发布', version: 'V1', publishedVersion: 'V1',
     target: { deviceId: 'DEV-006', metricCode: 'M.air_pressure' },
     triggerConfig: { type: 'threshold', mode: 'rangeOut', low: 0.6, high: 0.8, unit: 'MPa', durationSec: 30 },
     recoveryConfig: { mode: 'auto', closeMode: 'auto', condition: { type: 'range', lowDeadband: 0.05, highDeadband: 0.05, recoveryLow: 0.65, recoveryHigh: 0.75, unit: 'MPa' }, stabilize: { durationSec: 30, qualityRequired: 'GOOD', invalidDataPolicy: 'hold', rebreachPolicy: 'resetTimer' }, notifyOnRecover: true },
   };
   const r = applyBatchEditPatch(range, { low: 0.55, high: 0.85, deadband: 0.03 });
-  assert.equal(r.draft.triggerConfig.low, 0.55);
-  assert.equal(r.draft.triggerConfig.high, 0.85);
-  assert.equal(r.draft.recoveryConfig.condition.recoveryLow, 0.58, '按新回差固化恢复带下限');
-  assert.equal(r.draft.recoveryConfig.condition.recoveryHigh, 0.82, '按新回差固化恢复带上限');
-  assert.equal(r.draft.triggerConfig.durationSec, 30, '留空的持续不修改');
+  assert.equal(r.next.triggerConfig.low, 0.55);
+  assert.equal(r.next.triggerConfig.high, 0.85);
+  assert.equal(r.next.recoveryConfig.condition.recoveryLow, 0.58, '按新回差固化恢复带下限');
+  assert.equal(r.next.recoveryConfig.condition.recoveryHigh, 0.82, '按新回差固化恢复带上限');
+  assert.equal(r.next.triggerConfig.durationSec, 30, '留空的持续不修改');
   // 仅改等级
   const r2 = applyBatchEditPatch(range, { severity: '提示' });
-  assert.equal(r2.draft.triggerConfig.low, 0.6, '未涉及字段不动');
-  assert.equal(r2.draft.severity, '提示');
+  assert.equal(r2.next.triggerConfig.low, 0.6, '未涉及字段不动');
+  assert.equal(r2.next.severity, '提示');
 });
 test('applyBatchEditPatch：旧业务规则 / 已停用规则跳过并说明', () => {
   const biz = normalizeLegacyRule({ code: 'R-COMPARE-001', type: '程序', status: '已发布' });
@@ -798,7 +702,7 @@ test('applyBatchEditPatch：旧业务规则 / 已停用规则跳过并说明', (
   const stopped = { code: 'R-S', type: '阈值', status: '已停用', triggerConfig: { type: 'threshold', mode: 'upper', threshold: 1 } };
   assert.ok(applyBatchEditPatch(stopped, { severity: '紧急' }).error.includes('已停用'));
 });
-test('batchEdit reducer：同组勾选批量编辑 → 已发布生成草稿、草稿直改、逐条校验失败保留原因', () => {
+test('batchEdit reducer：已发布规则批量编辑后逐条发布新版本，失败条目不落库', () => {
   let s = baseState;
   const mk = (code, mode, threshold) => formToRule({
     ...createEmptyRuleForm(),
@@ -806,27 +710,24 @@ test('batchEdit reducer：同组勾选批量编辑 → 已发布生成草稿、�
     target: { deviceId: 'DEV-001', sourceId: 'iot-s-20012', metricCode: 'M.bearing_temp' },
     triggerConfig: { type: 'threshold', mode, operator: mode === 'lower' ? '<' : '>', threshold, unit: '℃', durationSec: 60 },
     recoveryConfig: { ...createEmptyRuleForm().recoveryConfig, condition: { type: 'hysteresis', direction: mode === 'lower' ? 'lower' : 'upper', thresholdMode: 'deadband', triggerValue: threshold, recoveryValue: null, deadband: 5, unit: '℃' } },
-    notificationConfig: { policyCode: 'NP-IMPORTANT', channels: ['站内'], receivers: ['李明'] },
   }, { code });
   s = reducer(s, { type: 'alarm/rule/saveAndPublish', payload: { rule: mk('R-BE-1', 'upper', 90) }, actionId: 'm1' });
-  s = reducer(s, { type: 'alarm/rule/saveDraft', payload: { rule: mk('R-BE-2', 'lower', 10) }, actionId: 'm2' });
+  s = reducer(s, { type: 'alarm/rule/saveAndPublish', payload: { rule: mk('R-BE-2', 'lower', 10) }, actionId: 'm2' });
   s = reducer(s, { type: 'alarm/rule/batchEdit', payload: { ruleCodes: ['R-BE-1', 'R-BE-2'], patch: { threshold: 95, severity: '紧急' } }, actionId: 'm3' });
   const res = lastOf(s);
   assert.equal(res.ok, true, res.message);
   assert.equal(res.refs.updated, 2);
-  const r1 = s.entities.alarmRulesById['R-BE-1'];
-  assert.equal(r1.status, '已发布', '已发布规则状态不变');
-  assert.equal(r1.triggerConfig.threshold, 90, '当前发布内容不被覆盖');
-  assert.equal(r1.draftConfig.triggerConfig.threshold, 95, '草稿独立保存');
-  const r2 = s.entities.alarmRulesById['R-BE-2'];
-  assert.equal(r2.triggerConfig.threshold, 95, '草稿规则直接更新');
+  assert.equal(s.entities.alarmRulesById['R-BE-1'].version, 'V2');
+  assert.equal(s.entities.alarmRulesById['R-BE-1'].triggerConfig.threshold, 95);
+  assert.equal(s.entities.alarmRulesById['R-BE-1'].draftConfig, undefined);
+  assert.equal(s.entities.alarmRulesById['R-BE-2'].version, 'V2');
   // 校验失败条目：阈值改到 999（超量程）→ failed 不落库
   s = reducer(s, { type: 'alarm/rule/batchEdit', payload: { ruleCodes: ['R-BE-2'], patch: { threshold: 999 } }, actionId: 'm4' });
   const res2 = lastOf(s);
-  assert.equal(res2.ok, true);
+  assert.equal(res2.ok, false);
   assert.equal(res2.refs.updated, 0);
   assert.equal(res2.refs.failed, 1);
-  assert.ok(s.entities.alarmRulesById['R-BE-2'].triggerConfig.threshold === 95, '失败目标不落库');
+  assert.equal(s.entities.alarmRulesById['R-BE-2'].triggerConfig.threshold, 95, '失败目标不落库');
 });
 
 console.log(`\n${passed} 项契约测试通过${process.exitCode ? '（存在失败）' : ''}`);

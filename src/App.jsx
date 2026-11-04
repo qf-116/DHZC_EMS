@@ -5,7 +5,7 @@ import {
   Activity, AlarmClock, BookOpen, ClipboardList, DatabaseZap, FileBarChart,
   Gauge, LineChart, Settings2, Truck, CalendarClock,
   LayoutDashboard, Boxes, Wrench, Package, ClipboardCheck, ArrowRightLeft, CirclePause, Archive,
-  GaugeCircle, LogOut, Layers, LayoutTemplate,
+  GaugeCircle, LogOut, LayoutTemplate,
   Users, ShieldCheck, Building2, BookMarked, ScrollText,
 } from 'lucide-react';
 import LoginPage from './pages/LoginPage.jsx';
@@ -20,7 +20,6 @@ import BindingOverviewPage from './pages/BindingOverviewPage.jsx';
 import BindingTemplatesPage from './pages/BindingTemplatesPage.jsx';
 import AlarmCenterPage from './pages/AlarmCenterPage.jsx';
 import RuleConfigPage from './pages/RuleConfigPage.jsx';
-import RuleTemplatePage from './pages/RuleTemplatePage.jsx';
 // V2.1：设备采集能力/指标字典/点位映射/数据质量/缺失死信/旧联网配置页面已下线，
 // 由 物联网接入配置（BindingOverviewPage）承接，旧路由做重定向。
 // 2026-10-27 标准版范围调整：平台指标清单 / 报警规则版本 / 通知策略配置 / 数据质量统计报表 下线，
@@ -176,7 +175,6 @@ const menus = [
   { key: 'alarm', icon: <AlarmClock size={15} />, label: '报警中心', children: [
     { key: '/alarm-center', icon: <AlarmClock size={14} />, label: '报警中心' },
     { key: '/alarm-rules', icon: <Settings2 size={14} />, label: '报警规则配置' },
-    { key: '/alarm-rule-templates', icon: <Layers size={14} />, label: '报警规则模板' },
     // 2026-10-27 范围调整：报警规则版本 / 通知策略配置 下线，旧路由重定向
   ] },
   { key: 'report', icon: <FileBarChart size={15} />, label: '报表中心', children: [
@@ -337,7 +335,6 @@ export default function App() {
                   {/* 报警中心 */}
                   <Route path="/alarm-center" element={<AlarmCenterPage />} />
                   <Route path="/alarm-rules" element={<RuleConfigPage />} />
-                  <Route path="/alarm-rule-templates" element={<RuleTemplatePage />} />
                   {/* 2026-10-27 范围调整：报警规则版本 / 通知策略配置 下线，旧路由重定向 */}
                   <Route path="/alarm-rule-versions" element={<Navigate to="/alarm-rules" replace />} />
                   <Route path="/notification-policy" element={<Navigate to="/alarm-center" replace />} />

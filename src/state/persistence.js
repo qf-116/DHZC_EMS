@@ -19,11 +19,16 @@ function migrateParsed(parsed) {
     entities: {
       ...base.entities,
       ...parsed.entities,
-      alarmBatchesById: parsed.entities?.alarmBatchesById || {},
     },
   };
+  // 已下线实体不随旧快照迁移，避免旧页面数据重新出现
+  delete next.entities.ruleTemplatesById;
+  delete next.entities.alarmBatchesById;
   next.entities.alarmRulesById = Object.fromEntries(
-    Object.entries(parsed.entities?.alarmRulesById || {}).map(([code, rule]) => [code, normalizeLegacyRule(rule)])
+    Object.entries(parsed.entities?.alarmRulesById || {})
+      .map(([code, rule]) => [code, normalizeLegacyRule(rule)])
+      // 报警规则已无草稿态：历史草稿规则（从未生效）随迁移清理
+      .filter(([, rule]) => rule.status !== '草稿')
   );
   return next;
 }
@@ -42,7 +47,7 @@ export function loadDemoState() {
     }
     // 旧版本快照：尝试结构迁移，保留用户已有草稿与业务事实
     try {
-      return { state: migrateParsed(parsed), notice: '本地快照已迁移至新版本结构（报警规则已补齐结构化字段）' };
+      return { state: migrateParsed(parsed), notice: '本地快照已迁移至新版本结构（报警规则已补齐结构化字段，历史草稿规则已清理）' };
     } catch {
       return { state: null, notice: '本地快照迁移失败，已恢复初始状态' };
     }

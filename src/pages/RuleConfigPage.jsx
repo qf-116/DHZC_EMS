@@ -234,7 +234,6 @@ export default function RuleConfigPage() {
       deviceText: r.target?.deviceId ? `${r.target.deviceId}${deviceName ? ` ${deviceName}` : ''}` : (r.deviceScope || '--'),
       sourceText: r.target?.sourceCode || r.target?.sourceId || '--',
       metricText: r.target?.metricCode ? `${r.metricCode}${metricName ? ` ${metricName}` : ''}` : (r.metricCode || '--'),
-      versionText: r.status === '已发布' ? (r.publishedVersion || r.version) : (r.version || '--'),
     };
   });
   // 查询条件（前端过滤，演示数据量级适用）
@@ -349,19 +348,17 @@ export default function RuleConfigPage() {
             { title: '触发条件', dataIndex: 'condition', width: 180 },
             { title: '恢复条件（迟滞）', dataIndex: 'recovery', width: 230 },
             { title: '等级', dataIndex: 'severity', width: 70, render: (v) => v === '紧急' ? <Tag color="error">{v}</Tag> : v === '重要' ? <Tag color="warning">{v}</Tag> : <Tag color="gold">{v || '--'}</Tag> },
-            { title: '版本', dataIndex: 'versionText', width: 80 },
             { title: '状态', dataIndex: 'status', width: 80, render: (v) => <Tag color={v === '已发布' ? 'success' : 'default'}>{v}</Tag> },
-            { title: '操作', width: 190, fixed: 'right', render: (_, r) => (
+            { title: '操作', width: 160, fixed: 'right', render: (_, r) => (
               <div className="list-actions">
                 <a onClick={() => setDetailRule(r)}>详情</a>
                 {!LEGACY_BUSINESS_RULE_TYPES.includes(r.type) && r.triggerConfig && <a onClick={() => openEdit(r)}>编辑</a>}
-                <a onClick={() => openTest(r)}>测试</a>
                 {r.status === '已发布' && <a style={{ color: '#d97706' }} onClick={() => confirmStop(r)}>停用</a>}
                 <a style={{ color: '#d64545' }} onClick={() => confirmDelete(r)}>删除</a>
               </div>
             ) },
           ]}
-          scroll={{ x: 1720 }}
+          scroll={{ x: 1640 }}
         />
       </Card>
 
@@ -376,7 +373,7 @@ export default function RuleConfigPage() {
 
       {/* 编辑规则弹窗：受控表单，保存即发布新版本 */}
       <Modal
-        title={editing ? `编辑报警规则（${editing.code} / 当前发布 ${editing.publishedVersion || editing.version}）` : ''}
+        title={editing ? `编辑报警规则（${editing.code}）` : ''}
         width={780}
         open={!!editing}
         onCancel={() => setEditing(null)}
@@ -442,11 +439,10 @@ export default function RuleConfigPage() {
       >
         {detailRule && (
           <Space direction="vertical" style={{ width: '100%' }} size={12}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8 }}>
               <Statistic title="近7天触发" value={detailRule.trig7d || 0} suffix="次" />
               <Statistic title="近7天重复抑制" value={detailRule.supp7d || 0} suffix="次" valueStyle={{ color: (detailRule.supp7d || 0) > (detailRule.trig7d || 0) ? '#d97706' : undefined }} />
               <Statistic title="等级" value={detailRule.severity || '--'} />
-              <Statistic title="发布版本" value={detailRule.versionText || '--'} />
             </div>
             <Descriptions size="small" bordered column={2} items={[
               { key: 'p', label: '产品', children: detailRule.productName },

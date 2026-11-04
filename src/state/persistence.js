@@ -26,6 +26,15 @@ function migrateParsed(parsed) {
   delete next.entities.alarmBatchesById;
   // 绑定模板管理下线（V14）：模板数据与向导模板预填一并移除
   if (next.ui && next.ui.bindingTemplates) delete next.ui.bindingTemplates;
+  // 来源设备 product 回填（V15）：旧快照来源设备无产品归属，按名称推断（主控制器→网关 / 振动→VB12 / 温度→TP08）
+  next.entities.sourceDevicesById = Object.fromEntries(
+    Object.entries(parsed.entities?.sourceDevicesById || {}).map(([id, s]) => {
+      if (s.product) return [id, s];
+      const n = `${s.name || ''}${s.iotDeviceCode || ''}`;
+      const product = /振动/.test(n) ? '振动传感器 VB12' : /温度/.test(n) ? '温度传感器 TP08' : '工业智能网关 GW200';
+      return [id, { ...s, product }];
+    })
+  );
   // 报警三态状态机迁移（V13）：已确认 / 已恢复待关闭 并入处理中；恢复口径改名
   next.entities.alarmEventsById = Object.fromEntries(
     Object.entries(parsed.entities?.alarmEventsById || {}).map(([id, a]) => {

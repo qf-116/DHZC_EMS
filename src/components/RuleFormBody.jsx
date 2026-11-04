@@ -261,7 +261,7 @@ export default function RuleFormBody({
         <Space direction="vertical" style={{ width: '100%' }} size={8}>
           <Space wrap>
             <span>恢复方式</span>
-            <Select value="auto" disabled style={{ width: 190 }} options={[{ value: 'auto', label: '自动恢复（满足条件）' }, { value: 'business', label: '恢复后业务闭环（随维修验收）' }, { value: 'manual', label: '人工确认关闭' }]} />
+            <Select value="auto" disabled style={{ width: 190 }} options={[{ value: 'auto', label: '自动恢复（满足条件）' }, { value: 'business', label: '恢复后业务闭环（随维修验收）' }, { value: 'manual', label: '人工处置关闭' }]} />
           </Space>
           {form.type === 'threshold' && ['rangeOut', 'rangeIn'].includes(form.triggerConfig.mode) && (
             <Space wrap>

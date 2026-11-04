@@ -285,27 +285,28 @@ export function createDemoActions(state, dispatch) {
       return { ok: true, message: `已切换为${label}`, refs: {} };
     },
 
-    // ---------- 报警 ----------
+    // ---------- 报警（三态状态机：已触发 → 处理中 → 已关闭） ----------
     ackAlarm(alarmId, { note }) {
       const alarm = E.alarmEventsById[alarmId];
       if (!alarm) return fail('报警事件不存在');
       if (!(note || '').trim()) return fail('确认必须填写说明');
-      if (!canAlarmTransition(alarm.status, '已确认')) return fail(`当前状态「${alarm.status}」不能确认`);
+      if (!canAlarmTransition(alarm.status, '处理中')) return fail(`当前状态「${alarm.status}」不能确认`);
       act('alarm/ack', { alarmId, note }, `ack:${alarmId}:v1`);
-      return { ok: true, message: `已确认 ${alarm.id}，下一步：处置（填写措施与预计完成时间）`, refs: { alarmId } };
+      return { ok: true, message: `已确认 ${alarm.id}，进入处理中；请填写处置措施与预计完成时间`, refs: { alarmId } };
     },
-    handleAlarm(alarmId, { measure, expectedAt }) {
+    // 处置：登记 / 更新二合一（弹窗预填上次内容）。填写恢复说明或恢复口径为「人工处置关闭」时提交即关闭，
+    // 关闭前置校验不通过时照常记录处置但不关闭，返回阻塞原因。
+    handleAlarm(alarmId, { measure, expectedAt, recoveryNote }) {
       const alarm = E.alarmEventsById[alarmId];
       if (!alarm) return fail('报警事件不存在');
       if (!(measure || '').trim()) return fail('处置必须填写措施');
-      // 处理中再次提交 = 更新处置：预计完成时间可留空并沿用上次
-      const isUpdate = alarm.status === '处理中';
-      if (!expectedAt && !alarm.expectedAt) return fail('处置必须填写预计完成时间');
+      if (alarm.status === '已触发') return fail('请先确认报警（确认后进入处理中，才能处置）');
       if (alarm.status === '已关闭') return fail('已关闭报警不能处置');
-      // 幂等键带处置履历条数：同一次提交重复点击被忽略，更新处置可连续记录多条
+      if (!expectedAt && !alarm.expectedAt) return fail('处置必须填写预计完成时间');
+      // 幂等键带履历条数：同一次提交重复点击被忽略，更新处置可连续记录多条
       const key = `handle:${alarmId}:${(alarm.timeline || []).length}`;
-      act('alarm/handle', { alarmId, measure, expectedAt }, key);
-      return { ok: true, message: isUpdate ? '处置已更新（状态仍为处理中）' : '处置已记录；如需维修请使用「转维修申请」', refs: { alarmId } };
+      // 透传 reducer 真实结果（refs.closed 标记本次是否关闭），页面据此提示
+      return act('alarm/handle', { alarmId, measure, expectedAt, recoveryNote }, key);
     },
     createRepairFromAlarm(alarmId, extra = {}) {
       const alarm = E.alarmEventsById[alarmId];
@@ -315,6 +316,7 @@ export function createDemoActions(state, dispatch) {
         return { ok: true, idempotent: true, message: `该报警已存在活动工单 ${existing.repairOrderId}，不重复建单`, refs: { repairOrderId: existing.repairOrderId } };
       }
       if (alarm.status === '已关闭') return fail('已关闭报警不能转维修；如需维修请人工报修');
+      if (alarm.status === '已触发') return fail('请先确认报警（确认后进入处理中，才能转维修）');
       act('alarm/createRepairFromAlarm', { alarmId, ...extra }, `repair-from-alarm:${alarmId}`);
       return {
         ok: true,
@@ -323,14 +325,6 @@ export function createDemoActions(state, dispatch) {
           : '已生成唯一主工单并回写至报警；请到「维修任务」派工',
         refs: { alarmId },
       };
-    },
-    closeAlarm(alarmId, { evidence, closeReason }) {
-      const alarm = E.alarmEventsById[alarmId];
-      if (!alarm) return fail('报警事件不存在');
-      if (alarm.status !== '已恢复待关闭') return fail(`当前状态「${alarm.status}」，只有「已恢复待关闭」可关闭`);
-      if (!(evidence || '').trim() || !(closeReason || '').trim()) return fail('关闭必须填写恢复证据和原因');
-      act('alarm/close', { alarmId, evidence, closeReason }, `close:${alarmId}:v1`);
-      return { ok: true, message: `已关闭 ${alarm.id}`, refs: { alarmId } };
     },
 
     // 规则动作（M0 Action 结果契约）：act 返回 dispatch 的真实结果（meta.lastAction），

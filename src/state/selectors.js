@@ -362,7 +362,7 @@ export function selectReportRows(state, theme, filters = {}) {
 // ---------- 工作台读模型（§7.1：行动入口，不复制完整 KPI） ----------
 export function selectWorkbench(state) {
   const unacked = Object.values(state.entities.alarmEventsById).filter(a => a.status === '已触发');
-  const processing = Object.values(state.entities.alarmEventsById).filter(a => a.status === '已确认' || a.status === '处理中');
+  const processing = Object.values(state.entities.alarmEventsById).filter(a => a.status === '处理中');
   const pendingDispatch = Object.values(state.entities.repairOrdersById).filter(o => o.status === '待派工');
   const pendingAccept = Object.values(state.entities.repairOrdersById).filter(o => o.status === '待验收');
   const lowStock = Object.values(state.entities.stockByKey).filter(row => {

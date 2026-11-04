@@ -602,27 +602,61 @@ export function reducer(state, action) {
     case 'alarm/ack': {
       const alarm = E.alarmEventsById[payload.alarmId];
       if (!alarm) return reject(state, action, '报警事件不存在');
-      if (!(payload.note || '').trim()) return reject(state, action, '确认必须填写说明（§6.4）');
-      if (!canAlarmTransition(alarm.status, '已确认')) return reject(state, action, `当前状态「${alarm.status}」不能确认`);
-      const updated = { ...alarm, status: '已确认', ack: timeOnly(at), handler: actor.userName, timeline: [...alarm.timeline, { type: '确认', time: timeOnly(at), actor: actor.userName, detail: payload.note }] };
+      if (!(payload.note || '').trim()) return reject(state, action, '确认必须填写说明');
+      if (!canAlarmTransition(alarm.status, '处理中')) return reject(state, action, `当前状态「${alarm.status}」不能确认`);
+      // 确认 = 接管：直接进入处理中（2026-11-04 三态状态机）
+      const updated = { ...alarm, status: '处理中', ack: timeOnly(at), handler: actor.userName, timeline: [...alarm.timeline, { type: '确认', time: timeOnly(at), actor: actor.userName, detail: payload.note }] };
       let next = setE(state, 'alarmEventsById', alarm.id, updated);
       next = addHistory(next, at, 'alarm', alarm.id, '确认报警', { deviceId: alarm.deviceId, note: payload.note });
-      return finish(next, action, true, `已确认 ${alarm.id}，请继续处置（填写措施与预计完成时间）`, { alarmId: alarm.id }, false, at);
+      return finish(next, action, true, `已确认 ${alarm.id}，进入处理中；请填写处置措施与预计完成时间`, { alarmId: alarm.id }, false, at);
     }
     case 'alarm/handle': {
       const alarm = E.alarmEventsById[payload.alarmId];
       if (!alarm) return reject(state, action, '报警事件不存在');
-      if (!(payload.measure || '').trim()) return reject(state, action, '处置必须填写措施（§6.4）');
+      if (!(payload.measure || '').trim()) return reject(state, action, '处置必须填写措施');
       if (alarm.status === '已关闭') return reject(state, action, '已关闭报警不能处置');
-      // 处理中再次提交 = 更新处置（状态保持处理中，追加处置履历；预计完成时间可沿用上次）
-      const isUpdate = alarm.status === '处理中';
+      if (alarm.status === '已触发') return reject(state, action, '请先确认报警（确认后进入处理中，才能处置）');
+      // 处理中再次提交 = 更新处置（预填上次内容；预计完成时间可沿用上次）
+      const isUpdate = Boolean(alarm.handleMeasure);
       const expectedAt = payload.expectedAt || alarm.expectedAt || '';
-      if (!expectedAt) return reject(state, action, '处置必须填写预计完成时间（§6.4）');
-      const toStatus = canAlarmTransition(alarm.status, '处理中') ? '处理中' : alarm.status;
-      const updated = { ...alarm, status: toStatus, handler: actor.userName, expectedAt, timeline: [...alarm.timeline, { type: isUpdate ? '更新处置' : '处置', time: timeOnly(at), actor: actor.userName, detail: `${payload.measure}（预计完成：${expectedAt}）` }] };
+      if (!expectedAt) return reject(state, action, '处置必须填写预计完成时间');
+      const recoveryNote = (payload.recoveryNote || '').trim();
+      // 关闭判定：恢复口径为「人工处置关闭」或本次填写了恢复说明
+      const wantClose = alarm.recovery === '人工处置关闭' || recoveryNote.length > 0;
+      let closeNote = '';
+      if (wantClose) {
+        const repair = alarm.relatedRepairOrderId ? E.repairOrdersById[alarm.relatedRepairOrderId] : null;
+        const downtime = alarm.relatedDowntimeId ? E.downtimeFactsById[alarm.relatedDowntimeId] : null;
+        const blockers = closeBlockers(alarm, { repairStatus: repair?.status, downtimeStatus: downtime?.status });
+        if (blockers.length) {
+          // 存在关闭阻塞：照常记录处置，但不关闭，返回阻塞原因
+          const updatedKeep = { ...alarm, status: '处理中', handler: actor.userName, handleMeasure: payload.measure, expectedAt, timeline: [...alarm.timeline, { type: isUpdate ? '更新处置' : '处置', time: timeOnly(at), actor: actor.userName, detail: `${payload.measure}（预计完成：${expectedAt}）` }] };
+          let nextKeep = setE(state, 'alarmEventsById', alarm.id, updatedKeep);
+          nextKeep = addHistory(nextKeep, at, 'alarm', alarm.id, isUpdate ? '更新报警处置' : '处置报警', { deviceId: alarm.deviceId, measure: payload.measure });
+          return finish(nextKeep, action, true, `已记录处置，但暂不能关闭：${blockers.join('；')}`, { alarmId: alarm.id, closed: false, blockers }, false, at);
+        }
+        closeNote = recoveryNote || '人工处置关闭';
+      }
+      const closed = wantClose;
+      const updated = {
+        ...alarm,
+        status: closed ? '已关闭' : '处理中',
+        handler: actor.userName,
+        handleMeasure: payload.measure,
+        expectedAt,
+        recovered: closed ? (recoveryNote || alarm.recovered || '人工处置关闭') : alarm.recovered,
+        recoveredEvidence: closed ? true : alarm.recoveredEvidence,
+        timeline: [
+          ...alarm.timeline,
+          { type: isUpdate ? '更新处置' : '处置', time: timeOnly(at), actor: actor.userName, detail: `${payload.measure}（预计完成：${expectedAt}）` },
+          ...(closed ? [{ type: '关闭', time: timeOnly(at), actor: actor.userName, detail: `恢复口径 ${alarm.recovery}；${closeNote}` }] : []),
+        ],
+      };
       let next = setE(state, 'alarmEventsById', alarm.id, updated);
-      next = addHistory(next, at, 'alarm', alarm.id, isUpdate ? '更新报警处置' : '处置报警', { deviceId: alarm.deviceId, measure: payload.measure });
-      return finish(next, action, true, isUpdate ? `已更新处置，状态仍为「${toStatus}」` : `已记录处置，状态「${toStatus}」${toStatus !== '处理中' ? '（恢复待关闭状态无需重复处置）' : ''}`, { alarmId: alarm.id }, false, at);
+      next = addHistory(next, at, 'alarm', alarm.id, closed ? `处置关闭报警 ${alarm.id}` : (isUpdate ? '更新报警处置' : '处置报警'), { deviceId: alarm.deviceId, measure: payload.measure, recoveryNote: recoveryNote || null });
+      return finish(next, action, true,
+        closed ? `已处置并关闭 ${alarm.id}` : (isUpdate ? '已更新处置，状态仍为「处理中」' : '已记录处置，状态「处理中」；指标恢复或业务闭环后关闭'),
+        { alarmId: alarm.id, closed }, false, at);
     }
     case 'alarm/createRepairFromAlarm': {
       const alarm = E.alarmEventsById[payload.alarmId];
@@ -660,26 +694,10 @@ export function reducer(state, action) {
         ? `已生成主工单 ${id} 并直接派工至 ${d.assignee.trim()}，可在「维修任务」中开工执行`
         : `已生成主工单 ${id}（待派工），并回写至报警 ${alarm.id}`, { repairOrderId: id, alarmId: alarm.id }, false, at);
     }
-    case 'alarm/close': {
-      const alarm = E.alarmEventsById[payload.alarmId];
-      if (!alarm) return reject(state, action, '报警事件不存在');
-      const repair = alarm.relatedRepairOrderId ? E.repairOrdersById[alarm.relatedRepairOrderId] : null;
-      const downtime = alarm.relatedDowntimeId ? E.downtimeFactsById[alarm.relatedDowntimeId] : null;
-      const blockers = closeBlockers(alarm, {
-        closeReason: payload.closeReason,
-        repairStatus: repair?.status,
-        downtimeStatus: downtime?.status,
-      });
-      if (blockers.length) return reject(state, action, `不能关闭：${blockers.join('；')}`);
-      const updated = { ...alarm, status: '已关闭', recoveredEvidence: true, timeline: [...alarm.timeline, { type: '关闭', time: timeOnly(at), actor: actor.userName, detail: `恢复证据：${payload.evidence}；原因：${payload.closeReason}` }] };
-      let next = setE(state, 'alarmEventsById', alarm.id, updated);
-      next = addHistory(next, at, 'alarm', alarm.id, '关闭报警', { deviceId: alarm.deviceId, closeReason: payload.closeReason });
-      return finish(next, action, true, `已关闭 ${alarm.id}`, { alarmId: alarm.id }, false, at);
-    }
     // 报警恢复（验收联动内部动作，也可由页面在指标恢复后调用）
     case 'alarm/recover': {
       const alarm = E.alarmEventsById[payload.alarmId];
-      if (!alarm || ['已关闭', '已恢复待关闭'].includes(alarm.status)) return state;
+      if (!alarm || alarm.status === '已关闭') return state;
       if (!(payload.evidence || '').trim()) return reject(state, action, '恢复必须填写恢复证据');
       // 恢复判定（M2 + P2）：提供样本时必须满足恢复条件且数据有效（null/BAD/OFFLINE 不恢复）。
       // 组合规则须提供全部子条件样本（payload.conditionSamples），全部回到非触发态才恢复。
@@ -696,21 +714,20 @@ export function reducer(state, action) {
           return reject(state, action, `样本值 ${payload.sample?.value ?? '--'}${payload.sample?.unit || ''} 未满足恢复条件（${rule ? recoveryTextOf(rule.recoveryConfig, rule.triggerConfig) : '--'}），报警保持`);
         }
       }
+      // 恢复即关闭（2026-11-04 三态状态机）：维修验收 / 备件入库 / 指标恢复联动直接关闭报警
       const updated = {
         ...alarm,
-        status: '已恢复待关闭',
+        status: '已关闭',
         recovered: payload.evidence || '指标恢复',
         recoveredEvidence: true,
         recoverySnapshot: rule?.recoveryConfig ? structuredClone(rule.recoveryConfig) : null,
-        timeline: [...alarm.timeline, { type: '恢复', time: timeOnly(at), actor: actor.userName, detail: payload.evidence || '指标恢复' }],
+        timeline: [
+          ...alarm.timeline,
+          { type: '恢复', time: timeOnly(at), actor: actor.userName, detail: payload.evidence || '指标恢复' },
+          { type: '关闭', time: timeOnly(at), actor: actor.userName, detail: `恢复口径 ${alarm.recovery}；${payload.evidence || '指标恢复'}` },
+        ],
       };
-      let next = setE(state, 'alarmEventsById', alarm.id, updated);
-      // 自动恢复类规则：无业务关联时恢复后自动关闭；有关联时仍需通过关闭校验（closeBlockers）。
-      const autoClose = (rule?.recoveryConfig ? (rule.recoveryConfig.mode === 'auto' && rule.recoveryConfig.closeMode !== 'manual') : false)
-        || alarm.recovery === '自动恢复';
-      if (autoClose && !alarm.relatedRepairOrderId && !alarm.relatedDowntimeId) {
-        next = setE(next, 'alarmEventsById', alarm.id, { ...updated, status: '已关闭', timeline: [...updated.timeline, { type: '关闭', time: timeOnly(at), actor: '系统', detail: '自动恢复类规则恢复后自动关闭' }] });
-      }
+      const next = setE(state, 'alarmEventsById', alarm.id, updated);
       return next;
     }
 

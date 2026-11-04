@@ -16,7 +16,7 @@ const COLOR_MAP = {
   运行: 'success', 待机: 'processing', 计划停机: 'warning', 故障: 'error', 故障停机: 'error',
   维修中: 'processing', 无数据: 'default',
   // 报警状态
-  已触发: 'error', 已确认: 'orange', 处理中: 'processing', 已恢复待关闭: 'warning', 已关闭: 'default',
+  已触发: 'error', 处理中: 'processing', 已关闭: 'default',
   // 维修状态
   待派工: 'warning', 已派工: 'processing', 挂起: 'warning', 待验收: 'orange', 已完成: 'success', 已取消: 'default',
   // 点检 / 保养 / 巡检任务状态（演示模块）

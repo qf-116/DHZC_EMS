@@ -749,13 +749,20 @@ test('并发编辑冲突：打开时的发布版本与当前不一致 → 阻断
   assert.equal(lastOf(s).ok, true, lastOf(s).message);
   assert.equal(s.entities.alarmRulesById['R-CONF-001'].publishedVersion, 'V3');
 });
-test('处置更新：处理中再次处置追加履历、状态保持处理中；同一次提交重复点击被幂等忽略', () => {
+test('三态状态机：确认后直接进入处理中；未确认不能处置；处置登记/更新二合一', () => {
   let s = baseState;
   s = reducer(s, { type: 'alarm/rule/saveAndPublish', payload: { rule: withCode(validForm(), 'R-HDL-001') }, actionId: 'h1' });
   s = reducer(s, { type: 'alarm/raise', payload: { deviceId: 'DEV-001', ruleCode: 'R-HDL-001', sample: { value: 95, qualityCode: 'GOOD', metricCode: 'M.bearing_temp' } }, actionId: 'h2' });
   const alarmId = lastOf(s).refs.alarmId;
+  // 未确认不能处置
+  s = reducer(s, { type: 'alarm/handle', payload: { alarmId, measure: '清洗管路', expectedAt: '2026-09-16 18:00' }, actionId: 'h2b' });
+  assert.equal(lastOf(s).ok, false);
+  assert.ok(lastOf(s).message.includes('先确认'), lastOf(s).message);
+  // 确认 → 直接进入处理中
   s = reducer(s, { type: 'alarm/ack', payload: { alarmId, note: '已到现场' }, actionId: 'h3' });
   assert.equal(lastOf(s).ok, true, lastOf(s).message);
+  assert.equal(s.entities.alarmEventsById[alarmId].status, '处理中');
+  // 处置登记
   s = reducer(s, { type: 'alarm/handle', payload: { alarmId, measure: '清洗管路', expectedAt: '2026-09-16 18:00' }, idempotencyKey: 'handle:x:0', actionId: 'h4' });
   assert.equal(lastOf(s).ok, true, lastOf(s).message);
   assert.equal(s.entities.alarmEventsById[alarmId].status, '处理中');
@@ -769,6 +776,47 @@ test('处置更新：处理中再次处置追加履历、状态保持处理中�
   assert.equal(evt.status, '处理中');
   assert.equal(evt.timeline.filter((t) => t.type === '处置' || t.type === '更新处置').length, 2);
   assert.equal(evt.expectedAt, '2026-09-16 18:00', '未填预计完成时间时沿用上次');
+});
+test('处置关闭：填写恢复说明 → 提交即关闭；未填保持处理中', () => {
+  let s = baseState;
+  s = reducer(s, { type: 'alarm/rule/saveAndPublish', payload: { rule: withCode(validForm(), 'R-HDL-002') }, actionId: 'i1' });
+  s = reducer(s, { type: 'alarm/raise', payload: { deviceId: 'DEV-001', ruleCode: 'R-HDL-002', sample: { value: 95, qualityCode: 'GOOD', metricCode: 'M.bearing_temp' } }, actionId: 'i2' });
+  const alarmId = lastOf(s).refs.alarmId;
+  s = reducer(s, { type: 'alarm/ack', payload: { alarmId, note: '已到现场' }, actionId: 'i3' });
+  // 只登记处置不填恢复说明 → 保持处理中
+  s = reducer(s, { type: 'alarm/handle', payload: { alarmId, measure: '清洗管路', expectedAt: '2026-09-16 18:00' }, actionId: 'i4' });
+  assert.equal(lastOf(s).ok, true);
+  assert.equal(s.entities.alarmEventsById[alarmId].status, '处理中');
+  // 更新处置并填写恢复说明 → 关闭
+  s = reducer(s, { type: 'alarm/handle', payload: { alarmId, measure: '更换冷却液', recoveryNote: '温度回落至 72℃，持续 30s' }, idempotencyKey: 'handle:y:1', actionId: 'i5' });
+  assert.equal(lastOf(s).ok, true, lastOf(s).message);
+  assert.equal(lastOf(s).refs.closed, true);
+  const evt = s.entities.alarmEventsById[alarmId];
+  assert.equal(evt.status, '已关闭');
+  assert.equal(evt.recovered, '温度回落至 72℃，持续 30s');
+  assert.ok(evt.timeline.some((t) => t.type === '关闭'));
+});
+test('处置关闭阻塞：关联维修未验收时照常记录处置但不关闭，返回阻塞原因', () => {
+  let s = baseState;
+  // 走种子链路：ALM-20260916-003 已关联维修单 RO-20260916-001（处理中）
+  const alarm = s.entities.alarmEventsById['ALM-20260916-003'];
+  assert.equal(alarm.status, '处理中', '种子迁移后已确认/已恢复待关闭并入处理中');
+  s = reducer(s, { type: 'alarm/handle', payload: { alarmId: 'ALM-20260916-003', measure: '等待备件到货', expectedAt: '2026-09-16 20:00', recoveryNote: '程序比对恢复一致' }, actionId: 'j1' });
+  const res = lastOf(s);
+  assert.equal(res.ok, true);
+  assert.equal(res.refs.closed, false, '维修未验收不得关闭');
+  assert.ok((res.refs.blockers || []).some((b) => b.includes('尚未完成验收')), res.message);
+  assert.equal(s.entities.alarmEventsById['ALM-20260916-003'].status, '处理中');
+});
+test('人工处置关闭：恢复口径为「人工处置关闭」的报警处置提交即关闭', () => {
+  let s = baseState;
+  const alarm = s.entities.alarmEventsById['ALM-20260916-003'];
+  // 将该报警恢复口径改为人工处置关闭（模拟规则口径），无阻塞后处置即关闭
+  s = { ...s, entities: { ...s.entities, alarmEventsById: { ...s.entities.alarmEventsById, 'ALM-20260916-003': { ...alarm, relatedRepairOrderId: null, recovery: '人工处置关闭' } } } };
+  s = reducer(s, { type: 'alarm/handle', payload: { alarmId: 'ALM-20260916-003', measure: '基线已更新并复比一致', expectedAt: '2026-09-16 20:00' }, actionId: 'k1' });
+  assert.equal(lastOf(s).ok, true, lastOf(s).message);
+  assert.equal(lastOf(s).refs.closed, true);
+  assert.equal(s.entities.alarmEventsById['ALM-20260916-003'].status, '已关闭');
 });
 
 console.log(`\n${passed} 项契约测试通过${process.exitCode ? '（存在失败）' : ''}`);

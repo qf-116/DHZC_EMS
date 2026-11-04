@@ -93,8 +93,8 @@ export default function OverviewPage() {
         <MetricTile label="故障" value={counts.fault} unit="台" color="#dc2626" />
         <MetricTile label="无数据" value={counts.noData} unit="台" color="#8d6e63" />
         <MetricTile label="未确认报警" value={alarms.filter(a => a.status === '已触发').length} unit="条" color="#d97706" />
-        <MetricTile label="处理中报警" value={alarms.filter(a => a.status === '处理中' || a.status === '已确认').length} unit="条" />
-        <MetricTile label="恢复待关闭" value={alarms.filter(a => a.status === '已恢复待关闭').length} unit="条" />
+        <MetricTile label="处理中报警" value={alarms.filter(a => a.status === '处理中').length} unit="条" />
+        <MetricTile label="已关闭报警" value={alarms.filter(a => a.status === '已关闭').length} unit="条" />
         <MetricTile label="通信正常" value={counts.normal} unit="台" color="#16a34a" />
         <MetricTile label="通信延迟 / 中断" value={counts.delayed + counts.partial + counts.offline} unit="台" color="#d97706" />
         <MetricTile label="非监测设备（停用/报废）" value={rows.length - monitored.length} unit="台" />

@@ -17,7 +17,7 @@ import { materialPool, speedConfigs, oeeTargets, shiftCalendar, oeeInputs, oeeEl
 import { programCompare, programBaselines, programHandles } from './programCompare.js';
 import { lifecycleTasks, assetChangeRecords, idleApplications, scrapApplications } from './lifecycle.js';
 
-export const STORE_VERSION = 12; // 快照结构版本：报警规则无草稿态（去掉模板/批次容器，清理历史草稿规则）
+export const STORE_VERSION = 13; // 快照结构版本：报警三态状态机（已确认/已恢复待关闭并入处理中，人工确认关闭→人工处置关闭）
 
 export const DEMO_META = {
   mode: 'demo',

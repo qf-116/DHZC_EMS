@@ -9,7 +9,7 @@ export const alarmRules = [
   { code: 'R-TEMP-002', name: '冷却液温度持续超限', type: '阈值', deviceScope: '绑定冷却液温度指标设备', metricCode: 'M.coolant_temp', condition: '> 42℃ 持续 60s', recovery: '自动恢复', recoverCondition: '< 39℃（回差 3℃）持续 60s', suppress: '活动事件抑制 · 重复提醒 5min', storm: '≤ 3 条/小时', severity: '重要', policyCode: 'NP-IMPORTANT', status: '已发布', version: 'V2', trig7d: 7, supp7d: 4 },
   { code: 'R-PRESS-001', name: '气压压力区间异常', type: '阈值', deviceScope: '绑定气源压力指标设备', metricCode: 'M.air_pressure', condition: '区间外 0.6 ~ 0.8 MPa 持续 30s', recovery: '自动恢复', recoverCondition: '回到 0.65 ~ 0.75 MPa（回差 0.05）持续 30s', suppress: '活动事件抑制 · 重复提醒 5min', storm: '≤ 3 条/小时', severity: '一般', policyCode: 'NP-GENERAL', status: '已发布', version: 'V1', trig7d: 7, supp7d: 4 },
   { code: 'R-STATE-001', name: '设备故障立即报警', type: '状态', deviceScope: '全部已启用绑定设备', metricCode: 'S.machine_state', condition: '状态 = 故障 立即触发', recovery: '自动恢复', recoverCondition: '状态恢复正常自动恢复', suppress: '活动事件抑制 · 重复提醒 10min', storm: '≤ 5 条/小时', severity: '紧急', policyCode: 'NP-URGENT', status: '已发布', version: 'V5', trig7d: 12, supp7d: 3 },
-  { code: 'R-COMPARE-001', name: 'MES程序参数不一致', type: '程序', deviceScope: '有程序下发设备', metricCode: '程序比对', condition: '实际参数 ≠ 基线且超容差', recovery: '人工确认关闭', recoverCondition: '人工确认关闭或基线更新', suppress: '活动事件抑制 · 不重复提醒', storm: '≤ 2 条/小时', severity: '重要', policyCode: 'NP-IMPORTANT', status: '已发布', version: 'V2', trig7d: 9, supp7d: 2 },
+  { code: 'R-COMPARE-001', name: 'MES程序参数不一致', type: '程序', deviceScope: '有程序下发设备', metricCode: '程序比对', condition: '实际参数 ≠ 基线且超容差', recovery: '人工处置关闭', recoverCondition: '人工确认关闭或基线更新', suppress: '活动事件抑制 · 不重复提醒', storm: '≤ 2 条/小时', severity: '重要', policyCode: 'NP-IMPORTANT', status: '已发布', version: 'V2', trig7d: 9, supp7d: 2 },
   { code: 'R-QUALITY-001', name: '采集数据延迟', type: '质量', deviceScope: '全部已启用绑定设备', metricCode: '最后采集时间', condition: '延迟 > 30s 持续 60s', recovery: '自动恢复', recoverCondition: '延迟 < 10s 持续 60s（回差 20s）', suppress: '活动事件抑制 · 重复提醒 15min', storm: '≤ 3 条/小时', severity: '一般', policyCode: 'NP-GENERAL', status: '已发布', version: 'V4', trig7d: 27, supp7d: 41 },
   { code: 'R-SPARE-001', name: '备件库存低于安全库存', type: '备件', deviceScope: '全部备件', metricCode: '库存数量', condition: '当前库存 < 安全库存', recovery: '业务闭环', recoverCondition: '补货入库至安全库存后关闭', suppress: '活动事件抑制 · 每日提醒 1 次', storm: '≤ 1 条/小时', severity: '提示', policyCode: 'NP-GENERAL', status: '已发布', version: 'V1', trig7d: 5, supp7d: 2 },
 ];
@@ -23,7 +23,7 @@ export const alarmRuleVersions = [
 ];
 
 // 报警事件（AlarmEvent）
-// 状态：已触发 / 已确认 / 处理中 / 已恢复待关闭 / 已关闭
+// 状态：已触发 / 处理中 / 已关闭（2026-11-04 三态状态机）
 export const alarmEvents = [
   {
     id: 'ALM-20260916-001', deviceId: 'DEV-004', deviceName: '数控铲齿机-04', name: '主轴温度高高报警',
@@ -40,7 +40,7 @@ export const alarmEvents = [
   },
   {
     id: 'ALM-20260916-002', deviceId: 'DEV-002', deviceName: 'CNC加工中心-02', name: '冷却液温度持续超限',
-    rule: 'R-TEMP-002', ruleVersion: 'V2', bindingVersion: 2, severity: '重要', status: '已确认',
+    rule: 'R-TEMP-002', ruleVersion: 'V2', bindingVersion: 2, severity: '重要', status: '处理中',
     metric: '冷却液温度', metricCode: 'M.coolant_temp', trigger: '44.6 ℃', threshold: '> 42 ℃ 持续 60s',
     time: '15:58:11', duration: '43m 0s', repeat: 1, ack: '16:02:40', escalation: '0', notify: '成功', policy: 'NP-IMPORTANT',
     recovery: '自动恢复', handler: '李明', recovered: '', recoveredEvidence: null, merge: 0,
@@ -56,7 +56,7 @@ export const alarmEvents = [
     rule: 'R-COMPARE-001', ruleVersion: 'V2', bindingVersion: 2, severity: '重要', status: '处理中',
     metric: '程序比对', metricCode: '程序比对', trigger: '进给倍率 120%', threshold: '基准 105% · 容差 ±3%',
     time: '14:41:20', duration: '1h 59m', repeat: 1, ack: '14:48:02', escalation: '1', notify: '成功', policy: 'NP-IMPORTANT',
-    recovery: '人工确认关闭', handler: '王强', recovered: '', recoveredEvidence: null, merge: 0,
+    recovery: '人工处置关闭', handler: '王强', recovered: '', recoveredEvidence: null, merge: 0,
     dedupeKey: 'DEV-002:R-COMPARE-001:V2:2', relatedRepairOrderId: 'RO-20260916-001', relatedDowntimeId: null,
     timeline: [
       { type: '触发', time: '14:41:20', actor: '系统', detail: '进给倍率 120% 超出基线 105% ±3%' },

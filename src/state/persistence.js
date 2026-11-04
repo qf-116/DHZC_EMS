@@ -24,6 +24,14 @@ function migrateParsed(parsed) {
   // 已下线实体不随旧快照迁移，避免旧页面数据重新出现
   delete next.entities.ruleTemplatesById;
   delete next.entities.alarmBatchesById;
+  // 报警三态状态机迁移（V13）：已确认 / 已恢复待关闭 并入处理中；恢复口径改名
+  next.entities.alarmEventsById = Object.fromEntries(
+    Object.entries(parsed.entities?.alarmEventsById || {}).map(([id, a]) => {
+      const status = ['已确认', '已恢复待关闭'].includes(a.status) ? '处理中' : a.status;
+      const recovery = a.recovery === '人工确认关闭' ? '人工处置关闭' : a.recovery;
+      return [id, { ...a, status, recovery }];
+    })
+  );
   next.entities.alarmRulesById = Object.fromEntries(
     Object.entries(parsed.entities?.alarmRulesById || {})
       .map(([code, rule]) => [code, normalizeLegacyRule(rule)])
@@ -47,7 +55,7 @@ export function loadDemoState() {
     }
     // 旧版本快照：尝试结构迁移，保留用户已有草稿与业务事实
     try {
-      return { state: migrateParsed(parsed), notice: '本地快照已迁移至新版本结构（报警规则已补齐结构化字段，历史草稿规则已清理）' };
+      return { state: migrateParsed(parsed), notice: '本地快照已迁移至新版本结构（报警状态机已收敛为三态，历史草稿规则已清理）' };
     } catch {
       return { state: null, notice: '本地快照迁移失败，已恢复初始状态' };
     }

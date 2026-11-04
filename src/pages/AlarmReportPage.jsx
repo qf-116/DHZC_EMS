@@ -12,7 +12,7 @@ import { selectExportTasks } from '../state/selectors.js';
 
 const THEME = 'alarm';
 
-const STATUS_KEYS = ['已触发', '已确认', '处理中', '已恢复待关闭', '已关闭'];
+const STATUS_KEYS = ['已触发', '处理中', '已关闭'];
 const SEVERITY_KEYS = ['紧急', '重要', '一般', '提示'];
 
 // 报警处理时限（SLA，按等级）：紧急 2h / 重要 8h / 一般 24h；提示不计超时
@@ -152,7 +152,7 @@ export default function AlarmReportPage() {
     message.success(`导出任务 ${task.exportId} 已创建`);
   };
 
-  const STATUS_COLOR = { 已触发: 'error', 已确认: 'orange', 处理中: 'processing', 已恢复待关闭: 'warning', 已关闭: 'default' };
+  const STATUS_COLOR = { 已触发: 'error', 处理中: 'processing', 已关闭: 'default' };
 
   const columns = [
     { title: '设备', dataIndex: 'deviceName', width: 160, render: v => v || '--' },

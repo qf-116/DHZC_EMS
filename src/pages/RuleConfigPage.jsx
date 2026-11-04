@@ -1,24 +1,24 @@
 import React from 'react';
 import { Card, Table, Tag, Button, Space, Select, App, Input, InputNumber, Alert, Modal, Statistic, Tooltip, Descriptions } from 'antd';
-import { Plus, TestTube2, Trash2, PowerOff, Pencil } from 'lucide-react';
+import { Plus, Trash2, PowerOff, Pencil } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import { metricAlarmTemplates } from '../data/demoData.js';
 import { iotProducts } from '../data/demo/bindings.js';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import {
   resolveRuleTargets, createEmptyRuleForm, ruleToForm, formToRule, switchRuleFormType,
-  validateRuleDraft, conditionTextOf, replayTrend, ruleProductOf, nextRuleCode,
+  validateRuleDraft, ruleProductOf, nextRuleCode,
   LEGACY_BUSINESS_RULE_TYPES,
 } from '../domain/alarmRule.js';
 import RuleFormBody from '../components/RuleFormBody.jsx';
 import RuleNewWizard from '../components/RuleNewWizard.jsx';
 import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 
-// 报警规则配置 V5（2026-11-03 合并「新增规则」与「批量新建」）：
+// 报警规则配置 V6（2026-11-04 界面精简：去版本展示、删除测试/历史数据回测）：
 // - 新增规则走三步向导（产品 → 物联网设备多选 → 单指标 → 参数 → 预览），N 台设备生成 N 条规则，直接发布、无草稿态；
 // - 列表保留产品列与产品查询（产品 = 物联网平台产品目录，同产品物模型一致）；
 // - 支持单条停用、批量停用、单条删除、批量删除（历史报警事件保留）。
-// - 规则编辑：受控表单，保存即发布新版本。
+// - 规则编辑：受控表单，保存即发布新版本。版本快照与并发冲突校验在内部保留，界面不再展示版本信息。
 const hint = { fontSize: 12, color: '#5d6b78', lineHeight: 1.7 };
 
 export default function RuleConfigPage() {
@@ -33,8 +33,6 @@ export default function RuleConfigPage() {
   const [editing, setEditing] = React.useState(null);          // 编辑中的规则
   const [editBaseVersion, setEditBaseVersion] = React.useState(null); // 打开编辑时的发布版本（并发冲突比对基线）
   const [form, setForm] = React.useState(() => createEmptyRuleForm());
-  const [testOpen, setTestOpen] = React.useState(false);
-  const [testRule, setTestRule] = React.useState(null);
   const [detailRule, setDetailRule] = React.useState(null);
   // 查询条件 + 勾选批量操作
   const [qKw, setQKw] = React.useState('');
@@ -96,13 +94,6 @@ export default function RuleConfigPage() {
     setEditBaseVersion(r.publishedVersion || r.version || null);
     setSubmitAttempted(false);
     setForm(ruleToForm(r));
-  };
-  const [testForm, setTestForm] = React.useState(null);
-  const openTest = (r, cfgForm) => {
-    setTestRule(r);
-    // 回测使用当前表单配置（未保存也可）；列表入口使用该规则当前生效配置
-    setTestForm(formToRule(cfgForm || ruleToForm(r)));
-    setTestOpen(true);
   };
 
   // 指标特征模板：选择数值指标后自动带出推荐判定模式与参数（用户可修改）
@@ -199,16 +190,6 @@ export default function RuleConfigPage() {
       },
     });
   };
-
-  // 真实回测（P2）：按触发配置对目标指标最近趋势采样点回放（60s 间隔）
-  const backtest = React.useMemo(() => {
-    if (!testRule || !testForm) return null;
-    const key = `${testForm.target?.deviceId}|${testForm.target?.metricCode}`;
-    const values = state.entities.trends[key];
-    const replay = replayTrend(testForm.triggerConfig, Array.isArray(values) ? values : [], { stepSec: 60 });
-    return { key, hasTrend: Array.isArray(values) && values.length > 0, replay };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [testRule, testForm, state.entities.trends]);
 
   // 列表读模型：chain 由 canonical 目标生成；legacy 规则回退 deviceScope + metricCode
   // 产品 = 物联网平台产品目录（canonical 目标按来源设备取；旧种子规则按指标物模型回退）
@@ -420,11 +401,6 @@ export default function RuleConfigPage() {
               targets={targets}
               disabled={legacyLocked}
             />
-            {!legacyLocked && (
-              <Button icon={<TestTube2 size={14} />} onClick={() => openTest(editing || { code: '当前配置', name: form.name || '未命名规则', trig7d: 23, supp7d: 31 }, form)}>
-                历史数据回测（按当前配置真实回放）
-              </Button>
-            )}
           </Space>
         </div>
       </Modal>
@@ -466,43 +442,6 @@ export default function RuleConfigPage() {
               {detailRule.effectiveFrom ? ` · 生效自 ${detailRule.effectiveFrom}` : ''}
             </div>
           </Space>
-        )}
-      </Modal>
-
-      {/* 历史数据回测弹窗（P2）：按当前配置对趋势采样点真实回放；无趋势数据时明示退回种子统计 */}
-      <Modal
-        title={`历史数据回测${testRule ? ` · ${testRule.code} ${testRule.name}` : ''}`}
-        width={560}
-        open={testOpen}
-        footer={<Button type="primary" onClick={() => setTestOpen(false)}>知道了</Button>}
-        onCancel={() => setTestOpen(false)}
-      >
-        {testRule && backtest && (
-          <>
-            {backtest.hasTrend ? (
-              <>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8, marginBottom: 8 }}>
-                  <Statistic title="回测窗口" value={backtest.replay.points} suffix="点" />
-                  <Statistic title="条件命中" value={backtest.replay.hits} suffix="点" />
-                  <Statistic title="生成事件" value={backtest.replay.events} suffix="条" valueStyle={{ color: '#00b8d4' }} />
-                  <Statistic title="被抑制 / 合并" value={backtest.replay.suppressed} suffix="点" valueStyle={{ color: '#d97706' }} />
-                </div>
-                <Alert type="success" showIcon message={`已按当前配置（${conditionTextOf(testForm.triggerConfig)}）对 ${backtest.key} 最近 ${backtest.replay.points} 个采样点（60s 间隔）真实回放。`} />
-              </>
-            ) : (
-              <>
-                <Alert type="warning" showIcon style={{ marginBottom: 10 }}
-                  message="无数据，不能完成回测"
-                  description={`该目标（${backtest.key}）没有历史趋势采样点，无法按当前配置真实回放。下方为系统事件计数，不是回测结论。`} />
-                <div style={{ fontSize: 12, color: '#8a97a3', marginBottom: 6 }}>近 7 天事件计数（系统统计，非回测结果）</div>
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 8 }}>
-                  <Statistic title="条件命中" value={(testRule.trig7d || 0) + (testRule.supp7d || 0)} suffix="次" />
-                  <Statistic title="实际生成事件" value={testRule.trig7d || 0} suffix="条" valueStyle={{ color: '#00b8d4' }} />
-                  <Statistic title="被抑制 / 合并" value={testRule.supp7d || 0} suffix="次" valueStyle={{ color: '#d97706' }} />
-                </div>
-              </>
-            )}
-          </>
         )}
       </Modal>
 

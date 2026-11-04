@@ -372,7 +372,8 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
         style={{ marginBottom: 16 }}
         items={[{ title: '① 选设备' }, { title: '② 选指标' }, { title: '③ 配条件' }]}
       />
-      <div style={{ maxHeight: '62vh', overflowY: 'auto', paddingRight: 6 }}>
+      {/* 内容区固定高度：三步弹窗大小保持一致，不随步骤内容增减跳动 */}
+      <div style={{ height: '56vh', overflowY: 'auto', paddingRight: 6 }}>
         {step === 0 && (
           <Space direction="vertical" style={{ width: '100%' }} size={12}>
             <Space wrap>

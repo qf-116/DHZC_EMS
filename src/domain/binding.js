@@ -14,7 +14,7 @@ export const BINDING_TRANSITIONS = {
   '待生效': ['已启用', '草稿'],
   '已启用': ['已停用', '换绑中'],
   '换绑中': ['已启用', '已停用'],
-  '已停用': ['草稿'],
+  '已停用': ['草稿', '已启用'], // 2026-11-04：停用可逆——已停用绑定可直接重新启用（校验仍走 binding/enable）
 };
 
 export function canTransitionBinding(from, to) {

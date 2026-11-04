@@ -179,22 +179,20 @@ export function createDemoActions(state, dispatch) {
     enableBinding(deviceId) {
       const b = E.bindingsByDeviceId[deviceId];
       if (!b) return fail('该设备尚未创建绑定');
-      if (!['待生效', '换绑中'].includes(b.configStatus)) return fail(`当前状态「${b.configStatus}」不能启用`);
-      act('binding/enable', { deviceId }, `binding-enable:${deviceId}:v${b.version}`);
-      return { ok: true, message: `绑定已启用，影响监测/报警/OEE/报表/大屏`, refs: { deviceId, bindingId: b.bindingId } };
+      if (!['待生效', '换绑中', '已停用'].includes(b.configStatus)) return fail(`当前状态「${b.configStatus}」不能启用`);
+      // 透传 reducer 真实结果：启用前校验（至少 1 个启用来源等）失败时如实失败
+      return act('binding/enable', { deviceId }, `binding-enable:${deviceId}:v${b.version}`);
     },
     disableBinding(deviceId, opts = {}) {
       const b = E.bindingsByDeviceId[deviceId];
       if (!b) return fail('该设备尚未创建绑定');
       if (b.configStatus !== '已启用') return fail(`当前状态「${b.configStatus}」不能停用`);
-      act('binding/disable', { deviceId, reason: opts?.reason || '' }, `binding-disable:${deviceId}:v${b.version}`);
-      return { ok: true, message: '绑定已停用', refs: { deviceId } };
+      return act('binding/disable', { deviceId, reason: opts?.reason || '' }, `binding-disable:${deviceId}:v${b.version}`);
     },
     deleteBinding(deviceId) {
       const b = E.bindingsByDeviceId[deviceId];
       if (!b) return fail('该设备尚未创建绑定');
-      act('binding/delete', { deviceId }, `binding-delete:${deviceId}:${b.bindingId}`);
-      return { ok: true, message: '绑定已删除', refs: { deviceId } };
+      return act('binding/delete', { deviceId }, `binding-delete:${deviceId}:${b.bindingId}`);
     },
     addBindingSource(deviceId, source) {
       act('binding/addSource', { deviceId, source });

@@ -649,7 +649,7 @@ export default function BindingOverviewPage() {
     const remove = <Button {...blueButton} icon={<Trash2 size={13} />} onClick={() => setDeleteTarget({ deviceId: device.deviceId, deviceName: device.name })}>删除</Button>;
     if (status === '已启用') return <Space size={2}>{detail}{edit}<Button {...blueButton} icon={<PauseCircle size={13} />} onClick={() => setDisableTarget({ deviceId: device.deviceId, deviceName: device.name })}>停用</Button>{remove}</Space>;
     if (status === '待生效') return <Space size={2}>{detail}<Button {...blueButton} icon={<Play size={13} />} onClick={() => enable(r)}>启用</Button>{edit}{remove}</Space>;
-    if (status === '已停用') return <Space size={2}>{detail}{edit}{remove}</Space>;
+    if (status === '已停用') return <Space size={2}>{detail}<Button {...blueButton} icon={<Play size={13} />} onClick={() => enable(r)}>启用</Button>{edit}{remove}</Space>;
     return null;
   };
 

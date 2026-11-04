@@ -282,6 +282,7 @@ export default function App() {
         <Layout>
           <Header className="app-header">
             <Space size={14}>
+              <Button icon={<BookOpen size={14} />} onClick={() => setSpecOpen(true)}>需求细则</Button>
               <Button type="primary" ghost icon={<Activity size={14} />} onClick={openScreen}>监测大屏</Button>
               <Dropdown
                 menu={{
@@ -302,11 +303,6 @@ export default function App() {
           </Header>
           <Content className="app-content">
             <main className="page-main">
-              <div className="spec-entry-row">
-                <Button icon={<BookOpen size={14} />} onClick={() => setSpecOpen(true)}>
-                  需求细则
-                </Button>
-              </div>
                 <Routes>
                   <Route path="/" element={<WorkbenchPage />} />
                   {/* 设备资产 */}

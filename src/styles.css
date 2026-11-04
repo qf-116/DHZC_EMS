@@ -228,12 +228,6 @@ body {
 }
 .page-sub { color: var(--muted); font-size: 12.5px; margin-top: 4px; }
 .toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-.spec-entry-row {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 12px;
-}
-
 /* ---- 卡片：柔和投影 + 悬停微抬升 ---- */
 .ant-card {
   transition: box-shadow 0.25s var(--ease), transform 0.25s var(--ease);

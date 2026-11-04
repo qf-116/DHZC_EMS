@@ -643,3 +643,7 @@ body {
 .ant-modal .ant-form > .ant-row,
 /* Space 分组块整体跨两列，由内部 flex 换行 */
 .ant-modal .ant-form > .ant-space { grid-column: 1 / -1; }
+
+/* ================= 报表行级标注 ================= */
+/* 报警统计：存在 SLA 超时事件的设备行橙色标注（细则 §9.6「超过等级处理时限目标的行橙色标注」） */
+.row-sla-breach > td { background: #fffaf0 !important; }

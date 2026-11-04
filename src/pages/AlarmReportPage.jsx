@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { App, Button, Card, DatePicker, Select, Space, Table, Tag } from 'antd';
+import { App, Button, Card, DatePicker, Select, Space, Table, Tag, Tooltip } from 'antd';
 import dayjs from 'dayjs';
 import { Download } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
@@ -14,6 +14,9 @@ const THEME = 'alarm';
 
 const STATUS_KEYS = ['已触发', '已确认', '处理中', '已恢复待关闭', '已关闭'];
 const SEVERITY_KEYS = ['紧急', '重要', '一般', '提示'];
+
+// 报警处理时限（SLA，按等级）：紧急 2h / 重要 8h / 一般 24h；提示不计超时
+const SLA_HOURS = { 紧急: 2, 重要: 8, 一般: 24 };
 
 const { RangePicker } = DatePicker;
 
@@ -31,6 +34,7 @@ const toSec = (t) => {
 
 // 报警统计报表：由 alarmEventsById 按设备 × 级别 × 状态聚合（页面内简单聚合，不引用旧 demoData）。
 // 平均确认时长 = 有确认时间的事件（触发 → 确认）均值，无样本显示 '--'。
+// 平均关闭时长 = 已关闭事件（触发 → 关闭）均值；SLA 超时 = 超过等级时限的事件数（未关闭按演示时刻计）。
 export default function AlarmReportPage() {
   const { message } = App.useApp();
   const state = useDemoState();
@@ -67,7 +71,8 @@ export default function AlarmReportPage() {
     [alarms, device, severity, range, meta.demoDay],
   );
 
-  // 按设备聚合：各状态 / 各级别数量 + 重复触发 / 升级 / 平均确认时长
+  // 按设备聚合：各状态 / 各级别数量 + 重复抑制 / 升级 / 平均确认时长 / 平均关闭时长 / SLA 超时
+  const nowSec = useMemo(() => toSec(String(meta.updatedAt || '').slice(11, 19)), [meta.updatedAt]);
   const rows = useMemo(() => {
     const byDevice = new Map();
     for (const a of scopedAlarms) {
@@ -76,7 +81,7 @@ export default function AlarmReportPage() {
           deviceName: a.deviceName, deviceId: a.deviceId, total: 0,
           status: Object.fromEntries(STATUS_KEYS.map(k => [k, 0])),
           severity: Object.fromEntries(SEVERITY_KEYS.map(k => [k, 0])),
-          repeat: 0, escalation: 0, ackSamples: [],
+          repeat: 0, escalation: 0, ackSamples: [], closeSamples: [], slaBreach: 0,
         });
       }
       const row = byDevice.get(a.deviceName);
@@ -92,14 +97,38 @@ export default function AlarmReportPage() {
         if (diff < 0) diff += 86400; // 跨日确认按 +24h 计
         row.ackSamples.push(diff);
       }
+      // 关闭时长：取履历中的「关闭」时刻
+      const closeEntry = (a.timeline || []).find((t) => t.type === '关闭');
+      const closeSec = closeEntry ? toSec(closeEntry.time) : null;
+      if (closeSec !== null && trigSec !== null) {
+        let d = closeSec - trigSec;
+        if (d < 0) d += 86400;
+        row.closeSamples.push(d);
+      }
+      // SLA 超时：按等级时限（紧急 2h / 重要 8h / 一般 24h），未关闭按演示时刻计
+      const slaH = SLA_HOURS[a.severity];
+      if (slaH && trigSec !== null) {
+        const endSec = closeSec !== null ? closeSec : nowSec;
+        if (endSec !== null) {
+          let d = endSec - trigSec;
+          if (d < 0) d += 86400;
+          if (d > slaH * 3600) row.slaBreach += 1;
+        }
+      }
     }
-    return [...byDevice.values()].map(r => ({
-      ...r,
-      avgAck: r.ackSamples.length
-        ? `${Math.floor(r.ackSamples.reduce((s, x) => s + x, 0) / r.ackSamples.length / 60)}m ${Math.round(r.ackSamples.reduce((s, x) => s + x, 0) / r.ackSamples.length % 60)}s`
-        : null,
-    })).sort((a, b) => b.total - a.total);
-  }, [scopedAlarms]);
+    return [...byDevice.values()].map((r) => {
+      const avg = (samples) => (samples.length
+        ? `${Math.floor(samples.reduce((s, x) => s + x, 0) / samples.length / 3600)}h ${Math.floor((samples.reduce((s, x) => s + x, 0) / samples.length % 3600) / 60)}m`
+        : null);
+      return {
+        ...r,
+        avgAck: r.ackSamples.length
+          ? `${Math.floor(r.ackSamples.reduce((s, x) => s + x, 0) / r.ackSamples.length / 60)}m ${Math.round(r.ackSamples.reduce((s, x) => s + x, 0) / r.ackSamples.length % 60)}s`
+          : null,
+        avgClose: avg(r.closeSamples),
+      };
+    }).sort((a, b) => b.total - a.total);
+  }, [scopedAlarms, nowSec]);
 
   const exportTasks = useMemo(
     () => selectExportTasks(state).filter(t => t.theme === THEME),
@@ -136,11 +165,24 @@ export default function AlarmReportPage() {
       title: `${k}级别`, key: `sev-${k}`, width: 90, align: 'center',
       render: (_, r) => (r.severity[k] > 0 ? severityTag(k, r.severity[k]) : '--'),
     })),
-    { title: '重复触发', dataIndex: 'repeat', width: 100, align: 'center', render: v => (v > 0 ? <Tag color="warning">{v}</Tag> : v) },
+    { title: '重复抑制', dataIndex: 'repeat', width: 100, align: 'center', render: v => (v > 0 ? <Tag color="warning">{v}</Tag> : v) },
     { title: '升级次数', dataIndex: 'escalation', width: 100, align: 'center', render: v => (v > 0 ? <Tag color="error">{v}</Tag> : v) },
     {
       title: '平均确认时长', key: 'avgAck', width: 120,
       render: (_, r) => (r.avgAck || <Tag>--</Tag>),
+    },
+    {
+      title: '平均关闭时长', key: 'avgClose', width: 120,
+      render: (_, r) => (r.avgClose || <Tag>--</Tag>),
+    },
+    {
+      title: (
+        <Tooltip title="时限口径：紧急 2h / 重要 8h / 一般 24h（提示不计时限）；未关闭事件按演示时刻判定">
+          <span>SLA 超时</span>
+        </Tooltip>
+      ),
+      key: 'slaBreach', width: 110, align: 'center',
+      render: (_, r) => (r.slaBreach > 0 ? <Tag color="error">{r.slaBreach} 条</Tag> : <Tag>0</Tag>),
     },
   ];
 
@@ -186,7 +228,14 @@ export default function AlarmReportPage() {
           onNext={handleReset}
         />
       ) : (
-        <Table rowKey="deviceName" size="small" scroll={{ x: 1300 }} dataSource={rows} columns={columns} />
+        <Table
+          rowKey="deviceName"
+          size="small"
+          scroll={{ x: 1520 }}
+          dataSource={rows}
+          columns={columns}
+          rowClassName={(r) => (r.slaBreach > 0 ? 'row-sla-breach' : '')}
+        />
       )}
       {exportTasks.length > 0 && (
         <Card size="small" title="导出任务" style={{ marginTop: 12 }}>

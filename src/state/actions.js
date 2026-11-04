@@ -228,51 +228,10 @@ export function createDemoActions(state, dispatch) {
       act('binding/setMonitored', { deviceId, iotDeviceId, iotDeviceCode, metricCode });
       return { ok: true, message: '监控勾选已更新', refs: { deviceId } };
     },
-    saveBindingTemplate(template) {
-      act('bindingTemplate/save', { template });
-      return { ok: true, message: `绑定模板「${template.name}」已保存，可在「应用到设备」中批量使用`, refs: { templateId: template.templateId } };
-    },
-    deleteBindingTemplate(templateId, name) {
-      act('bindingTemplate/delete', { templateId });
-      return { ok: true, message: `绑定模板「${name}」已删除`, refs: {} };
-    },
     // 批量应用模板：按模板结构为每台设备构造绑定（IoT 来源编码演示模拟：
     // 由物联网平台按设备自动分配专属编码 IOT-2xx，全局唯一，不与已占用编码冲突）。
     // 2026-10 口径：应用模板 = 一次完成两步——① 创建绑定，接入指标按平台指标字典自动发现（全量存储）；
     // ② 监控勾选按模板预置（模板指标 monitored 标志映射到同编码指标）。
-    applyBindingTemplate({ deviceIds, template, autoEnable }) {
-      if (!template) return fail('请先选择监控指标模板');
-      if (!deviceIds || deviceIds.length === 0) return fail('请先选择要应用的设备');
-      let seq = 0;
-      const platformMetrics = Object.values(E.metricsByKey).filter((def) => def.syncStatus !== '已失效');
-      const bindings = deviceIds.map((deviceId) => {
-        const current = E.bindingsByDeviceId[deviceId];
-        const version = (current?.version || 0) + 1;
-        const bindingId = `binding-${deviceId.replace('DEV-', 'D')}-${version >= 10 ? '' : '0'}${version}`;
-        const device = E.devicesById[deviceId];
-        const items = (template.items || []).map((t) => {
-          seq += 1;
-          const tplMonitored = new Set((t.metrics || []).filter((m) => m.monitored).map((m) => m.metricCode));
-          return {
-            iotDeviceId: `iot-auto-${bindingId}-${seq}`, iotDeviceCode: `IOT-2${100 + seq}`,
-            name: `${device?.name || deviceId} ${t.product || t.sensorType || '来源设备'}`,
-            sensorType: t.product || t.sensorType || '来源设备',
-            enabled: true,
-            // 指标自动发现：全量接入存储；监控勾选取模板口径（同编码指标）
-            metrics: platformMetrics.map((def) => ({
-              metricCode: def.metricCode, metricVersion: def.metricVersion, monitored: tplMonitored.has(def.metricCode),
-            })),
-          };
-        });
-        return { deviceId, bindingId, version, configStatus: autoEnable ? '已启用' : '待生效', items, summary: `应用模板「${template.name}」` };
-      });
-      act('binding/applyTemplate', { bindings, autoEnable, templateName: template.name });
-      return {
-        ok: true,
-        message: `模板「${template.name}」已应用到 ${deviceIds.length} 台设备（${autoEnable ? '已启用，全量接入存储并按模板监控' : '待生效，需再点「启用」'}）`,
-        refs: { deviceIds },
-      };
-    },
 
     // ---------- 实时 ----------
     refreshRealtime() {

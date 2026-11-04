@@ -5,7 +5,7 @@ import {
   Activity, AlarmClock, BookOpen, ClipboardList, DatabaseZap, FileBarChart,
   Gauge, LineChart, Settings2, Truck, CalendarClock,
   LayoutDashboard, Boxes, Wrench, Package, ClipboardCheck, ArrowRightLeft, CirclePause, Archive,
-  GaugeCircle, LogOut, LayoutTemplate,
+  GaugeCircle, LogOut,
   Users, ShieldCheck, Building2, BookMarked, ScrollText,
 } from 'lucide-react';
 import LoginPage from './pages/LoginPage.jsx';
@@ -17,7 +17,6 @@ import DeviceLedgerDetailPage from './pages/DeviceLedgerDetailPage.jsx';
 import DocLibraryPage from './pages/DocLibraryPage.jsx';
 import BaseTypeConfigPage from './pages/BaseTypeConfigPage.jsx';
 import BindingOverviewPage from './pages/BindingOverviewPage.jsx';
-import BindingTemplatesPage from './pages/BindingTemplatesPage.jsx';
 import AlarmCenterPage from './pages/AlarmCenterPage.jsx';
 import RuleConfigPage from './pages/RuleConfigPage.jsx';
 // V2.1：设备采集能力/指标字典/点位映射/数据质量/缺失死信/旧联网配置页面已下线，
@@ -156,7 +155,6 @@ const menus = [
   ] },
   { key: 'data', icon: <DatabaseZap size={15} />, label: '数据接入', children: [
     { key: '/binding-overview', icon: <DatabaseZap size={14} />, label: '物联网接入配置' },
-    { key: '/binding-templates', icon: <LayoutTemplate size={14} />, label: '绑定模板管理' },
     { key: '/program-compare', icon: <BookOpen size={14} />, label: '程序参数比对' },
     { key: '/program-handle-record', icon: <ClipboardList size={14} />, label: '比对处理记录' },
     // V2.1：协议/网关/点位/采集能力归 IoT 平台；旧「设备采集能力/指标字典/点位映射/接入质量/缺失死信」并入总览或重定向
@@ -386,7 +384,7 @@ export default function App() {
                   <Route path="/planned-downtime" element={<PlannedDowntimePage />} />
                   {/* 数据接入（V2.1：3 页 + 旧路由重定向；平台指标清单已下线） */}
                   <Route path="/binding-overview" element={<BindingOverviewPage />} />
-                  <Route path="/binding-templates" element={<BindingTemplatesPage />} />
+                  <Route path="/binding-templates" element={<Navigate to="/binding-overview" replace />} />
                   <Route path="/platform-metrics" element={<Navigate to="/binding-overview" replace />} />
                   <Route path="/program-compare" element={<ProgramComparePage />} />
                   <Route path="/program-handle-record" element={<ProgramHandleRecordPage />} />

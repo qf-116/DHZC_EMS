@@ -1,5 +1,6 @@
 // ============================================================
 // 物联网接入配置（/binding-overview · 数据接入域核心交互页）
+// 2026-11-04 绑定模板管理下线：向导不再提供模板预填，产品筛选 + 勾选自动发现指标即原生路径。
 // 2026-10-27 口径：单页单列表（原「设备绑定 / 监控指标」双 Tab 合并）——
 //   绑定向导三步走：① 选择主设备（设备管理台账）→ ② 选择物联网平台子设备（来源，可多选，来源间平级）
 //   → ③ 选择监控指标（可选：不选则无曲线 / 实时监测呈现；无论选否，接入指标均全量存储，
@@ -30,14 +31,13 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
   const state = useDemoState();
   const actions = useDemoActions();
   const { message } = App.useApp();
-  const [step, setStep] = useState(0);                        // 向导步骤：0=选主设备，1=选择模板/物联网设备，2=选择监控指标
+  const [step, setStep] = useState(0);                        // 向导步骤：0=选主设备，1=选物联网设备，2=选择监控指标
   const [deviceId, setDeviceId] = useState(null);             // 向导内选定的设备管理台账设备
   const [devKw, setDevKw] = useState('');                     // 第 1 步查询条件：编号/名称/资产编码
   const [devBound, setDevBound] = useState('all');            // 第 1 步查询条件：是否已绑定
   const [devType, setDevType] = useState('all');              // 第 1 步查询条件：设备类型
   const [sourceKw, setSourceKw] = useState('');               // 来源列表搜索
-  const [templateId, setTemplateId] = useState('');            // 可选模板：先预置来源，再允许手工调整
-  const [templateProductFilter, setTemplateProductFilter] = useState('all');
+  const [productFilter, setProductFilter] = useState('all');
   const [appliedSourceKw, setAppliedSourceKw] = useState('');
   const [appliedProductFilter, setAppliedProductFilter] = useState('all');
 
@@ -54,41 +54,10 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
     () => [...new Set(sourceDevicesAll.map((s) => s.product).filter(Boolean))],
     [sourceDevicesAll],
   );
-  const templates = state.ui.bindingTemplates || [];
-  const applyTemplateToDraft = (id) => {
-    setTemplateId(id || '');
-    if (!id || !deviceId) return;
-    const template = templates.find((t) => t.templateId === id);
-    if (!template) return;
-    const host = allDevices.find((d) => d.deviceId === deviceId);
-    const hostNumbers = `${host?.deviceId || ''} ${host?.name || ''}`.match(/\d+/g) || [];
-    const matchedSources = (template.items || []).map((item) => {
-      const product = item.product || item.sensorType;
-      const candidates = sourceDevicesAll.filter((s) => s.product === product);
-      if (!candidates.length) return null;
-      const exact = hostNumbers.map((n) => candidates.find((s) => (`${s.name} ${s.iotDeviceCode}`).includes(n))).find(Boolean);
-      return { item, source: exact || candidates[0] };
-    }).filter(Boolean);
-
-    draftItems.forEach((item) => actions.removeBindingSource(deviceId, item.iotDeviceId));
-    matchedSources.forEach(({ item, source }) => {
-      actions.addBindingSource(deviceId, {
-        iotDeviceId: source.iotDeviceId,
-        iotDeviceCode: source.iotDeviceCode,
-        name: source.name,
-        sensorType: source.name,
-        metrics: [],
-      });
-      (item.metrics || []).filter((m) => m.monitored !== false).forEach((m) => {
-        actions.setDraftMetricMonitoredValue(deviceId, source, m.metricCode, true);
-      });
-    });
-  };
-
   const sourceDevicesForView = useMemo(() => sourceDevices.filter((s) => {
-    if (templateProductFilter === 'all') return true;
-    return s.product === templateProductFilter;
-  }), [sourceDevices, templateProductFilter]);
+    if (productFilter === 'all') return true;
+    return s.product === productFilter;
+  }), [sourceDevices, productFilter]);
 
   // 勾选来源（表格行选 / 多选）：新增走 binding/addSource（自动发现指标），移除走 binding/removeSource
   const toggleSourcesByIds = (ids) => {
@@ -120,10 +89,9 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
       setStep(presetDeviceId ? 1 : 0);
       setDeviceId(presetDeviceId || null);
       setSourceKw('');
-      setTemplateProductFilter('all');
+      setProductFilter('all');
       setAppliedSourceKw('');
       setAppliedProductFilter('all');
-      setTemplateId('');
       setDevKw('');
       setDevBound('all');
       setDevType('all');
@@ -249,7 +217,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
     >
       <Steps
         size="small" current={step} style={{ marginBottom: 16, maxWidth: 660 }}
-        items={[{ title: '选择主设备' }, { title: '选择模板 / 物联网设备' }, { title: '选择监控指标（可选）' }]}
+        items={[{ title: '选择主设备' }, { title: '选择物联网设备' }, { title: '选择监控指标（可选）' }]}
       />
 
       {step === 0 && (
@@ -321,21 +289,14 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
       {step === 1 && (
         <>
           <Space size={8} wrap>
-            <FilterField label="模板">
-              <Select
-                allowClear size="small" style={{ width: 220 }} placeholder="选择模板（可选）"
-                value={templateId || undefined} onChange={applyTemplateToDraft}
-                options={templates.map((t) => ({ value: t.templateId, label: t.name }))}
-              />
-            </FilterField>
             <FilterField label="物联网设备">
               <Input allowClear size="small" style={{ width: 180 }} placeholder="编号 / 名称" value={sourceKw} onChange={(e) => setSourceKw(e.target.value)} />
             </FilterField>
             <FilterField label="产品">
-              <Select size="small" style={{ width: 180 }} value={templateProductFilter} onChange={setTemplateProductFilter} options={[{ value: 'all', label: '全部' }, ...sourceProducts.map((p) => ({ value: p, label: p }))]} />
+              <Select size="small" style={{ width: 180 }} value={productFilter} onChange={setProductFilter} options={[{ value: 'all', label: '全部' }, ...sourceProducts.map((p) => ({ value: p, label: p }))]} />
             </FilterField>
-            <Button size="small" type="primary" onClick={() => { setAppliedSourceKw(sourceKw); setAppliedProductFilter(templateProductFilter); }}>查询</Button>
-            <Button size="small" onClick={() => { setSourceKw(''); setTemplateProductFilter('all'); setAppliedSourceKw(''); setAppliedProductFilter('all'); }}>重置</Button>
+            <Button size="small" type="primary" onClick={() => { setAppliedSourceKw(sourceKw); setAppliedProductFilter(productFilter); }}>查询</Button>
+            <Button size="small" onClick={() => { setSourceKw(''); setProductFilter('all'); setAppliedSourceKw(''); setAppliedProductFilter('all'); }}>重置</Button>
           </Space>
           <Table
             rowKey="iotDeviceId" size="small"
@@ -409,7 +370,6 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
                   </Space>
                 )}
               >
-                {templateId && <Tag color="blue">已应用模板，可继续调整</Tag>}
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, minmax(0, 1fr))', gap: 4 }}>
                   {(item.metrics || []).map((m) => {
                     const def = state.entities.metricsByKey[m.metricCode];
@@ -476,7 +436,7 @@ function DisableBindingModal({ deviceId, deviceName, open, onClose }) {
 
 // ---------- 监控指标配置弹窗（保留组件供已有状态兼容） ----------
 // 2026-10-29 交互统一：勾选先暂存在弹窗本地状态，点击「确认」后统一生效（不产生新版本）；
-// 已保存绑定的指标调整入口由列表「编辑」统一处理，保存时与来源设备一并生效；「存为模板」操作已移除 ----------
+// 已保存绑定的指标调整入口由列表「编辑」统一处理，保存时与来源设备一并生效----------
 function MonitorConfigModal({ deviceId, deviceName, open, onClose }) {
   const state = useDemoState();
   const actions = useDemoActions();
@@ -638,7 +598,6 @@ function BindingDetailModal({ deviceId, deviceName, open, onClose }) {
   );
 }
 
-// 模板批量应用弹窗已抽为共享组件（components/ApplyTemplateModal.jsx），供本页两个 Tab 与「监控指标模板管理」页共用。
 
 // ---------- 主页面 ----------
 export default function BindingOverviewPage() {

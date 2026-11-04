@@ -24,6 +24,8 @@ function migrateParsed(parsed) {
   // 已下线实体不随旧快照迁移，避免旧页面数据重新出现
   delete next.entities.ruleTemplatesById;
   delete next.entities.alarmBatchesById;
+  // 绑定模板管理下线（V14）：模板数据与向导模板预填一并移除
+  if (next.ui && next.ui.bindingTemplates) delete next.ui.bindingTemplates;
   // 报警三态状态机迁移（V13）：已确认 / 已恢复待关闭 并入处理中；恢复口径改名
   next.entities.alarmEventsById = Object.fromEntries(
     Object.entries(parsed.entities?.alarmEventsById || {}).map(([id, a]) => {

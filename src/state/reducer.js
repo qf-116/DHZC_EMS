@@ -421,43 +421,6 @@ export function reducer(state, action) {
       next = addHistory(next, at, 'binding', binding.bindingId, `监控指标${toggled ? '纳入' : '移出'}：${def?.name || payload.metricCode}（${payload.iotDeviceCode || payload.iotDeviceId}）`, { deviceId: payload.deviceId });
       return finish(next, action, true, `${def?.name || payload.metricCode} 已${toggled ? '纳入监控（曲线呈现）' : '移出监控（数据仍存储，台账历史可查）'}`, { deviceId: payload.deviceId }, false, at);
     }
-    case 'bindingTemplate/save': {
-      // 按 templateId upsert：新模板插入队首；同 id 视为编辑（保留原创建时间）
-      const templates = state.ui.bindingTemplates || [];
-      const existing = templates.find(t => t.templateId === payload.template.templateId);
-      const record = { ...payload.template, createdAt: existing?.createdAt || at };
-      const next = {
-        ...state,
-        ui: { ...state.ui, bindingTemplates: existing ? templates.map(t => (t.templateId === record.templateId ? record : t)) : [record, ...templates] },
-      };
-      return finish(next, action, true, `绑定模板「${payload.template.name}」已${existing ? '更新' : '保存'}（来源：${payload.template.sourceName || '--'}）`, { templateId: payload.template.templateId }, false, at);
-    }
-    case 'bindingTemplate/delete': {
-      const templates = (state.ui.bindingTemplates || []).filter(t => t.templateId !== payload.templateId);
-      const next = { ...state, ui: { ...state.ui, bindingTemplates: templates } };
-      return finish(next, action, true, '绑定模板已删除', {}, false, at);
-    }
-    case 'binding/applyTemplate': {
-      // bindings 由 actions 层按模板结构构造（IoT 来源编码演示模拟：由物联网平台自动分配专属编码，天然不冲突）
-      const { bindings, autoEnable, templateName } = payload;
-      let next = state;
-      bindings.forEach((b) => {
-        const prev = E.bindingsByDeviceId[b.deviceId];
-        const newBinding = {
-          deviceId: b.deviceId, bindingId: b.bindingId, version: b.version,
-          items: b.items, configStatus: b.configStatus,
-          effectiveFrom: autoEnable ? at : null, effectiveTo: null,
-          healthStatus: prev?.healthStatus || '--',
-          pullCycleSec: prev?.pullCycleSec || 60, lastPullTime: prev?.lastPullTime || '--',
-          pullFailCount: 0, pendingCompensation: 0,
-        };
-        next = setE(next, 'bindingsByDeviceId', b.deviceId, newBinding);
-        next = setE(next, 'bindingVersionsById', b.bindingId, { bindingId: b.bindingId, deviceId: b.deviceId, version: b.version, configStatus: b.configStatus, effectiveFrom: newBinding.effectiveFrom, effectiveTo: null, summary: b.summary });
-        next = { ...next, ui: { ...next.ui, bindingDraftsByDeviceId: { ...next.ui.bindingDraftsByDeviceId, [`draft-${b.deviceId}`]: undefined } } };
-        next = addHistory(next, at, 'binding', b.bindingId, `应用绑定模板「${templateName}」（${b.configStatus}）`, { deviceId: b.deviceId });
-      });
-      return finish(next, action, true, `模板「${templateName}」已应用到 ${bindings.length} 台设备（${autoEnable ? '已启用' : '待生效'}）`, { deviceIds: bindings.map(b => b.deviceId) }, false, at);
-    }
     case 'binding/save': {
       const key = `draft-${payload.deviceId}`;
       const draft = (state.ui.bindingDraftsByDeviceId || {})[key];

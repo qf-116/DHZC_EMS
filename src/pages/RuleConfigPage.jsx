@@ -31,6 +31,7 @@ export default function RuleConfigPage() {
   // 校验提示只在提交后才出现：新建空表单时直接报「名称必填/必须选设备」没有意义
   const [submitAttempted, setSubmitAttempted] = React.useState(false);
   const [editing, setEditing] = React.useState(null);          // 编辑中的规则
+  const [editBaseVersion, setEditBaseVersion] = React.useState(null); // 打开编辑时的发布版本（并发冲突比对基线）
   const [form, setForm] = React.useState(() => createEmptyRuleForm());
   const [testOpen, setTestOpen] = React.useState(false);
   const [testRule, setTestRule] = React.useState(null);
@@ -92,6 +93,7 @@ export default function RuleConfigPage() {
 
   const openEdit = (r) => {
     setEditing(r);
+    setEditBaseVersion(r.publishedVersion || r.version || null);
     setSubmitAttempted(false);
     setForm(ruleToForm(r));
   };
@@ -136,7 +138,8 @@ export default function RuleConfigPage() {
   const saveRule = () => {
     setSubmitAttempted(true);
     const rule = buildRule();
-    const res = actions.saveAndPublishRule(rule);
+    // expectedPublishedVersion：打开弹窗时的发布版本，与当前不一致时后端阻断（并发编辑冲突）
+    const res = actions.saveAndPublishRule(rule, { expectedPublishedVersion: editBaseVersion });
     if (!res.ok) {
       // 保存/发布失败：弹窗与表单内容保留，用户可修正后重试
       message.error(res.message);
@@ -502,12 +505,15 @@ export default function RuleConfigPage() {
               </>
             ) : (
               <>
+                <Alert type="warning" showIcon style={{ marginBottom: 10 }}
+                  message="无数据，不能完成回测"
+                  description={`该目标（${backtest.key}）没有历史趋势采样点，无法按当前配置真实回放。下方为系统事件计数，不是回测结论。`} />
+                <div style={{ fontSize: 12, color: '#8a97a3', marginBottom: 6 }}>近 7 天事件计数（系统统计，非回测结果）</div>
                 <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, marginBottom: 8 }}>
-                  <Statistic title="近7天条件命中" value={(testRule.trig7d || 0) + (testRule.supp7d || 0)} suffix="次" />
+                  <Statistic title="条件命中" value={(testRule.trig7d || 0) + (testRule.supp7d || 0)} suffix="次" />
                   <Statistic title="实际生成事件" value={testRule.trig7d || 0} suffix="条" valueStyle={{ color: '#00b8d4' }} />
                   <Statistic title="被抑制 / 合并" value={testRule.supp7d || 0} suffix="次" valueStyle={{ color: '#d97706' }} />
                 </div>
-                <Alert type="info" showIcon message={`该目标（${backtest.key}）暂无历史趋势采样数据，以下为该规则近 7 天种子统计（含抑制口径）。`} />
               </>
             )}
           </>

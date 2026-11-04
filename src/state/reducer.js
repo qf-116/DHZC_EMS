@@ -11,7 +11,7 @@ import {
 import {
   validateRuleDraft, nextPublishVersion, conditionTextOf, recoveryTextOf,
   sampleTriggered, sampleRecovered, comboTriggered, comboRecovered,
-  qualityTriggerHit, NUMERIC_TRIGGER_MODES, applyBatchEditPatch,
+  qualityTriggerHit, NUMERIC_TRIGGER_MODES, applyBatchEditPatch, ruleEditConflict,
 } from '../domain/alarmRule.js';
 import { canRepairTransition } from '../domain/repair.js';
 import { validateDowntime } from '../domain/downtime.js';
@@ -613,13 +613,16 @@ export function reducer(state, action) {
       const alarm = E.alarmEventsById[payload.alarmId];
       if (!alarm) return reject(state, action, '报警事件不存在');
       if (!(payload.measure || '').trim()) return reject(state, action, '处置必须填写措施（§6.4）');
-      if (!payload.expectedAt) return reject(state, action, '处置必须填写预计完成时间（§6.4）');
       if (alarm.status === '已关闭') return reject(state, action, '已关闭报警不能处置');
+      // 处理中再次提交 = 更新处置（状态保持处理中，追加处置履历；预计完成时间可沿用上次）
+      const isUpdate = alarm.status === '处理中';
+      const expectedAt = payload.expectedAt || alarm.expectedAt || '';
+      if (!expectedAt) return reject(state, action, '处置必须填写预计完成时间（§6.4）');
       const toStatus = canAlarmTransition(alarm.status, '处理中') ? '处理中' : alarm.status;
-      const updated = { ...alarm, status: toStatus, handler: actor.userName, timeline: [...alarm.timeline, { type: '处置', time: timeOnly(at), actor: actor.userName, detail: `${payload.measure}（预计完成：${payload.expectedAt}）` }] };
+      const updated = { ...alarm, status: toStatus, handler: actor.userName, expectedAt, timeline: [...alarm.timeline, { type: isUpdate ? '更新处置' : '处置', time: timeOnly(at), actor: actor.userName, detail: `${payload.measure}（预计完成：${expectedAt}）` }] };
       let next = setE(state, 'alarmEventsById', alarm.id, updated);
-      next = addHistory(next, at, 'alarm', alarm.id, '处置报警', { deviceId: alarm.deviceId, measure: payload.measure });
-      return finish(next, action, true, `已记录处置，状态「${toStatus}」${toStatus !== '处理中' ? '（恢复待关闭状态无需重复处置）' : ''}`, { alarmId: alarm.id }, false, at);
+      next = addHistory(next, at, 'alarm', alarm.id, isUpdate ? '更新报警处置' : '处置报警', { deviceId: alarm.deviceId, measure: payload.measure });
+      return finish(next, action, true, isUpdate ? `已更新处置，状态仍为「${toStatus}」` : `已记录处置，状态「${toStatus}」${toStatus !== '处理中' ? '（恢复待关闭状态无需重复处置）' : ''}`, { alarmId: alarm.id }, false, at);
     }
     case 'alarm/createRepairFromAlarm': {
       const alarm = E.alarmEventsById[payload.alarmId];
@@ -715,6 +718,12 @@ export function reducer(state, action) {
       // 原子保存并发布（M2）：校验 → 落库 → 版本递增 → 不可变快照 → 历史，单个 reducer case 内完成
       const payloadRule = payload.rule || {};
       if (!(payloadRule.code || '').trim() || !(payloadRule.name || '').trim()) return reject(state, action, '规则编号与名称必填');
+      // 并发编辑冲突：打开弹窗时的发布版本与当前不一致 → 阻断，不得静默覆盖（§7.2）
+      const existing = state.entities.alarmRulesById[payloadRule.code];
+      if (existing) {
+        const conflict = ruleEditConflict(existing, payload.expectedPublishedVersion);
+        if (conflict) return reject(state, action, conflict);
+      }
       const [next, result] = publishRuleCore(state, payloadRule, at, actor);
       if (!result.ok) return reject(state, action, `规则校验未通过：${result.message}`);
       return finish(next, action, true, `规则 ${result.code} 已发布为 ${result.version}`, { ruleCode: result.code, version: result.version }, false, at);

@@ -49,4 +49,4 @@ export const ALARM_FORM_RULES = {
 };
 
 // 报警时间线事件类型
-export const TIMELINE_TYPES = ['触发', '重复触发', '通知', '确认', '处置', '转维修', '恢复', '关闭', '重开关联'];
+export const TIMELINE_TYPES = ['触发', '重复触发', '通知', '确认', '处置', '更新处置', '转维修', '恢复', '关闭', '重开关联'];

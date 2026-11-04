@@ -1,10 +1,10 @@
 import React from 'react';
-import { Modal, Steps, Card, Space, Select, Table, Tag, Button, Input, InputNumber, Alert, Statistic, App } from 'antd';
+import { Modal, Steps, Space, Select, Table, Tag, Button, Alert, Statistic, App } from 'antd';
 import { Plus } from 'lucide-react';
 import {
   createEmptyRuleForm, switchRuleFormType, formToRule, validateRuleDraft,
   resolveProductSources, listRuleProducts, planRuleBatch, finalizeRuleConfigs,
-  ruleToForm,
+  resolveRuleTargets, normalizeMetricMeta, RULE_TYPE_LABEL,
 } from '../domain/alarmRule.js';
 import { metricAlarmTemplates } from '../data/demoData.js';
 import RuleFormBody from './RuleFormBody.jsx';
@@ -13,17 +13,28 @@ import RuleFormBody from './RuleFormBody.jsx';
 // ① 选目标：产品 → 该产品下的物联网平台设备（多选，反查绑定台账设备）→ 选一个指标
 // ② 配参数：名称/等级/判定模式/阈值/持续/恢复/抑制/风暴/静默
 // ③ 预览确认：逐设备生成 N 条规则，确认后一次性创建并发布（无草稿态）
+// 规则类型：阈值 / 状态 按「设备 + 指标」批量生成（1 设备 1 规则，N 对 N）；
+//           质量 按设备通信健康批量生成（不需要指标）；组合为单设备多子条件规则。
 const NAME_TEMPLATES = [
   { value: '{device}{metric}超限报警', label: '{设备}{指标}超限报警' },
   { value: '{device}{metric}报警', label: '{设备}{指标}报警' },
-  { value: '{device} {metric} 超限报警', label: '{设备} {指标} 超限报警' },
-  { value: '{device}{metric}过低报警', label: '{设备}{指标}过低报警' },
+  { value: '{device} {metric} 超限报警', label: '{设备} {metric} 超限报警' },
+  { value: '{device}{metric}过低报警', label: '{设备}{metric}过低报警' },
+  { value: '{device}质量异常报警', label: '{设备}质量异常报警' },
+];
+
+const RULE_TYPES = [
+  { value: 'threshold', label: '阈值规则（指标阈值）' },
+  { value: 'state', label: '状态规则（状态枚举）' },
+  { value: 'quality', label: '质量规则（通信健康）' },
+  { value: 'combo', label: '组合规则（多子条件）' },
 ];
 
 export default function RuleNewWizard({ open, onClose, state, actions, onDone }) {
   const { message } = App.useApp();
   const E = state.entities;
   const [step, setStep] = React.useState(0);
+  const [ruleType, setRuleType] = React.useState('threshold');
   const [product, setProduct] = React.useState(null);
   const [selectedKeys, setSelectedKeys] = React.useState([]);
   const [metricCode, setMetricCode] = React.useState(null);
@@ -32,6 +43,7 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
 
   const reset = () => {
     setStep(0);
+    setRuleType('threshold');
     setProduct(null);
     setSelectedKeys([]);
     setMetricCode(null);
@@ -39,6 +51,22 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
     setSubmitAttempted(false);
   };
   React.useEffect(() => { if (open) reset(); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [open]);
+
+  const patch = (p) => setForm((f) => ({ ...f, ...p }));
+  const patchTrigger = (p) => setForm((f) => ({ ...f, triggerConfig: { ...f.triggerConfig, ...p } }));
+  const patchRecoveryCondition = (p) => setForm((f) => ({ ...f, recoveryConfig: { ...f.recoveryConfig, condition: { ...f.recoveryConfig.condition, ...p } } }));
+
+  // 规则类型切换：状态 / 质量 / 组合的恢复口径随类型确定
+  const changeRuleType = (t) => {
+    setRuleType(t);
+    setForm((f) => {
+      const next = switchRuleFormType(f, t);
+      if (t === 'state') next.recoveryConfig = { ...next.recoveryConfig, condition: { ...next.recoveryConfig.condition, type: 'state', normalValues: [] } };
+      if (t === 'quality') next.recoveryConfig = { ...next.recoveryConfig, condition: { ...next.recoveryConfig.condition, type: 'quality', requiredQualityCode: 'GOOD' } };
+      if (t === 'combo') next.recoveryConfig = { ...next.recoveryConfig, condition: { ...next.recoveryConfig.condition, type: 'state', normalValues: [] } };
+      return next;
+    });
+  };
 
   // ① 选目标：产品 → 物联网设备（反查台账设备）
   const products = React.useMemo(() => listRuleProducts(state), [state]);
@@ -57,16 +85,25 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
     if (selectedRows.length === 0) return [];
     const counts = new Map();
     selectedRows.forEach((r) => r.metrics.forEach((m) => counts.set(m, (counts.get(m) || 0) + 1)));
+    const wantType = ruleType === 'state' ? 'state' : 'number';
     return [...counts.entries()]
-      .map(([code, n]) => ({ code, count: n, metric: E.metricsByKey[code] }))
+      .map(([code, n]) => ({ code, count: n, metric: normalizeMetricMeta(E.metricsByKey[code]) }))
+      .filter((m) => (m.metric?.dataType || 'other') === wantType)
       .sort((a, b) => b.count - a.count);
-  }, [selectedRows, E.metricsByKey]);
-  const selectedMetric = metricCode ? E.metricsByKey[metricCode] : null;
-
-  const patch = (p) => setForm((f) => ({ ...f, ...p }));
-  const patchTrigger = (p) => setForm((f) => ({ ...f, triggerConfig: { ...f.triggerConfig, ...p } }));
-  const patchRecoveryCondition = (p) => setForm((f) => ({ ...f, recoveryConfig: { ...f.recoveryConfig, condition: { ...f.recoveryConfig.condition, ...p } } }));
-  const changeRuleType = (t) => setForm((f) => switchRuleFormType(f, t));
+  }, [selectedRows, E.metricsByKey, ruleType]);
+  const selectedMetric = metricCode ? normalizeMetricMeta(E.metricsByKey[metricCode]) : null;
+  // 组合规则的子条件可选目标（全站启用绑定下的可用目标）
+  const allTargets = React.useMemo(() => resolveRuleTargets(state), [state]);
+  const comboCascadeOptions = React.useMemo(() => {
+    const devMap = new Map();
+    allTargets.forEach((t) => {
+      if (!devMap.has(t.deviceId)) devMap.set(t.deviceId, { value: t.deviceId, label: `${t.deviceId} ${t.deviceName}`, children: new Map() });
+      const dev = devMap.get(t.deviceId);
+      if (!dev.children.has(t.sourceId)) dev.children.set(t.sourceId, { value: t.sourceId, label: t.sourceCode, children: [] });
+      dev.children.get(t.sourceId).children.push({ value: t.metricCode, label: `${t.metricCode} ${t.metric.name}` });
+    });
+    return [...devMap.values()].map((d) => ({ value: d.value, label: d.label, children: [...d.children.values()] }));
+  }, [allTargets]);
 
   // 选定指标后带出推荐参数（指标特征模板）
   React.useEffect(() => {
@@ -77,7 +114,7 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
       triggerConfig: { ...f.triggerConfig, unit: selectedMetric?.unit || null },
       recoveryConfig: { ...f.recoveryConfig, condition: { ...f.recoveryConfig.condition, unit: selectedMetric?.unit || null } },
     }));
-    if (t && t.mode && t.mode !== 'state') {
+    if (t && t.mode && t.mode !== 'state' && ruleType === 'threshold') {
       setForm((f) => ({
         ...f,
         triggerConfig: {
@@ -100,15 +137,34 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
         },
       }));
     }
-  }, [metricCode]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [metricCode, ruleType]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // 状态规则：正常枚举即恢复口径（与触发配置的正常状态保持一致）
+  React.useEffect(() => {
+    if (ruleType !== 'state') return;
+    setForm((f) => {
+      if (f.recoveryConfig.condition.type === 'state'
+        && JSON.stringify(f.recoveryConfig.condition.normalValues) === JSON.stringify(f.triggerConfig.normalValues || [])) return f;
+      return { ...f, recoveryConfig: { ...f.recoveryConfig, condition: { ...f.recoveryConfig.condition, type: 'state', normalValues: f.triggerConfig.normalValues || [] } } };
+    });
+  }, [ruleType, form.triggerConfig.normalValues]);
 
   // 名称模板
   const [nameTemplate, setNameTemplate] = React.useState(NAME_TEMPLATES[0].value);
+  React.useEffect(() => {
+    if (ruleType === 'quality') setNameTemplate('{device}质量异常报警');
+    else if (ruleType === 'combo') setNameTemplate('{device}组合条件报警');
+    else setNameTemplate(NAME_TEMPLATES[0].value);
+  }, [ruleType]);
+
+  // 组合规则的主目标 = 第一个子条件目标
+  const comboPrimary = form.triggerConfig.conditions?.[0]?.target || null;
 
   // ③ 预览：逐设备生成规则（N 对 N）
   const preview = React.useMemo(() => {
-    if (!metricCode || selectedRows.length === 0) return { rows: [], summary: null };
+    if (selectedRows.length === 0) return { rows: [], summary: null };
     const request = {
+      type: RULE_TYPE_LABEL[ruleType],
       nameTemplate,
       severity: form.severity,
       triggerConfig: form.triggerConfig,
@@ -118,35 +174,62 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
       silenceConfig: form.silenceConfig,
       qualityPolicy: form.qualityPolicy,
     };
-    const targets = selectedRows.map((r) => ({
-      deviceId: r.deviceId,
-      deviceName: r.deviceName,
-      sourceId: r.sourceId,
-      sourceCode: r.sourceCode,
-      metricCode,
-      bindingId: r.bindingId,
-      bindingVersion: r.bindingVersion,
-      metricVersion: selectedMetric?.metricVersion || null,
-    }));
+    let targets;
+    if (ruleType === 'quality') {
+      // 质量规则按设备通信健康判定：不需要指标，一台台账设备一条
+      targets = selectedRows.map((r) => ({
+        deviceId: r.deviceId,
+        deviceName: r.deviceName,
+        sourceId: null,
+        sourceCode: r.sourceCode,
+        metricCode: null,
+        bindingId: r.bindingId,
+        bindingVersion: r.bindingVersion,
+      }));
+    } else if (ruleType === 'combo') {
+      // 组合规则：单设备多子条件，生成 1 条
+      targets = comboPrimary ? [{
+        deviceId: comboPrimary.deviceId,
+        deviceName: allTargets.find((t) => t.deviceId === comboPrimary.deviceId)?.deviceName || comboPrimary.deviceId,
+        sourceId: comboPrimary.sourceId,
+        sourceCode: comboPrimary.sourceId,
+        metricCode: comboPrimary.metricCode,
+      }] : [];
+    } else {
+      targets = selectedRows.map((r) => ({
+        deviceId: r.deviceId,
+        deviceName: r.deviceName,
+        sourceId: r.sourceId,
+        sourceCode: r.sourceCode,
+        metricCode,
+        bindingId: r.bindingId,
+        bindingVersion: r.bindingVersion,
+        metricVersion: selectedMetric?.metricVersion || null,
+      }));
+    }
     return planRuleBatch(state, request, targets);
-  }, [state, selectedRows, metricCode, nameTemplate, form, selectedMetric]);
+  }, [state, selectedRows, metricCode, nameTemplate, form, selectedMetric, ruleType, comboPrimary, allTargets]);
 
-  // 参数校验（对产品指标量程一次性校验）
+  // 参数校验（对所选指标量程一次性校验；组合规则校验子条件）
   const paramValidation = React.useMemo(() => {
-    if (!metricCode) return { errors: [], warnings: [] };
+    if (!metricCode && ruleType !== 'quality' && ruleType !== 'combo') return { errors: [], warnings: [] };
     const probe = {
       code: 'R-PROBE',
       name: `${selectedRows[0]?.deviceName || '设备'}${selectedMetric?.name || ''}报警`,
-      type: '阈值',
+      type: RULE_TYPE_LABEL[ruleType],
       severity: form.severity,
-      target: {
-        deviceId: selectedRows[0]?.deviceId,
-        bindingId: selectedRows[0]?.bindingId,
-        bindingVersion: selectedRows[0]?.bindingVersion,
-        sourceId: selectedRows[0]?.sourceId,
-        sourceCode: selectedRows[0]?.sourceCode,
-        metricCode,
-      },
+      target: ruleType === 'combo'
+        ? (comboPrimary ? { ...comboPrimary } : { deviceId: null, sourceId: null, metricCode: null })
+        : ruleType === 'quality'
+          ? { deviceId: selectedRows[0]?.deviceId, sourceId: null, metricCode: null }
+          : {
+            deviceId: selectedRows[0]?.deviceId,
+            bindingId: selectedRows[0]?.bindingId,
+            bindingVersion: selectedRows[0]?.bindingVersion,
+            sourceId: selectedRows[0]?.sourceId,
+            sourceCode: selectedRows[0]?.sourceCode,
+            metricCode,
+          },
       triggerConfig: form.triggerConfig,
       recoveryConfig: form.recoveryConfig,
       notificationConfig: null,
@@ -159,9 +242,10 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
       devicesById: E.devicesById, bindingsByDeviceId: E.bindingsByDeviceId, metricsByKey: E.metricsByKey, alarmRulesById: E.alarmRulesById,
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [form, metricCode, selectedRows, selectedMetric]);
+  }, [form, metricCode, selectedRows, selectedMetric, ruleType, comboPrimary]);
 
-  const step1Ready = !!product && selectedRows.length > 0 && !!metricCode;
+  const needMetric = ruleType === 'threshold' || ruleType === 'state';
+  const step1Ready = !!product && selectedRows.length > 0 && (!needMetric || !!metricCode);
   const step2Ready = paramValidation.errors.length === 0;
   const creatable = preview.summary?.creatable || 0;
 
@@ -169,7 +253,7 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
     if (step === 0) {
       if (!product) { message.warning('请先选择产品'); return; }
       if (selectedRows.length === 0) { message.warning('请至少勾选一台物联网设备'); return; }
-      if (!metricCode) { message.warning('请选择一个指标'); return; }
+      if (needMetric && !metricCode) { message.warning('请选择一个指标'); return; }
       setStep(1);
       return;
     }
@@ -187,21 +271,24 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
       .filter((r) => r.result === 'creatable')
       .map((r) => {
         const base = formToRule(form);
-        const target = {
-          deviceId: r.deviceId,
-          bindingId: selectedRows.find((x) => x.key === selectedRows.find((y) => y.deviceId === r.deviceId && y.sourceId === r.sourceId)?.key)?.bindingId,
-          bindingVersion: selectedRows.find((x) => x.deviceId === r.deviceId && x.sourceId === r.sourceId)?.bindingVersion,
-          sourceId: r.sourceId,
-          sourceCode: r.sourceCode,
-          metricCode: r.metricCode,
-          metricVersion: selectedMetric?.metricVersion || null,
-        };
+        const src = selectedRows.find((x) => x.deviceId === r.deviceId && (ruleType === 'quality' || x.sourceId === r.sourceId));
+        const target = ruleType === 'quality'
+          ? { deviceId: r.deviceId, bindingId: src?.bindingId || null, bindingVersion: src?.bindingVersion || null, sourceId: null, sourceCode: null, metricCode: null }
+          : {
+            deviceId: r.deviceId,
+            bindingId: src?.bindingId || null,
+            bindingVersion: src?.bindingVersion || null,
+            sourceId: r.sourceId,
+            sourceCode: r.sourceCode,
+            metricCode: r.metricCode,
+            metricVersion: selectedMetric?.metricVersion || null,
+          };
         finalizeRuleConfigs(base.triggerConfig, base.recoveryConfig);
         return {
           ...base,
           code: r.code,
           name: r.name,
-          type: '阈值',
+          type: RULE_TYPE_LABEL[ruleType],
           target,
           metricCode: r.metricCode,
           condition: undefined,
@@ -254,9 +341,16 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
         {step === 0 && (
           <Space direction="vertical" style={{ width: '100%' }} size={12}>
             <Space wrap>
+              <span>规则类型</span>
+              <Select
+                style={{ width: 240 }}
+                value={ruleType}
+                onChange={(v) => { changeRuleType(v); setMetricCode(null); setSelectedKeys([]); }}
+                options={RULE_TYPES}
+              />
               <span>产品</span>
               <Select
-                style={{ width: 260 }}
+                style={{ width: 240 }}
                 placeholder="选择产品（物联网平台产品目录）"
                 value={product || undefined}
                 onChange={(v) => { setProduct(v); setSelectedKeys([]); setMetricCode(null); }}
@@ -269,6 +363,7 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
               <>
                 <div style={{ fontSize: 12, color: '#5d6b78' }}>
                   该产品下的物联网平台设备（勾选后按「物联网设备 → 绑定台账设备」反查，确定是哪台设备在报警）
+                  {ruleType === 'combo' ? '；组合规则一次只针对一台设备' : ''}
                 </div>
                 <Table
                   rowKey="key"
@@ -278,7 +373,7 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
                   rowSelection={{
                     selectedRowKeys: selectedKeys,
                     onChange: setSelectedKeys,
-                    getCheckboxProps: (r) => ({ disabled: !r.enabled }),
+                    getCheckboxProps: (r) => ({ disabled: !r.enabled || (ruleType === 'combo' && selectedRows.length > 0 && selectedRows[0].key !== r.key) }),
                   }}
                   columns={[
                     { title: '物联网设备编码', dataIndex: 'sourceCode', width: 150 },
@@ -289,24 +384,28 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
                     { title: '说明', width: 160, render: (_, r) => (r.reason ? <span style={{ color: '#d97706' }}>{r.reason}</span> : <span style={{ color: '#8a97a3' }}>可选</span>) },
                   ]}
                 />
-                <Space wrap>
-                  <span>指标</span>
-                  <Select
-                    style={{ width: 360 }}
-                    placeholder="选择一个指标（仅列出所选设备都接入的指标）"
-                    value={metricCode || undefined}
-                    onChange={setMetricCode}
-                    disabled={selectedRows.length === 0}
-                    options={metricOptions.map((m) => ({
-                      value: m.code,
-                      label: `${m.metric?.name || m.code}（${m.code}）· 覆盖 ${m.count}/${selectedRows.length} 台`,
-                    }))}
-                    showSearch
-                    optionFilterProp="label"
-                  />
-                </Space>
+                {needMetric && (
+                  <Space wrap>
+                    <span>指标</span>
+                    <Select
+                      style={{ width: 360 }}
+                      placeholder={ruleType === 'state' ? '选择一个状态类指标（S.*）' : '选择一个数值指标'}
+                      value={metricCode || undefined}
+                      onChange={setMetricCode}
+                      disabled={selectedRows.length === 0}
+                      options={metricOptions.map((m) => ({
+                        value: m.code,
+                        label: `${m.metric?.name || m.code}（${m.code}）· 覆盖 ${m.count}/${selectedRows.length} 台`,
+                      }))}
+                      showSearch
+                      optionFilterProp="label"
+                    />
+                  </Space>
+                )}
                 <div style={{ fontSize: 12, color: '#5d6b78' }}>
-                  已选 {selectedRows.length} 台物联网设备 → 将生成 {selectedRows.length} 条规则（每台设备一条）
+                  {ruleType === 'combo'
+                    ? `已选 ${selectedRows.length} 台物联网设备 → 组合规则按子条件生成`
+                    : `已选 ${selectedRows.length} 台物联网设备 → 将生成 ${selectedRows.length} 条规则（每台设备一条）`}
                 </div>
               </>
             )}
@@ -349,16 +448,18 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
               changeRuleType={changeRuleType}
               changeTarget={() => {}}
               currentTarget={{
-                deviceId: selectedRows[0]?.deviceId,
-                sourceId: selectedRows[0]?.sourceId,
-                metricCode,
-                metric: selectedMetric,
+                deviceId: ruleType === 'combo' ? comboPrimary?.deviceId : selectedRows[0]?.deviceId,
+                sourceId: ruleType === 'combo' ? comboPrimary?.sourceId : selectedRows[0]?.sourceId,
+                metricCode: ruleType === 'combo' ? comboPrimary?.metricCode : metricCode,
+                metric: ruleType === 'combo'
+                  ? allTargets.find((t) => t.deviceId === comboPrimary?.deviceId && t.metricCode === comboPrimary?.metricCode)?.metric
+                  : selectedMetric,
               }}
-              cascadeOptions={[]}
-              cascadeStateOptions={[]}
+              cascadeOptions={comboCascadeOptions}
+              cascadeStateOptions={comboCascadeOptions}
               enumOptions={(selectedMetric?.enumValues || []).map((v) => ({ value: v, label: v }))}
               deviceOptions={[]}
-              targets={[]}
+              targets={allTargets}
               showTarget={false}
               showTypeSelect={false}
             />
@@ -379,20 +480,24 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
               pagination={false}
               dataSource={preview.rows}
               columns={[
-                { title: '规则编号', dataIndex: 'code', width: 100, render: (v) => v || '--' },
+                { title: '规则编号', dataIndex: 'code', width: 90, render: (v) => v || '--' },
                 { title: '规则名称', dataIndex: 'name', width: 220, render: (v) => v || '--' },
-                { title: '台账设备', width: 170, render: (_, r) => `${r.deviceId} ${r.deviceName}` },
-                { title: '物联网来源', dataIndex: 'sourceCode', width: 140 },
-                { title: '指标', width: 150, render: (_, r) => `${r.metricName}（${r.metricCode}）` },
-                { title: '结果', width: 110, render: (_, r) => (
-                  r.result === 'creatable' ? <Tag color="success">将创建</Tag>
-                    : r.result === 'skipped' ? <Tag color="default">跳过</Tag>
-                      : <Tag color="warning">阻断</Tag>
-                ) },
-                { title: '说明', render: (_, r) => r.reason },
+                { title: '台账设备', width: 190, render: (_, r) => `${r.deviceId} ${r.deviceName}` },
+                { title: 'IoT来源', dataIndex: 'sourceCode', width: 130 },
+                { title: '指标', dataIndex: 'metricName', width: 140 },
+                {
+                  title: '结果',
+                  width: 110,
+                  render: (_, r) => (
+                    <Tag color={r.result === 'creatable' ? 'success' : r.result === 'skipped' ? 'default' : 'warning'}>
+                      {r.result === 'creatable' ? '可创建' : r.result === 'skipped' ? '跳过' : '阻断'}
+                    </Tag>
+                  ),
+                },
+                { title: '说明', dataIndex: 'reason' },
               ]}
             />
-            <div style={{ fontSize: 12, color: '#5d6b78' }}>
+            <div style={{ fontSize: 12, color: '#8a97a3' }}>
               创建后直接发布并开始判定报警（不设草稿状态）；已存在同目标规则的条目默认跳过，不覆盖。
             </div>
           </Space>

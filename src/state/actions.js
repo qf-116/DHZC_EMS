@@ -298,10 +298,14 @@ export function createDemoActions(state, dispatch) {
       const alarm = E.alarmEventsById[alarmId];
       if (!alarm) return fail('报警事件不存在');
       if (!(measure || '').trim()) return fail('处置必须填写措施');
-      if (!expectedAt) return fail('处置必须填写预计完成时间');
+      // 处理中再次提交 = 更新处置：预计完成时间可留空并沿用上次
+      const isUpdate = alarm.status === '处理中';
+      if (!expectedAt && !alarm.expectedAt) return fail('处置必须填写预计完成时间');
       if (alarm.status === '已关闭') return fail('已关闭报警不能处置');
-      act('alarm/handle', { alarmId, measure, expectedAt }, `handle:${alarmId}:v1`);
-      return { ok: true, message: '处置已记录；如需维修请使用「转维修申请」', refs: { alarmId } };
+      // 幂等键带处置履历条数：同一次提交重复点击被忽略，更新处置可连续记录多条
+      const key = `handle:${alarmId}:${(alarm.timeline || []).length}`;
+      act('alarm/handle', { alarmId, measure, expectedAt }, key);
+      return { ok: true, message: isUpdate ? '处置已更新（状态仍为处理中）' : '处置已记录；如需维修请使用「转维修申请」', refs: { alarmId } };
     },
     createRepairFromAlarm(alarmId, extra = {}) {
       const alarm = E.alarmEventsById[alarmId];
@@ -331,12 +335,14 @@ export function createDemoActions(state, dispatch) {
 
     // 规则动作（M0 Action 结果契约）：act 返回 dispatch 的真实结果（meta.lastAction），
     // 页面据此提示成功/失败；保存、发布、批量提交统一此方式。
-    saveAndPublishRule(rule) {
+    saveAndPublishRule(rule, options = {}) {
       const code = (rule.code || '').trim();
       const name = (rule.name || '').trim();
       if (!code) return fail('规则编号必填');
       if (!name) return fail('规则名称必填');
-      return act('alarm/rule/saveAndPublish', { rule: { ...rule, code, name } });
+      // expectedPublishedVersion：打开编辑弹窗时的发布版本，不一致时 reducer 阻断（并发编辑冲突）
+      const expectedPublishedVersion = options.expectedPublishedVersion ?? null;
+      return act('alarm/rule/saveAndPublish', { rule: { ...rule, code, name }, expectedPublishedVersion });
     },
     disableRule(ruleCode, reason = '') {
       const rule = E.alarmRulesById[ruleCode];

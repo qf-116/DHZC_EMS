@@ -11,7 +11,7 @@
 // ============================================================
 
 import React, { useMemo, useState } from 'react';
-import { App, Button, Card, DatePicker, Input, Modal, Select, Space, Statistic, Switch, Table, Tag, Timeline, Tooltip } from 'antd';
+import { App, Alert, Button, Card, DatePicker, Input, Modal, Select, Space, Statistic, Switch, Table, Tag, Timeline, Tooltip } from 'antd';
 import dayjs from 'dayjs';
 import { CheckCircle2, FilePlus2, MoreHorizontal, RotateCcw, XCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -22,6 +22,7 @@ import DegradedBanner from '../components/DegradedBanner.jsx';
 import { useDemoStore, useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import { selectActiveAlarms, selectDevice, selectNotificationDeliveries } from '../state/selectors.js';
 import { FAULT_TYPES } from '../domain/repair.js';
+import { closeBlockers } from '../domain/alarm.js';
 import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import { users } from '../data/demo/masterData.js';
 
@@ -30,7 +31,7 @@ const REPAIR_STAFF = users.filter(u => u.status === '在职' && (u.role === '维
 const DISPATCH_GROUPS = ['机修班', '电气班', '工艺班'].map(v => ({ value: v, label: v }));
 
 const SEVERITY_COLOR = { 紧急: 'error', 重要: 'warning', 一般: 'gold', 提示: 'default' };
-const TIMELINE_COLOR = { 触发: 'red', 重复触发: 'red', 通知: 'blue', 确认: 'green', 处置: 'blue', 转维修: 'purple', 恢复: 'green', 关闭: 'gray', 重开关联: 'orange' };
+const TIMELINE_COLOR = { 触发: 'red', 重复触发: 'red', 通知: 'blue', 确认: 'green', 处置: 'blue', 更新处置: 'cyan', 转维修: 'purple', 恢复: 'green', 关闭: 'gray', 重开关联: 'orange' };
 const DELIVERY_COLOR = { 送达: 'success', 失败: 'error', 升级: 'orange', 重试中: 'processing' };
 
 export default function AlarmCenterPage() {
@@ -115,8 +116,9 @@ export default function AlarmCenterPage() {
 
   const submitHandle = () => {
     const expectedAt = handleExpectedAt ? handleExpectedAt.format('YYYY-MM-DD HH:mm') : '';
-    if (!expectedAt) { message.warning('请选择预计恢复时间'); return; }
-    const res = actions.handleAlarm(handleRow.id, { measure: handleMeasure, expectedAt });
+    const isUpdate = handleRow?.status === '处理中';
+    if (!expectedAt && !isUpdate) { message.warning('请选择预计恢复时间'); return; }
+    const res = actions.handleAlarm(handleRow.id, { measure: handleMeasure, expectedAt: expectedAt || undefined });
     if (!res.ok) { message.error(res.message); return; }
     message.success(res.message);
     setHandleRow(null); setHandleMeasure(''); setHandleExpectedAt(null);
@@ -158,9 +160,23 @@ export default function AlarmCenterPage() {
   };
 
   const openWith = (setter, row) => {
-    setAckNote(''); setHandleMeasure(''); setHandleExpectedAt(''); setCloseEvidence(''); setCloseReason(''); setRecoverEvidence('');
+    setAckNote(''); setHandleMeasure(''); setHandleExpectedAt(row?.expectedAt ? dayjs(row.expectedAt) : null); setCloseEvidence(''); setCloseReason(''); setRecoverEvidence('');
     setter(row);
   };
+
+  // 关闭前置条件（与 reducer 的 closeBlockers 同一口径）：关联维修未验收 / 关联停机未结束 / 人工关闭缺原因 / 恢复证据必填
+  const closeBlockerList = useMemo(() => {
+    if (!closeRow) return [];
+    const repair = closeRow.relatedRepairOrderId ? state.entities.repairOrdersById?.[closeRow.relatedRepairOrderId] : null;
+    const downtime = closeRow.relatedDowntimeId ? state.entities.downtimeFactsById?.[closeRow.relatedDowntimeId] : null;
+    const list = closeBlockers(closeRow, {
+      closeReason,
+      repairStatus: repair?.status,
+      downtimeStatus: downtime?.status,
+    });
+    if (!(closeEvidence || '').trim()) list.push('恢复证据必填');
+    return list;
+  }, [closeRow, closeReason, closeEvidence, state]);
 
   const recoveryTag = {
     自动恢复: <Tag color="success">自动恢复</Tag>,
@@ -209,6 +225,7 @@ export default function AlarmCenterPage() {
       } else if (r.status === '已确认') {
         buttons.push(<Button key="handle" size="small" icon={<MoreHorizontal size={12} />} onClick={() => openWith(setHandleRow, r)}>处置</Button>);
       } else if (r.status === '处理中') {
+        buttons.push(<Button key="handle" size="small" icon={<MoreHorizontal size={12} />} onClick={() => openWith(setHandleRow, r)}>更新处置</Button>);
         buttons.push(<Button key="recover" size="small" icon={<RotateCcw size={12} />} onClick={() => openWith(setRecoverRow, r)}>登记恢复</Button>);
       } else if (r.status === '已恢复待关闭') {
         buttons.push(<Button key="close" size="small" danger icon={<XCircle size={12} />} onClick={() => openWith(setCloseRow, r)}>关闭</Button>);
@@ -297,21 +314,22 @@ export default function AlarmCenterPage() {
         <Input.TextArea rows={3} placeholder="确认说明（必填），如：已到现场查看，主轴温度持续上升，安排停机检查。" value={ackNote} onChange={e => setAckNote(e.target.value)} />
       </Modal>
 
-      {/* 处置弹窗（措施 + 预计恢复时间必填） */}
+      {/* 处置弹窗（措施 + 预计恢复时间必填；处理中再次进入 = 更新处置，预计完成时间可留空沿用上次） */}
       <Modal
-        title={`处置报警（${handleRow?.id || ''}）`}
+        title={handleRow?.status === '处理中' ? `更新处置（${handleRow?.id || ''}）` : `处置报警（${handleRow?.id || ''}）`}
         width={560}
         open={!!handleRow}
         onOk={submitHandle}
         onCancel={() => setHandleRow(null)}
-        okText="提交处置" cancelText="取消"
+        okText={handleRow?.status === '处理中' ? '提交更新' : '提交处置'}
+        cancelText="取消"
       >
         <Space direction="vertical" style={{ width: '100%' }} size={10}>
           <div style={{ fontSize: 12, color: '#8a97a3' }}>
-            提交后报警进入「处理中」
+            {handleRow?.status === '处理中' ? '提交后状态仍为「处理中」，处置履历追加一条' : '提交后报警进入「处理中」'}
           </div>
           <Input.TextArea rows={3} placeholder="处置措施（必填），如：已更换冷却液并清洗管路，持续观察温度回落。" value={handleMeasure} onChange={e => setHandleMeasure(e.target.value)} />
-          <DatePicker showTime style={{ width: '100%' }} placeholder="请选择预计恢复时间" value={handleExpectedAt} onChange={v => setHandleExpectedAt(v)} />
+          <DatePicker showTime style={{ width: '100%' }} placeholder={handleRow?.status === '处理中' && handleRow?.expectedAt ? '预计完成时间（可留空，沿用上次）' : '请选择预计完成时间'} value={handleExpectedAt} onChange={v => setHandleExpectedAt(v)} />
         </Space>
       </Modal>
 
@@ -391,12 +409,16 @@ export default function AlarmCenterPage() {
         open={!!closeRow}
         onOk={submitClose}
         onCancel={() => setCloseRow(null)}
-        okText="关闭" okButtonProps={{ danger: true }} cancelText="取消"
+        okText="关闭" okButtonProps={{ danger: true, disabled: closeBlockerList.length > 0 }} cancelText="取消"
       >
         {closeRow && (
           <div style={{ fontSize: 12, color: '#8a97a3', marginBottom: 8 }}>
-            触发规则 <b>{closeRow.rule}</b>（恢复口径：{closeRow.recovery || '--'}）；不满足关闭前置条件将拒绝关闭。
+            触发规则 <b>{closeRow.rule}</b>（恢复口径：{closeRow.recovery || '--'}）
           </div>
+        )}
+        {closeBlockerList.length > 0 && (
+          <Alert type="warning" showIcon style={{ marginBottom: 10 }}
+            message={<>当前不满足关闭前置条件：<br />{closeBlockerList.map((b, i) => <div key={i}>· {b}</div>)}</>} />
         )}
         <Space direction="vertical" style={{ width: '100%' }} size={10}>
           <Input.TextArea rows={2} placeholder="恢复证据（必填），如：程序比对恢复一致，持续 60s。" value={closeEvidence} onChange={e => setCloseEvidence(e.target.value)} />
@@ -431,6 +453,7 @@ export default function AlarmCenterPage() {
                   ['触发时间', detailAlarm.time || '--'],
                   ['持续时长', detailAlarm.duration || '--'],
                   ['确认时间', detailAlarm.ack || '--'],
+                  ['预计完成时间', detailAlarm.expectedAt || '--'],
                   ['重复触发次数', `${detailAlarm.repeat || 0} 次`],
                   ['升级次数', detailAlarm.escalation ?? '--'],
                   ['通知策略 / 结果', `${detailAlarm.policy || '--'} · ${detailAlarm.notify || '--'}`],

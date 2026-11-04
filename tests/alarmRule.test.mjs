@@ -730,4 +730,45 @@ test('batchEdit reducer：已发布规则批量编辑后逐条发布新版本，
   assert.equal(s.entities.alarmRulesById['R-BE-2'].triggerConfig.threshold, 95, '失败目标不落库');
 });
 
+// ---------- 并发编辑冲突 + 处置更新（§7.2 / §7.1） ----------
+test('并发编辑冲突：打开时的发布版本与当前不一致 → 阻断发布，不静默覆盖', () => {
+  let s = baseState;
+  s = reducer(s, { type: 'alarm/rule/saveAndPublish', payload: { rule: withCode(validForm(), 'R-CONF-001') }, actionId: 'c1' });
+  assert.equal(lastOf(s).ok, true, lastOf(s).message);
+  // 打开编辑时看到 V1；期间别人发布为 V2
+  s = reducer(s, { type: 'alarm/rule/saveAndPublish', payload: { rule: withCode(validForm(), 'R-CONF-001') }, actionId: 'c2' });
+  assert.equal(s.entities.alarmRulesById['R-CONF-001'].publishedVersion, 'V2');
+  // 旧表单（基线 V1）再提交 → 阻断
+  s = reducer(s, { type: 'alarm/rule/saveAndPublish', payload: { rule: withCode(validForm(), 'R-CONF-001'), expectedPublishedVersion: 'V1' }, actionId: 'c3' });
+  const res = lastOf(s);
+  assert.equal(res.ok, false);
+  assert.ok(res.message.includes('已被他人更新'), res.message);
+  assert.equal(s.entities.alarmRulesById['R-CONF-001'].publishedVersion, 'V2', '被阻断的提交不得改版本');
+  // 基线与当前一致 → 正常发布 V3
+  s = reducer(s, { type: 'alarm/rule/saveAndPublish', payload: { rule: withCode(validForm(), 'R-CONF-001'), expectedPublishedVersion: 'V2' }, actionId: 'c4' });
+  assert.equal(lastOf(s).ok, true, lastOf(s).message);
+  assert.equal(s.entities.alarmRulesById['R-CONF-001'].publishedVersion, 'V3');
+});
+test('处置更新：处理中再次处置追加履历、状态保持处理中；同一次提交重复点击被幂等忽略', () => {
+  let s = baseState;
+  s = reducer(s, { type: 'alarm/rule/saveAndPublish', payload: { rule: withCode(validForm(), 'R-HDL-001') }, actionId: 'h1' });
+  s = reducer(s, { type: 'alarm/raise', payload: { deviceId: 'DEV-001', ruleCode: 'R-HDL-001', sample: { value: 95, qualityCode: 'GOOD', metricCode: 'M.bearing_temp' } }, actionId: 'h2' });
+  const alarmId = lastOf(s).refs.alarmId;
+  s = reducer(s, { type: 'alarm/ack', payload: { alarmId, note: '已到现场' }, actionId: 'h3' });
+  assert.equal(lastOf(s).ok, true, lastOf(s).message);
+  s = reducer(s, { type: 'alarm/handle', payload: { alarmId, measure: '清洗管路', expectedAt: '2026-09-16 18:00' }, idempotencyKey: 'handle:x:0', actionId: 'h4' });
+  assert.equal(lastOf(s).ok, true, lastOf(s).message);
+  assert.equal(s.entities.alarmEventsById[alarmId].status, '处理中');
+  // 同一幂等键重复提交 → 忽略，不重复写履历
+  s = reducer(s, { type: 'alarm/handle', payload: { alarmId, measure: '清洗管路', expectedAt: '2026-09-16 18:00' }, idempotencyKey: 'handle:x:0', actionId: 'h5' });
+  assert.equal(lastOf(s).idempotent, true);
+  // 更新处置：新幂等键 → 追加一条「更新处置」履历，状态仍为处理中
+  s = reducer(s, { type: 'alarm/handle', payload: { alarmId, measure: '更换冷却液' }, idempotencyKey: 'handle:x:1', actionId: 'h6' });
+  assert.equal(lastOf(s).ok, true, lastOf(s).message);
+  const evt = s.entities.alarmEventsById[alarmId];
+  assert.equal(evt.status, '处理中');
+  assert.equal(evt.timeline.filter((t) => t.type === '处置' || t.type === '更新处置').length, 2);
+  assert.equal(evt.expectedAt, '2026-09-16 18:00', '未填预计完成时间时沿用上次');
+});
+
 console.log(`\n${passed} 项契约测试通过${process.exitCode ? '（存在失败）' : ''}`);

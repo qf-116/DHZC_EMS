@@ -334,7 +334,8 @@ export function listRuleProducts(state) {
 
 // ---------- 批量创建（产品 → 多设备 → 单指标 → N 条规则直接发布） ----------
 // 纯计算（不改状态）：页面第 3 步预览与 reducer 提交共用同一份逻辑，保证预览与实际一致。
-// request: { nameTemplate, severity, triggerConfig, recoveryConfig, suppressionConfig, stormConfig, silenceConfig, qualityPolicy }
+// request: { type, nameTemplate, severity, triggerConfig, recoveryConfig, suppressionConfig, stormConfig, silenceConfig, qualityPolicy }
+//   type = 规则类型中文名（阈值 / 状态 / 质量 / 组合）；质量规则按设备通信健康判定，不需要指标。
 // targets: [{ deviceId, deviceName, sourceId, sourceCode, metricCode, bindingId, bindingVersion, metricVersion }]
 // 返回 { rows, summary }；rows[i].result ∈ creatable | skipped | blocked
 export function planRuleBatch(state, request, targets) {
@@ -343,19 +344,20 @@ export function planRuleBatch(state, request, targets) {
   const bindingsByDeviceId = E.bindingsByDeviceId || {};
   const metricsByKey = E.metricsByKey || {};
   const rules = E.alarmRulesById || {};
+  const ruleType = request?.type || '阈值';
   const usedCodes = new Set(Object.keys(rules));
   const rows = [];
   (targets || []).forEach((t) => {
     const device = devicesById[t.deviceId];
     const binding = bindingsByDeviceId[t.deviceId];
-    const metric = metricsByKey[t.metricCode];
+    const metric = t.metricCode ? metricsByKey[t.metricCode] : null;
     const rowBase = {
       deviceId: t.deviceId,
       deviceName: t.deviceName || device?.name || t.deviceId || '--',
-      sourceId: t.sourceId,
+      sourceId: t.sourceId || null,
       sourceCode: t.sourceCode || t.sourceId || '--',
-      metricCode: t.metricCode,
-      metricName: metric?.name || t.metricCode || '--',
+      metricCode: t.metricCode || null,
+      metricName: metric?.name || (t.metricCode || '--'),
       code: null,
       name: '',
       result: 'blocked',
@@ -364,16 +366,19 @@ export function planRuleBatch(state, request, targets) {
     if (!device) { rows.push({ ...rowBase, reason: '台账设备不存在' }); return; }
     if (!binding) { rows.push({ ...rowBase, reason: '台账设备尚未创建绑定' }); return; }
     if (binding.configStatus !== '已启用') { rows.push({ ...rowBase, reason: `绑定状态「${binding.configStatus}」，不能创建规则` }); return; }
-    const item = (binding.items || []).find((i) => i.iotDeviceId === t.sourceId && i.enabled);
+    // 质量规则按设备通信健康判定：只要绑定内有启用的来源项即可；其余类型必须命中具体来源项
+    const item = t.sourceId
+      ? (binding.items || []).find((i) => i.iotDeviceId === t.sourceId && i.enabled)
+      : (binding.items || []).find((i) => i.enabled);
     if (!item) { rows.push({ ...rowBase, reason: '物联网设备未在当前启用绑定中' }); return; }
-    if (!(item.metrics || []).some((m) => m.metricCode === t.metricCode)) {
+    if (t.metricCode && !(item.metrics || []).some((m) => m.metricCode === t.metricCode)) {
       rows.push({ ...rowBase, reason: `指标 ${t.metricCode} 未接入该物联网设备` });
       return;
     }
-    const existing = Object.values(rules).find((r) => r.type === '阈值'
+    const existing = Object.values(rules).find((r) => r.type === ruleType
       && r.status === '已发布'
       && r.target?.deviceId === t.deviceId
-      && r.target?.metricCode === t.metricCode);
+      && (r.target?.metricCode || null) === (t.metricCode || null));
     if (existing) {
       rows.push({ ...rowBase, code: existing.code, result: 'skipped', reason: `已存在已发布规则 ${existing.code}（${existing.name}），默认不覆盖` });
       return;
@@ -622,6 +627,16 @@ export function nextPublishVersion(publishedVersion) {
   if (!publishedVersion) return 'V1';
   const n = Number(String(publishedVersion).replace(/\D/g, '')) || 0;
   return `V${n + 1}`;
+}
+
+// 并发编辑冲突检查（§7.2：并发编辑冲突必须提示「当前版本已被他人更新」，不得静默覆盖）
+// expectedPublishedVersion：打开编辑弹窗时看到的发布版本；为空表示不做冲突校验（如新建规则）
+export function ruleEditConflict(rule, expectedPublishedVersion) {
+  if (!rule) return null;
+  if (expectedPublishedVersion === null || expectedPublishedVersion === undefined || expectedPublishedVersion === '') return null;
+  const current = rule.publishedVersion || rule.version || null;
+  if (String(current) === String(expectedPublishedVersion)) return null;
+  return `当前版本已被他人更新（您打开时为 V${expectedPublishedVersion}，当前为 V${current || '--'}），请关闭后重新打开规则再编辑`;
 }
 
 // ---------- 规则草稿校验（全类型） ----------

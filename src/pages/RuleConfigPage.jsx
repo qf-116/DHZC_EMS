@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, Table, Tag, Button, Space, Select, App, Input, InputNumber, Alert, Modal, Statistic, Tooltip, Descriptions } from 'antd';
-import { Plus, TestTube2, Zap, Trash2, PowerOff, Pencil } from 'lucide-react';
+import { Plus, TestTube2, Trash2, PowerOff, Pencil } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import { metricAlarmTemplates } from '../data/demoData.js';
 import { iotProducts } from '../data/demo/bindings.js';
@@ -284,19 +284,9 @@ export default function RuleConfigPage() {
     }
     setSelectedRowKeys([]);
   };
-  const chattering = rows.filter((r) => (r.supp7d || 0) > (r.trig7d || 0));
-
   return (
     <>
       <PageHeader title="报警规则配置" />
-
-      {chattering.length > 0 && (
-        <Alert
-          type="warning" showIcon icon={<Zap size={14} />}
-          style={{ marginBottom: 12 }}
-          message={`报警治理提示：${chattering.map((r) => `${r.name}（近7天触发 ${r.trig7d} 次、重复抑制 ${r.supp7d} 次）`).join('、')}。抑制次数高于触发次数说明值在阈值附近反复震荡，建议增大恢复回差或延长触发持续时间。`}
-        />
-      )}
 
       {/* 筛选卡（规范 §1/§4：查询条件独立在列表卡上方） */}
       <FilterBar onQuery={() => {}} onReset={() => { setQKw(''); setQType(null); setQStatus(null); setQProduct(null); }} extra={<span style={{ fontSize: 12, color: '#8a97a3' }}>共 {rows.length} 条</span>}>

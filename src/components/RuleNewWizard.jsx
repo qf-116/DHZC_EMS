@@ -7,6 +7,7 @@ import {
   resolveRuleTargets, normalizeMetricMeta, RULE_TYPE_LABEL,
 } from '../domain/alarmRule.js';
 import { metricAlarmTemplates } from '../data/demoData.js';
+import { iotProducts } from '../data/demo/bindings.js';
 import RuleFormBody from './RuleFormBody.jsx';
 
 // 新增报警规则向导（2026-11-03 合并「新增规则」与「批量新建」）：
@@ -72,7 +73,12 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
   };
 
   // ① 选目标：产品 → 物联网设备（反查台账设备）
-  const products = React.useMemo(() => listRuleProducts(state), [state]);
+  // 产品下拉 = 来源设备上的产品 ∪ 物联网平台产品目录（合并去重、按来源设备数降序）——目录产品即使暂无来源设备也可见
+  const products = React.useMemo(() => {
+    const map = new Map(listRuleProducts(state).map((p) => [p.product, p]));
+    iotProducts.forEach((p) => { if (!map.has(p.product)) map.set(p.product, { product: p.product, sourceCount: 0 }); });
+    return [...map.values()].sort((x, y) => y.sourceCount - x.sourceCount);
+  }, [state]);
   const sourceRows = React.useMemo(
     () => (product ? resolveProductSources(state, product) : []),
     [state, product]

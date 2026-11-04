@@ -55,6 +55,10 @@ export function loadDemoState() {
     if (typeof parsed.version !== 'number' || parsed.version > STORE_VERSION) {
       return { state: null, notice: '本地快照版本已更新，已恢复初始状态' };
     }
+    if (parsed.version < 12) {
+      // V12 之前的快照缺少物联网平台产品等关键结构（来源设备无 product 字段），无法安全迁移
+      return { state: null, notice: '本地快照版本过旧（缺少物联网平台产品数据），已恢复初始演示状态' };
+    }
     // 旧版本快照：尝试结构迁移，保留用户已有草稿与业务事实
     try {
       return { state: migrateParsed(parsed), notice: '本地快照已迁移至新版本结构（报警状态机已收敛为三态，历史草稿规则已清理）' };

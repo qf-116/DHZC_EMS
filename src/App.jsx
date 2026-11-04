@@ -53,6 +53,7 @@ import PatrolTasksPage from './pages/PatrolTasksPage.jsx';
 import PatrolTaskDetailPage from './pages/PatrolTaskDetailPage.jsx';
 import PatrolExecutePage from './pages/PatrolExecutePage.jsx';
 import PatrolReportPage from './pages/PatrolReportPage.jsx';
+import PlatformModuleNotice from './components/PlatformModuleNotice.jsx';
 // 范围外提示组件 ScopeNoticePage 保留在 components/ 下备用（原 /permissions、/audit 已由基础配置模块承接）
 import { DemoStoreProvider } from './state/DemoStore.jsx';
 // 需求细则（开发说明面板）：每页点击「需求细则」查看本页详细规则，内容维护在 src/specs/pageSpecs.jsx
@@ -85,11 +86,6 @@ import ComprehensiveReportPage from './pages/ComprehensiveReportPage.jsx';
 import LifecycleTasksPage from './pages/LifecycleTasksPage.jsx';
 import LifecycleGovernancePage from './pages/LifecycleGovernancePage.jsx';
 // 基础配置模块：系统从宿主平台拆分独立后自建（用户/角色/组织/字典/日志）
-import SystemUsersPage from './pages/SystemUsersPage.jsx';
-import SystemRolesPage from './pages/SystemRolesPage.jsx';
-import SystemOrgPage from './pages/SystemOrgPage.jsx';
-import SystemDictPage from './pages/SystemDictPage.jsx';
-import SystemLogsPage from './pages/SystemLogsPage.jsx';
 
 const { Sider, Content, Header } = Layout;
 
@@ -412,11 +408,11 @@ export default function App() {
                   <Route path="/report/repair" element={<RepairReportPage />} />
                   <Route path="/report/sparepart" element={<SparePartReportPage />} />
                   {/* 基础配置模块：系统拆分独立后自建的基础管理域 */}
-                  <Route path="/system/users" element={<SystemUsersPage />} />
-                  <Route path="/system/roles" element={<SystemRolesPage />} />
-                  <Route path="/system/org" element={<SystemOrgPage />} />
-                  <Route path="/system/dict" element={<SystemDictPage />} />
-                  <Route path="/system/logs" element={<SystemLogsPage />} />
+                  <Route path="/system/users" element={<PlatformModuleNotice />} />
+                  <Route path="/system/roles" element={<PlatformModuleNotice />} />
+                  <Route path="/system/org" element={<PlatformModuleNotice />} />
+                  <Route path="/system/dict" element={<PlatformModuleNotice />} />
+                  <Route path="/system/logs" element={<PlatformModuleNotice />} />
                   {/* 原「由宿主平台提供」的权限/审计入口，拆分后由本系统基础配置模块承接，重定向 */}
                   <Route path="/permissions" element={<Navigate to="/system/roles" replace />} />
                   <Route path="/audit" element={<Navigate to="/system/logs" replace />} />

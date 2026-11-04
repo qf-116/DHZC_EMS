@@ -10,7 +10,8 @@ import { metricAlarmTemplates } from '../data/demoData.js';
 import RuleFormBody from './RuleFormBody.jsx';
 
 // 新增报警规则向导（2026-11-03 合并「新增规则」与「批量新建」）：
-// ① 选目标：产品 → 该产品下的物联网平台设备（多选，反查绑定台账设备）→ 选一个指标
+// ① 选目标：产品 → 该产品下的物联网平台设备（多选，反查绑定台账设备）→ 选指标 → 规则类型（在指标处选择，
+//    选指标后按指标类型自动带出：数值→阈值、状态→状态；阈值/状态与指标类型不匹配在「下一步」拦截）
 // ② 配参数：名称/等级/判定模式/阈值/持续/恢复/抑制/风暴/静默
 // ③ 预览确认：逐设备生成 N 条规则，确认后一次性创建并发布（无草稿态）
 // 规则类型：阈值 / 状态 按「设备 + 指标」批量生成（1 设备 1 规则，N 对 N）；
@@ -56,8 +57,10 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
   const patchTrigger = (p) => setForm((f) => ({ ...f, triggerConfig: { ...f.triggerConfig, ...p } }));
   const patchRecoveryCondition = (p) => setForm((f) => ({ ...f, recoveryConfig: { ...f.recoveryConfig, condition: { ...f.recoveryConfig.condition, ...p } } }));
 
+  const userTypeRef = React.useRef(false); // 用户是否手动改过规则类型（手动后不再按指标类型自动带出）
   // 规则类型切换：状态 / 质量 / 组合的恢复口径随类型确定
   const changeRuleType = (t) => {
+    userTypeRef.current = true;
     setRuleType(t);
     setForm((f) => {
       const next = switchRuleFormType(f, t);
@@ -85,12 +88,10 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
     if (selectedRows.length === 0) return [];
     const counts = new Map();
     selectedRows.forEach((r) => r.metrics.forEach((m) => counts.set(m, (counts.get(m) || 0) + 1)));
-    const wantType = ruleType === 'state' ? 'state' : 'number';
     return [...counts.entries()]
       .map(([code, n]) => ({ code, count: n, metric: normalizeMetricMeta(E.metricsByKey[code]) }))
-      .filter((m) => (m.metric?.dataType || 'other') === wantType)
       .sort((a, b) => b.count - a.count);
-  }, [selectedRows, E.metricsByKey, ruleType]);
+  }, [selectedRows, E.metricsByKey]);
   const selectedMetric = metricCode ? normalizeMetricMeta(E.metricsByKey[metricCode]) : null;
   // 组合规则的子条件可选目标（全站启用绑定下的可用目标）
   const allTargets = React.useMemo(() => resolveRuleTargets(state), [state]);
@@ -104,6 +105,16 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
     });
     return [...devMap.values()].map((d) => ({ value: d.value, label: d.label, children: [...d.children.values()] }));
   }, [allTargets]);
+
+  // 选定指标后自动带出规则类型（数值指标→阈值、状态类指标→状态）；用户手动改过则以手选为准
+  React.useEffect(() => {
+    if (!metricCode) return;
+    const meta = normalizeMetricMeta(E.metricsByKey[metricCode]);
+    if (!userTypeRef.current) {
+      if ((meta?.dataType) === 'state') setRuleType('state');
+      else setRuleType('threshold');
+    }
+  }, [metricCode]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // 选定指标后带出推荐参数（指标特征模板）
   React.useEffect(() => {
@@ -254,6 +265,9 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
       if (!product) { message.warning('请先选择产品'); return; }
       if (selectedRows.length === 0) { message.warning('请至少勾选一台物联网设备'); return; }
       if (needMetric && !metricCode) { message.warning('请选择一个指标'); return; }
+      const meta = metricCode ? normalizeMetricMeta(E.metricsByKey[metricCode]) : null;
+      if (metricCode && ['threshold'].includes(ruleType) && meta?.dataType !== 'number') { message.warning('阈值规则需要数值类指标，请在指标处重新选择或调整规则类型'); return; }
+      if (metricCode && ruleType === 'state' && meta?.dataType !== 'state') { message.warning('状态规则需要状态类指标（S.*），请在指标处重新选择或调整规则类型'); return; }
       setStep(1);
       return;
     }
@@ -341,13 +355,6 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
         {step === 0 && (
           <Space direction="vertical" style={{ width: '100%' }} size={12}>
             <Space wrap>
-              <span>规则类型</span>
-              <Select
-                style={{ width: 240 }}
-                value={ruleType}
-                onChange={(v) => { changeRuleType(v); setMetricCode(null); setSelectedKeys([]); }}
-                options={RULE_TYPES}
-              />
               <span>产品</span>
               <Select
                 style={{ width: 240 }}
@@ -384,24 +391,29 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
                     { title: '说明', width: 160, render: (_, r) => (r.reason ? <span style={{ color: '#d97706' }}>{r.reason}</span> : <span style={{ color: '#8a97a3' }}>可选</span>) },
                   ]}
                 />
-                {needMetric && (
-                  <Space wrap>
-                    <span>指标</span>
-                    <Select
-                      style={{ width: 360 }}
-                      placeholder={ruleType === 'state' ? '选择一个状态类指标（S.*）' : '选择一个数值指标'}
-                      value={metricCode || undefined}
-                      onChange={setMetricCode}
-                      disabled={selectedRows.length === 0}
-                      options={metricOptions.map((m) => ({
-                        value: m.code,
-                        label: `${m.metric?.name || m.code}（${m.code}）· 覆盖 ${m.count}/${selectedRows.length} 台`,
-                      }))}
-                      showSearch
-                      optionFilterProp="label"
-                    />
-                  </Space>
-                )}
+                <Space wrap>
+                  <span>指标</span>
+                  <Select
+                    style={{ width: 340 }}
+                    placeholder={selectedRows.length === 0 ? '请先勾选物联网设备' : '选择一个指标（仅列出所选设备都接入的指标）'}
+                    value={metricCode || undefined}
+                    onChange={setMetricCode}
+                    disabled={selectedRows.length === 0}
+                    options={metricOptions.map((m) => ({
+                      value: m.code,
+                      label: `${m.metric?.name || m.code}（${m.code}）· 覆盖 ${m.count}/${selectedRows.length} 台`,
+                    }))}
+                    showSearch
+                    optionFilterProp="label"
+                  />
+                  <span>规则类型</span>
+                  <Select
+                    style={{ width: 220 }}
+                    value={ruleType}
+                    onChange={changeRuleType}
+                    options={RULE_TYPES}
+                  />
+                </Space>
                 <div style={{ fontSize: 12, color: '#5d6b78' }}>
                   {ruleType === 'combo'
                     ? `已选 ${selectedRows.length} 台物联网设备 → 组合规则按子条件生成`

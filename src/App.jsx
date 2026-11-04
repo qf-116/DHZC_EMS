@@ -176,7 +176,7 @@ const menus = [
     // 2026-10-27 范围调整：报警规则版本 / 通知策略配置 下线，旧路由重定向
   ] },
   { key: 'report', icon: <FileBarChart size={15} />, label: '报表中心', children: [
-    { key: '/report/runtime', icon: <FileBarChart size={14} />, label: '运行时长与设备状态统计' },
+    { key: '/report/runtime', icon: <FileBarChart size={14} />, label: '运行状态统计' },
     { key: '/report/production', icon: <FileBarChart size={14} />, label: '生产产出' },
     { key: '/report/mttr', icon: <FileBarChart size={14} />, label: 'MTTR / MTBF 分析' },
     { key: '/report/comprehensive', icon: <FileBarChart size={14} />, label: '综合运行分析' },

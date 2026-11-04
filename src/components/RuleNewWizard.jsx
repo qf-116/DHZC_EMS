@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, Steps, Space, Select, Table, Tag, Button, Alert, Statistic, App } from 'antd';
+import { Modal, Steps, Space, Select, Table, Tag, Button, Alert, App } from 'antd';
 import { Plus } from 'lucide-react';
 import {
   createEmptyRuleForm, switchRuleFormType, formToRule, validateRuleDraft,
@@ -10,11 +10,10 @@ import { metricAlarmTemplates } from '../data/demoData.js';
 import { iotProducts } from '../data/demo/bindings.js';
 import RuleFormBody from './RuleFormBody.jsx';
 
-// 新增报警规则向导（2026-11-03 合并「新增规则」与「批量新建」）：
-// ① 选目标：产品 → 该产品下的物联网平台设备（多选，反查绑定台账设备）→ 选指标 → 规则类型（在指标处选择，
-//    选指标后按指标类型自动带出：数值→阈值、状态→状态；阈值/状态与指标类型不匹配在「下一步」拦截）
-// ② 配参数：名称/等级/判定模式/阈值/持续/恢复/抑制/风暴/静默
-// ③ 预览确认：逐设备生成 N 条规则，确认后一次性创建并发布（无草稿态）
+// 新增报警规则向导（2026-11-03 合并「新增规则」与「批量新建」；2026-11-04 简化为两步，预览确认步骤删除）：
+// ① 选目标：产品 → 该产品下的物联网平台设备（多选，反查绑定台账设备）
+// ② 配参数：指标（下拉选项带「数值 / 状态」类型标注）→ 规则类型（按指标类型自动带出，可改）→ 名称/等级/判定/恢复/治理参数
+//    提交即一次性创建并发布（无草稿态）；同目标已存在的条目跳过，结果逐条提示
 // 规则类型：阈值 / 状态 按「设备 + 指标」批量生成（1 设备 1 规则，N 对 N）；
 //           质量 按设备通信健康批量生成（不需要指标）；组合为单设备多子条件规则。
 const NAME_TEMPLATES = [
@@ -89,13 +88,16 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
     () => selectedKeys.map((k) => selectableRows.find((r) => r.key === k)).filter(Boolean),
     [selectedKeys, selectableRows]
   );
-  // 指标候选：所选设备已接入指标的交集（同一产品物模型一致，交集即真正可批量配置的指标）
+  // 指标候选：所选设备已接入指标的交集（同一产品物模型一致，交集即真正可批量配置的指标）；带「数值 / 状态」类型
   const metricOptions = React.useMemo(() => {
     if (selectedRows.length === 0) return [];
     const counts = new Map();
     selectedRows.forEach((r) => r.metrics.forEach((m) => counts.set(m, (counts.get(m) || 0) + 1)));
     return [...counts.entries()]
-      .map(([code, n]) => ({ code, count: n, metric: normalizeMetricMeta(E.metricsByKey[code]) }))
+      .map(([code, n]) => {
+        const metric = normalizeMetricMeta(E.metricsByKey[code]);
+        return { code, count: n, metric, dataType: metric?.dataType || 'number' };
+      })
       .sort((a, b) => b.count - a.count);
   }, [selectedRows, E.metricsByKey]);
   const selectedMetric = metricCode ? normalizeMetricMeta(E.metricsByKey[metricCode]) : null;
@@ -177,7 +179,7 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
   // 组合规则的主目标 = 第一个子条件目标
   const comboPrimary = form.triggerConfig.conditions?.[0]?.target || null;
 
-  // ③ 预览：逐设备生成规则（N 对 N）
+  // 逐设备生成规则（N 对 N）：用于底部「创建并发布 N 条」计数与提交
   const preview = React.useMemo(() => {
     if (selectedRows.length === 0) return { rows: [], summary: null };
     const request = {
@@ -262,7 +264,6 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
   }, [form, metricCode, selectedRows, selectedMetric, ruleType, comboPrimary]);
 
   const needMetric = ruleType === 'threshold' || ruleType === 'state';
-  const step1Ready = !!product && selectedRows.length > 0 && (!needMetric || !!metricCode);
   const step2Ready = paramValidation.errors.length === 0;
   const creatable = preview.summary?.creatable || 0;
 
@@ -270,22 +271,22 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
     if (step === 0) {
       if (!product) { message.warning('请先选择产品'); return; }
       if (selectedRows.length === 0) { message.warning('请至少勾选一台物联网设备'); return; }
-      if (needMetric && !metricCode) { message.warning('请选择一个指标'); return; }
-      const meta = metricCode ? normalizeMetricMeta(E.metricsByKey[metricCode]) : null;
-      if (metricCode && ['threshold'].includes(ruleType) && meta?.dataType !== 'number') { message.warning('阈值规则需要数值类指标，请在指标处重新选择或调整规则类型'); return; }
-      if (metricCode && ruleType === 'state' && meta?.dataType !== 'state') { message.warning('状态规则需要状态类指标（S.*），请在指标处重新选择或调整规则类型'); return; }
       setStep(1);
-      return;
     }
-    if (step === 1) {
-      setSubmitAttempted(true);
-      if (!step2Ready) { message.warning('请先修正参数问题'); return; }
-      setStep(2);
-    }
+  };
+
+  // 提交前统一校验：指标必选（阈值/状态）、类型与指标匹配、参数校验
+  const preSubmitCheck = () => {
+    if (needMetric && !metricCode) { message.warning('请先选择指标'); return false; }
+    const meta = metricCode ? normalizeMetricMeta(E.metricsByKey[metricCode]) : null;
+    if (metricCode && ruleType === 'threshold' && meta?.dataType !== 'number') { message.warning('阈值规则需要数值类指标，请重新选择指标或调整规则类型'); return false; }
+    if (metricCode && ruleType === 'state' && meta?.dataType !== 'state') { message.warning('状态规则需要状态类指标（S.*），请重新选择指标或调整规则类型'); return false; }
+    return true;
   };
 
   const submit = () => {
     setSubmitAttempted(true);
+    if (!preSubmitCheck()) return;
     if (!step2Ready) { message.warning('请先修正参数问题'); return; }
     const rules = preview.rows
       .filter((r) => r.result === 'creatable')
@@ -344,7 +345,7 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
         <Button key="cancel" onClick={() => { if (step === 0) onClose(); else setStep(step - 1); }}>
           {step === 0 ? '取消' : '上一步'}
         </Button>,
-        step < 2
+        step < 1
           ? <Button key="next" type="primary" onClick={goNext}>下一步</Button>
           : <Button key="submit" type="primary" icon={<Plus size={14} />} onClick={submit} disabled={creatable === 0}>
             {creatable === 0 ? '无可创建规则' : `创建并发布 ${creatable} 条规则`}
@@ -355,7 +356,7 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
         current={step}
         size="small"
         style={{ marginBottom: 16 }}
-        items={[{ title: '① 选目标' }, { title: '② 配参数' }, { title: '③ 预览确认' }]}
+        items={[{ title: '① 选目标' }, { title: '② 配参数' }]}
       />
       <div style={{ maxHeight: '62vh', overflowY: 'auto', paddingRight: 6 }}>
         {step === 0 && (
@@ -397,33 +398,8 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
                     { title: '说明', width: 160, render: (_, r) => (r.reason ? <span style={{ color: '#d97706' }}>{r.reason}</span> : <span style={{ color: '#8a97a3' }}>可选</span>) },
                   ]}
                 />
-                <Space wrap>
-                  <span>指标</span>
-                  <Select
-                    style={{ width: 340 }}
-                    placeholder={selectedRows.length === 0 ? '请先勾选物联网设备' : '选择一个指标（仅列出所选设备都接入的指标）'}
-                    value={metricCode || undefined}
-                    onChange={setMetricCode}
-                    disabled={selectedRows.length === 0}
-                    options={metricOptions.map((m) => ({
-                      value: m.code,
-                      label: `${m.metric?.name || m.code}（${m.code}）· 覆盖 ${m.count}/${selectedRows.length} 台`,
-                    }))}
-                    showSearch
-                    optionFilterProp="label"
-                  />
-                  <span>规则类型</span>
-                  <Select
-                    style={{ width: 220 }}
-                    value={ruleType}
-                    onChange={changeRuleType}
-                    options={RULE_TYPES}
-                  />
-                </Space>
-                <div style={{ fontSize: 12, color: '#5d6b78' }}>
-                  {ruleType === 'combo'
-                    ? `已选 ${selectedRows.length} 台物联网设备 → 组合规则按子条件生成`
-                    : `已选 ${selectedRows.length} 台物联网设备 → 将生成 ${selectedRows.length} 条规则（每台设备一条）`}
+                <div style={{ fontSize: 12, color: '#8a97a3' }}>
+                  已选 {selectedRows.length} 台物联网设备；指标与判定参数在下一步配置
                 </div>
               </>
             )}
@@ -433,24 +409,33 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
         {step === 1 && (
           <Space direction="vertical" style={{ width: '100%' }} size={12}>
             <Space wrap>
-              <span>规则名称格式</span>
+              <span>指标</span>
               <Select
-                style={{ width: 280 }}
-                value={nameTemplate}
-                onChange={setNameTemplate}
-                options={NAME_TEMPLATES.map((t) => ({ value: t.value, label: t.label }))}
+                style={{ width: 330 }}
+                placeholder={selectedRows.length === 0 ? '请返回上一步勾选设备' : '选择一个指标（仅列出所选设备都接入的指标）'}
+                value={metricCode || undefined}
+                onChange={setMetricCode}
+                options={metricOptions.map((m) => ({
+                  value: m.code,
+                  label: `${m.metric?.name || m.code}（${m.code}）· ${m.dataType === 'state' ? '状态' : '数值'} · 覆盖 ${m.count}/${selectedRows.length} 台`,
+                }))}
+                showSearch
+                optionFilterProp="label"
+              />
+              <span>规则类型</span>
+              <Select
+                style={{ width: 200 }}
+                value={ruleType}
+                onChange={changeRuleType}
+                options={RULE_TYPES}
               />
               <span>等级</span>
               <Select
-                style={{ width: 100 }}
+                style={{ width: 90 }}
                 value={form.severity}
                 onChange={(v) => patch({ severity: v })}
                 options={['紧急', '重要', '一般', '提示'].map((v) => ({ value: v, label: v }))}
               />
-              <span>规则名称示例</span>
-              <span style={{ fontSize: 12, color: '#5d6b78' }}>
-                {nameTemplate.replace('{device}', selectedRows[0]?.deviceName || '设备名').replace('{metric}', selectedMetric?.name || '指标名').replace('{mode}', '超限')}
-              </span>
             </Space>
             {submitAttempted && paramValidation.errors.length > 0 && (
               <Alert type="error" showIcon message={<>保存前需修正以下问题：<br />{paramValidation.errors.map((e, i) => <div key={i}>· {e}</div>)}</>} />
@@ -481,43 +466,6 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
               showTarget={false}
               showTypeSelect={false}
             />
-          </Space>
-        )}
-
-        {step === 2 && preview.summary && (
-          <Space direction="vertical" style={{ width: '100%' }} size={12}>
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 8 }}>
-              <Statistic title="将创建" value={preview.summary.creatable} suffix="条" valueStyle={{ color: '#00b8d4' }} />
-              <Statistic title="跳过（已存在同目标规则）" value={preview.summary.skipped} suffix="条" />
-              <Statistic title="阻断" value={preview.summary.blocked} suffix="条" valueStyle={{ color: preview.summary.blocked ? '#d97706' : undefined }} />
-              <Statistic title="目标设备" value={selectedRows.length} suffix="台" />
-            </div>
-            <Table
-              rowKey={(r) => `${r.deviceId}|${r.sourceId}|${r.metricCode}`}
-              size="small"
-              pagination={false}
-              dataSource={preview.rows}
-              columns={[
-                { title: '规则编号', dataIndex: 'code', width: 90, render: (v) => v || '--' },
-                { title: '规则名称', dataIndex: 'name', width: 220, render: (v) => v || '--' },
-                { title: '台账设备', width: 190, render: (_, r) => `${r.deviceId} ${r.deviceName}` },
-                { title: 'IoT来源', dataIndex: 'sourceCode', width: 130 },
-                { title: '指标', dataIndex: 'metricName', width: 140 },
-                {
-                  title: '结果',
-                  width: 110,
-                  render: (_, r) => (
-                    <Tag color={r.result === 'creatable' ? 'success' : r.result === 'skipped' ? 'default' : 'warning'}>
-                      {r.result === 'creatable' ? '可创建' : r.result === 'skipped' ? '跳过' : '阻断'}
-                    </Tag>
-                  ),
-                },
-                { title: '说明', dataIndex: 'reason' },
-              ]}
-            />
-            <div style={{ fontSize: 12, color: '#8a97a3' }}>
-              创建后直接发布并开始判定报警（不设草稿状态）；已存在同目标规则的条目默认跳过，不覆盖。
-            </div>
           </Space>
         )}
       </div>

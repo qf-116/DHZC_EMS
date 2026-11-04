@@ -25,7 +25,7 @@ const fmtDur = (min) => (min == null ? '--' : `${Math.floor(min / 60)}h ${min % 
 // 运行状态统计（原名「运行时长与设备状态统计报表」，2026-11-04 简化命名）
 // 口径（2026-11-04 需求方确认）：列表为所选日期范围内的汇总结果——
 //   每台设备一行，时长类逐日求和、稼动率/状态占比按汇总时长重算、切换次数求和、
-//   最长连续运行/最长离线取范围内最大值、数据完整率按时长加权平均；列表不展示「日期」列。
+//   最长连续运行/最长离线取范围内最大值；列表不展示「日期」列与「数据完整率」列（2026-11-04 删除）。
 //   默认统计范围 = 最近 7 天（锚定演示数据最后日期）。
 // 数据来源：selectReportRows(state, 'runtime', filters)（内部引用演示种子兼容导出，页面不直接 import demoData）
 export default function RunTimeReportPage() {
@@ -83,7 +83,7 @@ export default function RunTimeReportPage() {
       if (!byDevice.has(r.device)) {
         byDevice.set(r.device, {
           date: null, device: r.device, run: 0, standby: 0, fault: 0, offline: 0,
-          switches: 0, maxRun: null, maxOffline: null, completeNum: 0, completeW: 0, days: 0,
+          switches: 0, maxRun: null, maxOffline: null, days: 0,
         });
       }
       const a = byDevice.get(r.device);
@@ -94,11 +94,6 @@ export default function RunTimeReportPage() {
       a.switches += Number(r.switches) || 0;
       a.maxRun = Math.max(a.maxRun ?? -1, parseDur(r.maxRun) ?? -1);
       a.maxOffline = Math.max(a.maxOffline ?? -1, parseDur(r.maxOffline) ?? -1);
-      const total = (parseDur(r.run) ?? 0) + (parseDur(r.standby) ?? 0) + (parseDur(r.fault) ?? 0) + (parseDur(r.offline) ?? 0);
-      if (total > 0 && r.complete != null && parseFloat(r.complete) > 0) {
-        a.completeNum += (parseFloat(r.complete) / 100) * total;
-        a.completeW += total;
-      }
       a.days += 1;
     }
     return [...byDevice.values()].map((a) => {
@@ -115,7 +110,6 @@ export default function RunTimeReportPage() {
         switches: a.switches,
         maxRun: fmtDur(a.maxRun >= 0 ? a.maxRun : null),
         maxOffline: fmtDur(a.maxOffline >= 0 ? a.maxOffline : null),
-        complete: a.completeW > 0 ? `${((a.completeNum / a.completeW) * 100).toFixed(1)}%` : '--',
         days: a.days,
       };
     }).sort((x, y) => String(y.run).localeCompare(String(x.run)));
@@ -162,7 +156,6 @@ export default function RunTimeReportPage() {
     { title: '切换次数', dataIndex: 'switches', width: 100, sorter: (a, b) => a.switches - b.switches },
     { title: '最长连续运行', dataIndex: 'maxRun', width: 120, sorter: (a, b) => String(a.maxRun).localeCompare(String(b.maxRun)) },
     { title: '最长离线', dataIndex: 'maxOffline', width: 100, sorter: (a, b) => String(a.maxOffline).localeCompare(String(b.maxOffline)) },
-    { title: '数据完整率', dataIndex: 'complete', width: 110, render: v => (v != null && parseFloat(v) < 95 ? <Tag color="warning">{v}</Tag> : v) },
   ];
 
   return (
@@ -203,7 +196,7 @@ export default function RunTimeReportPage() {
           onNext={handleReset}
         />
       ) : (
-        <Table rowKey="device" size="small" scroll={{ x: 1400 }} dataSource={rows} columns={columns} />
+        <Table rowKey="device" size="small" scroll={{ x: 1290 }} dataSource={rows} columns={columns} />
       )}
       {exportTasks.length > 0 && (
         <Card size="small" title="导出任务" style={{ marginTop: 12 }}>

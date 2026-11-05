@@ -17,6 +17,8 @@ export const metrics = [
   { metricCode: 'M.oil_pressure', metricVersion: 'v1.0', name: '润滑油压', unit: 'MPa', dataType: '数值', precision: 0.01, range: '0 ~ 0.6', syncStatus: '正常', lastSyncTime: '2026-09-16 06:00' },
   { metricCode: 'M.weld_current', metricVersion: 'v1.0', name: '焊接电流', unit: 'A', dataType: '数值', precision: 1, range: '0 ~ 500', syncStatus: '正常', lastSyncTime: '2026-09-16 06:00' },
   { metricCode: 'M.axis_load', metricVersion: 'v1.0', name: '轴向负载', unit: '%', dataType: '数值', precision: 1, range: '0 ~ 100', syncStatus: '正常', lastSyncTime: '2026-09-16 06:00' },
+  { metricCode: 'M.output', metricVersion: 'v1.1', name: '加工数量', unit: '件', dataType: '数值', precision: 1, range: '0 ~ 999999', syncStatus: '正常', lastSyncTime: '2026-09-16 06:00' },
+  { metricCode: 'M.qualified', metricVersion: 'v1.1', name: '合格数量', unit: '件', dataType: '数值', precision: 1, range: '0 ~ 999999', syncStatus: '正常', lastSyncTime: '2026-09-16 06:00' },
 ];
 
 export const metricsByKey = Object.fromEntries(metrics.map(m => [m.metricCode, m]));

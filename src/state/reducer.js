@@ -375,6 +375,17 @@ export function reducer(state, action) {
       const next = { ...state, ui: { ...state.ui, bindingDraftsByDeviceId: setIn(drafts, key, { ...draft, items: draft.items.filter(i => i.iotDeviceId !== payload.iotDeviceId) }) } };
       return finish(next, action, true, '已从绑定草稿移除该来源（未保存）', {}, false, at);
     }
+    case 'binding/setDraftOee': {
+      // OEE 计算配置（2026-11-05）：作用于绑定草稿，保存时随草稿整体落库到绑定实体（oee 字段）。
+      // oee: { enabled, stateMetricCode, outputMetricCode, qualifiedMetricCode } —— 候选 = 已勾选监控的指标。
+      const key = `draft-${payload.deviceId}`;
+      const drafts = state.ui.bindingDraftsByDeviceId || {};
+      const draft = drafts[key];
+      if (!draft) return reject(state, action, '没有进行中的绑定草稿');
+      const oee = { ...(draft.oee || {}), ...(payload.oee || {}) };
+      const next = { ...state, ui: { ...state.ui, bindingDraftsByDeviceId: setIn(drafts, key, { ...draft, oee }) } };
+      return finish(next, action, true, oee.enabled ? '已纳入 OEE 计算（请完成 OEE 指标映射）' : '该设备不参与 OEE 计算', { deviceId: payload.deviceId }, false, at);
+    }
     case 'binding/setDraftMonitored': {
       // 监控指标勾选（绑定向导第 3 步，2026-10-27 口径）：作用于未保存的绑定草稿；
       // 指标可以全部不勾选（仅存储不做曲线监控）；保存时随草稿整体落库（binding/save 展开 draft），

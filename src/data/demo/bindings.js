@@ -86,7 +86,7 @@ export const iotProducts = [
     metrics: [
       sel('M.spindle_temp', 'v1.2'), sel('M.coolant_temp', 'v1.2'), sel('M.spindle_speed', 'v1.1'), sel('M.feed_rate', 'v1.1'),
       sel('S.machine_state', 'v1.3'), sel('S.alarm_code', 'v1.3'), sel('M.air_pressure', 'v1.0'), sel('M.motor_current', 'v1.1'),
-      sel('M.oil_pressure', 'v1.0'), sel('M.weld_current', 'v1.0'), sel('M.axis_load', 'v1.0'),
+      sel('M.oil_pressure', 'v1.0'), sel('M.weld_current', 'v1.0'), sel('M.axis_load', 'v1.0'), sel('M.output', 'v1.1'), sel('M.qualified', 'v1.1'),
     ],
   },
   { product: '振动传感器 VB12', metrics: [sel('M.vib_amplitude', 'v2.0'), sel('M.bearing_temp', 'v1.0')] },

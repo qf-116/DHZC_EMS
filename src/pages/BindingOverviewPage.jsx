@@ -13,7 +13,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  App, Alert, Button, Card, Checkbox, Input, Modal, Select, Space, Steps, Table, Tag, Tooltip, Typography,
+  App, Alert, Button, Card, Checkbox, Input, Modal, Select, Space, Steps, Switch, Table, Tag, Tooltip, Typography,
 } from 'antd';
 import { Plus, Save, Play, PauseCircle, Pencil, Trash2, Eye, ArrowRight, ArrowLeft } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
@@ -22,6 +22,7 @@ import StatusTag from '../components/StatusTag.jsx';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import { selectAllDevices, selectBindingDraft } from '../state/selectors.js';
 import { validateBindingDraft } from '../domain/binding.js';
+import { normalizeMetricMeta } from '../domain/alarmRule.js';
 
 // ---------- 绑定草稿弹窗（三步向导：① 选主设备（设备管理台账）→ ② 选物联网平台子设备 →
 // ③ 选监控指标（可选））。勾选子设备即自动发现其上报的全部指标（reducer binding/addSource 带出），
@@ -130,6 +131,29 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
   const draftItems = draft?.items || [];
   const discoveredMetrics = draftItems.reduce((s, i) => s + (i.metrics || []).length, 0);
   const monitoredMetrics = draftItems.reduce((s, i) => s + (i.metrics || []).filter((m) => m.monitored).length, 0);
+  // OEE 计算配置（2026-11-05）：候选 = 草稿中已勾选监控的指标；开启时按目录默认语义自动预选（状态→S.machine_state、M.output→产量、M.qualified→合格数）
+  const oeeCfg = draft?.oee || { enabled: false };
+  const monitoredMetricDefs = React.useMemo(() => {
+    const seen = new Map();
+    draftItems.forEach((i) => (i.metrics || []).forEach((m) => {
+      if (m.monitored && !seen.has(m.metricCode)) {
+        const def = normalizeMetricMeta(state.entities.metricsByKey[m.metricCode]);
+        if (def && def.syncStatus !== '已失效') seen.set(m.metricCode, def);
+      }
+    }));
+    return [...seen.values()];
+  }, [draftItems, state]);
+  const setOee = (patch) => {
+    let next = { ...oeeCfg, ...patch };
+    if (patch.enabled === true) {
+      // 开启时自动预选：状态指标取唯一状态类监控指标；产量 / 合格数按目录编码默认匹配
+      const stateM = monitoredMetricDefs.find((d) => d.dataType === 'state');
+      next.stateMetricCode = next.stateMetricCode || (stateM?.metricCode || null);
+      next.outputMetricCode = next.outputMetricCode || (monitoredMetricDefs.some((d) => d.metricCode === 'M.output') ? 'M.output' : null);
+      next.qualifiedMetricCode = next.qualifiedMetricCode || (monitoredMetricDefs.some((d) => d.metricCode === 'M.qualified') ? 'M.qualified' : null);
+    }
+    actions.setDraftOee(deviceId, next);
+  };
   const selectedDevice = allDevices.find((d) => d.deviceId === deviceId);
   // 设备绑定情况：已有绑定（含历史停用）即视为「已绑定」——不能重复新建，只能编辑；
   // 未保存的草稿不算已绑定（放弃草稿即可重新新建）
@@ -173,6 +197,17 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
     if (!draft) { message.warning('请先勾选物联网平台子设备，生成绑定草稿'); return; }
     const res = validateBindingDraft(draft, { metricsByKey: state.entities.metricsByKey });
     if (!res.ok) { message.error(`校验未通过：${res.errors.join('；')}`); return; }
+    // OEE 校验（2026-11-05）：开启时状态 / 产量指标必映射，且映射的指标须已勾选监控
+    if (draft.oee?.enabled) {
+      const missing = [];
+      if (!draft.oee.stateMetricCode) missing.push('状态指标未映射');
+      if (!draft.oee.outputMetricCode) missing.push('产量指标未映射');
+      if (missing.length) { message.error(`OEE 指标映射未完成：${missing.join('、')}（合格数指标可留空，留空则质量率不可计算）`); return; }
+      const monitoredCodes = new Set(draftItems.flatMap((i) => (i.metrics || []).filter((m) => m.monitored).map((m) => m.metricCode)));
+      const notMonitored = [draft.oee.stateMetricCode, draft.oee.outputMetricCode, draft.oee.qualifiedMetricCode]
+        .filter((c) => c && !monitoredCodes.has(c));
+      if (notMonitored.length) { message.error(`OEE 映射的指标未勾选监控：${notMonitored.join('、')}，请先纳入监控或调整映射`); return; }
+    }
     const r = actions.saveBinding(deviceId, `绑定草稿：${draftItems.length} 个来源 / 自动接入 ${discoveredMetrics} 项指标 / 监控 ${monitoredMetrics} 项`);
     if (r.ok) {
       message.success(monitoredMetrics > 0
@@ -386,6 +421,62 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
           <Typography.Paragraph type="secondary" style={{ fontSize: 12, marginBottom: 0 }}>
             共接入 <b>{discoveredMetrics}</b> 项指标 · 已勾选监控 <b>{monitoredMetrics}</b> 项
           </Typography.Paragraph>
+
+          <Card
+            size="small"
+            title={(
+              <Space size={10}>
+                <span>OEE 计算</span>
+                <Switch size="small" checked={!!oeeCfg.enabled} onChange={(v) => setOee({ enabled: v })} />
+                <span style={{ fontSize: 12, fontWeight: 400, color: oeeCfg.enabled ? '#16a34a' : '#8a97a3' }}>
+                  {oeeCfg.enabled ? '参与 OEE 计算' : '不参与 OEE 计算'}
+                </span>
+              </Space>
+            )}
+            style={{ marginTop: 8 }}
+          >
+            {oeeCfg.enabled ? (
+              <>
+                <div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 8 }}>
+                  OEE 指标映射：为公式入参指定取数指标（候选 = 已勾选监控的指标）。状态 / 产量必映射，合格数可留空（留空则质量率不可计算）。
+                </div>
+                <table style={{ width: '100%', fontSize: 13, borderCollapse: 'collapse' }}>
+                  <tbody>
+                    {[
+                      ['状态指标（可用率）', 'stateMetricCode', '必选', '提供运行 / 待机 / 故障状态流，聚合出运行时长'],
+                      ['产量指标（性能率）', 'outputMetricCode', '必选', '当日加工数量计数，结合速度配置的理想速度计算性能率'],
+                      ['合格数指标（质量率）', 'qualifiedMetricCode', '可选', '当日合格数量计数；留空则质量率不可计算并注明原因'],
+                    ].map(([label, field, req, desc]) => (
+                      <tr key={field}>
+                        <td style={{ padding: '6px 8px', width: 190, borderBottom: '1px solid #eef1f4', color: '#5d6b78' }}>
+                          {label} {req === '必选' && <span style={{ color: '#dc2626' }}>*</span>}
+                        </td>
+                        <td style={{ padding: '6px 8px', borderBottom: '1px solid #eef1f4' }}>
+                          <Select
+                            style={{ width: 280 }}
+                            allowClear={req !== '必选'}
+                            placeholder={monitoredMetricDefs.length ? '选择已勾选监控的指标' : '请先在上方勾选监控指标'}
+                            value={oeeCfg[field] || undefined}
+                            onChange={(v) => setOee({ [field]: v || null })}
+                            notFoundContent="无已勾选监控的指标"
+                            options={monitoredMetricDefs.map((d) => ({
+                              value: d.metricCode,
+                              label: `${d.name}（${d.metricCode}）· ${d.dataType === 'state' ? '状态' : '数值'}`,
+                            }))}
+                          />
+                          <div style={{ fontSize: 12, color: '#8a97a3', marginTop: 2 }}>{desc}</div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </>
+            ) : (
+              <div style={{ fontSize: 12, color: '#8a97a3' }}>
+                不参与 OEE 计算：综合运行分析 / 实时 OEE / 大屏中该设备 OEE 显示「未纳入 OEE 计算」；监控指标照常勾选。
+              </div>
+            )}
+          </Card>
         </>
       )}
     </Modal>
@@ -682,7 +773,9 @@ export default function BindingOverviewPage() {
             { title: '设备名称', width: 130, render: (_, r) => r.device.name },
             { title: '来源设备数', width: 100, render: (_, r) => `${(r.binding?.items || []).filter((i) => i.enabled).length} 个` },
             { title: '接入指标', width: 90, render: (_, r) => `${r.metricTotal} 项` },
-            { title: '监控指标', width: 90, render: (_, r) => `${r.metricMonitored} 项` },
+            { title: 'OEE', width: 90, render: (_, r) => (r.binding?.oee?.enabled === false
+              ? <Tag>未参与</Tag>
+              : <Tag color="success">参与</Tag>) },
             { title: '拉取周期', width: 90, render: (_, r) => (r.binding ? `${r.binding.pullCycleSec} 秒` : '--') },
             {
               title: '配置状态', width: 100,

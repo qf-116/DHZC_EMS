@@ -260,8 +260,27 @@ export function selectOeeResult(state, deviceId, { window = 'realtime', day = nu
     if (!Number.isNaN(toMs)) plannedWindow = { fromMs: toMs - 60 * 60000, toMs };
   }
   const plannedDowntimeMinutesValue = plannedDowntimeMinutes(state, deviceId, plannedWindow);
-  const blockers = oeeBlockers({ ...raw }, config);
-  const result = blockers.length ? { availability: null, performance: null, quality: null, oee: null } : computeOee({
+  // OEE 计算配置（2026-11-05，绑定 oee 字段）：未参与 → 不计算；参与但映射缺失 → 列入 blocker（合格数可留空 → 质量率/OEE 不可算）
+  const oeeCfg = binding?.oee;
+  const oeeCfgBlockers = [];
+  if (oeeCfg && oeeCfg.enabled === false) {
+    return {
+      deviceId, window, day: day || state.meta.demoDay,
+      availability: null, performance: null, quality: null, oee: null,
+      loadMinutes: raw?.loadMinutes ?? null, runMinutes: raw?.runMinutes ?? null,
+      plannedDowntimeMinutes: null, idealSpeed: null, actualSpeed: null,
+      output: raw?.output ?? null, qualified: raw?.qualified ?? null,
+      materialCode: raw?.materialCode || null, dataComplete: raw?.dataComplete || '--',
+      dataStatus: '未纳入 OEE 计算', blockers: ['该设备未纳入 OEE 计算（绑定配置）'], eligibility, target: null,
+    };
+  }
+  if (oeeCfg && oeeCfg.enabled) {
+    if (!oeeCfg.stateMetricCode) oeeCfgBlockers.push('OEE 状态指标未映射（可用率不可计算）');
+    if (!oeeCfg.outputMetricCode) oeeCfgBlockers.push('OEE 产量指标未映射（性能率不可计算）');
+  }
+  const blockers = [...oeeCfgBlockers, ...oeeBlockers({ ...raw }, config)];
+  const oeeQualityBlocked = oeeCfg && oeeCfg.enabled && !oeeCfg.qualifiedMetricCode;
+  const resultRaw = blockers.length ? { availability: null, performance: null, quality: null, oee: null } : computeOee({
     loadMinutes: raw.loadMinutes,
     plannedDowntimeMinutes: plannedDowntimeMinutesValue,
     runMinutes: raw.runMinutes,
@@ -271,6 +290,10 @@ export function selectOeeResult(state, deviceId, { window = 'realtime', day = nu
     output: raw.output,
     qualified: raw.qualified,
   });
+  const result = oeeQualityBlocked && !blockers.length
+    ? { ...resultRaw, quality: null, oee: null }
+    : resultRaw;
+  if (oeeQualityBlocked && !blockers.length) blockers.push('合格数指标未映射，质量率不可计算');
   return {
     deviceId, window, day: day || state.meta.demoDay,
     ...result,
@@ -283,7 +306,7 @@ export function selectOeeResult(state, deviceId, { window = 'realtime', day = nu
     qualified: raw.qualified,
     materialCode: raw.materialCode,
     dataComplete: raw.dataComplete || '--',
-    dataStatus: blockers.length ? '不可计算' : '正常',
+    dataStatus: blockers.length ? (oeeCfgBlockers.length ? 'OEE 映射不完整' : '不可计算') : '正常',
     blockers,
     eligibility,
     target: state.entities.oeeTargetsByDeviceId[deviceId]?.target ?? null,

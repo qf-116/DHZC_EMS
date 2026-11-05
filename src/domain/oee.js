@@ -35,8 +35,12 @@ export function oeeBlockers(input = {}, config = {}) {
   if (config.idealSpeed == null) blockers.push('该物料未配置理想生产速度/标准节拍');
   if (input.runMinutes == null) blockers.push('缺少运行时间数据');
   if (input.runMinutes === 0 && !input.output) blockers.push('窗口内无生产数据（运行时间为 0 且无产出）');
-  if (input.output == null) blockers.push('缺少产量数据');
-  if (input.qualified == null) blockers.push('缺少质量（良品）数据');
+  if (input.reportCount === 0) {
+    blockers.push('窗口内无报工记录');
+  } else if (input.reportCount != null) {
+    if (input.output == null) blockers.push('缺少产量数据');
+    if (input.qualified == null) blockers.push('缺少质量（良品）数据');
+  }
   return blockers;
 }
 
@@ -85,21 +89,31 @@ export function computeMttrMtbf(repairFacts = [], faultEvents = [], runMinutesTo
 }
 
 
-// ---------- 产出计数器窗口差值（2026-11-05）----------
-// state.entities.oeeCounters[deviceId][metricCode] = [{ t: 'HH:MM', cum }]（PLC 累计计数采样）；
-// 取 ≤ 时点的最近累计值之差——实时 OEE = 最近 1 小时差值，日 OEE = 全天差值。
-export function counterWindowDiff(state, deviceId, metricCode, fromTime, toTime) {
-  const series = (state?.entities?.oeeCounters?.[deviceId] || {})[metricCode];
-  if (!series || !series.length) return null;
-  const cumAt = (t) => {
-    let v = null;
-    for (const p of series) {
-      if (p.t <= t) v = p.cum; else break;
-    }
-    return v;
+// ---------- 报工事件窗口汇总（2026-11-05）----------
+// 报工事件 = { reportTime: 'YYYY-MM-DD HH:mm:ss', quantity, qualified, metricCode }
+// 产量 = 窗口内 quantity 之和；合格数 = 窗口内 qualified=true 的 quantity 之和。
+// 按报工时间（reportTime）归窗，receivedAt 只用于延迟/补偿判断，不参与归属。
+export function productionReportWindowStats(reports = [], { day = null, fromTime = null, toTime = null, metricCode = null } = {}) {
+  const rows = (reports || []).filter((r) => {
+    if (metricCode && r.metricCode !== metricCode) return false;
+    const ts = String(r.reportTime || '');
+    if (day && ts.slice(0, 10) !== day) return false;
+    const hm = ts.slice(11, 16);
+    if (fromTime && hm < fromTime) return false;
+    if (toTime && hm > toTime) return false;
+    return true;
+  });
+  if (!rows.length) {
+    return { count: 0, output: null, qualified: null, firstReportTime: null, lastReportTime: null };
+  }
+  const output = rows.reduce((s, r) => s + (Number(r.quantity) || 0), 0);
+  const qualified = rows.reduce((s, r) => s + (r.qualified ? (Number(r.quantity) || 0) : 0), 0);
+  const times = rows.map(r => r.reportTime).sort();
+  return {
+    count: rows.length,
+    output,
+    qualified,
+    firstReportTime: times[0],
+    lastReportTime: times[times.length - 1],
   };
-  const a = cumAt(fromTime);
-  const b = cumAt(toTime);
-  if (a == null || b == null) return null;
-  return Math.max(0, b - a);
 }

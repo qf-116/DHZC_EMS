@@ -3,10 +3,11 @@ import { Card, Table, Button, Select, Space, Tag, Tooltip, Empty } from 'antd';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useDemoState } from '../state/DemoStore.jsx';
 import {
-  selectOeeResult, selectOeeLosses, selectMttrMtbf, selectAllDevices,
+  selectOeeResult, selectOeeLosses, selectMttrMtbf, selectAllDevices, selectProductionReports,
 } from '../state/selectors.js';
 import PageHeader from '../components/PageHeader.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
+import ProductionReportTable from '../components/ProductionReportTable.jsx';
 
 // 历史 OEE 日明细：路由 /oee-history/detail/:deviceId（兼容旧 /oee-history/detail?device=xxx）。
 // 展示该设备当日输入项、三率与 OEE 计算过程、损失分解与 MTTR/MTBF；
@@ -50,6 +51,14 @@ export default function OeeHistoryDetailPage() {
   const result = useMemo(() => selectOeeResult(state, deviceId, { window: 'daily', day }), [state, deviceId, day]);
   const losses = useMemo(() => selectOeeLosses(state, deviceId, { window: 'daily', day }), [state, deviceId, day]);
   const mttrMtbf = useMemo(() => selectMttrMtbf(state, deviceId), [state, deviceId]);
+  const reports = useMemo(
+    () => selectProductionReports(state, deviceId, {
+      window: 'daily',
+      day,
+      metricCode: result.reportMetricCode || 'E.production_report',
+    }),
+    [state, deviceId, day, result.reportMetricCode],
+  );
 
   if (!device) {
     return (
@@ -86,8 +95,9 @@ export default function OeeHistoryDetailPage() {
     { key: 'material', label: '生产物料', value: result.materialCode || '--' },
     { key: 'idealSpeed', label: '理想生产速度（速度配置 SC）', value: speedText(result.idealSpeed) },
     { key: 'actualSpeed', label: '实际生产速度（产出 / 运行时间折算）', value: speedText(result.actualSpeed) },
-    { key: 'output', label: '总产量', value: result.output ?? '--' },
-    { key: 'qualified', label: '良品数量', value: result.qualified ?? '--' },
+    { key: 'reportCount', label: '报工事件（当日）', value: result.reportCount == null ? '--' : `${result.reportCount} 条` },
+    { key: 'output', label: '总产量（报工事件汇总）', value: result.output ?? '--' },
+    { key: 'qualified', label: '良品数量（合格报工汇总）', value: result.qualified ?? '--' },
     { key: 'complete', label: '数据完整率', value: result.dataComplete || '--' },
   ];
 
@@ -125,6 +135,15 @@ export default function OeeHistoryDetailPage() {
             { title: '数值', dataIndex: 'value', align: 'right' },
           ]}
         />
+      </Card>
+
+      <Card
+        size="small"
+        title="当日报工记录（OEE 源数据）"
+        style={{ marginBottom: 12 }}
+        extra={<span style={{ fontSize: 12, color: '#8a97a3' }}>一条报工 = 报工时间 + 数量（默认 +1）+ 是否合格；产量 / 合格数由此汇总</span>}
+      >
+        <ProductionReportTable state={state} reports={reports} pageSize={10} />
       </Card>
 
       <Card size="small" title="计算过程" style={{ marginBottom: 12 }}>

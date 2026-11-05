@@ -13,11 +13,12 @@ import { normalizeLegacyRule } from '../../domain/alarmRule.js';
 import { repairReports, repairOrders, repairAcceptances } from './repairs.js';
 import { warehouses, spares, stock, inbounds, outbounds, returns, stockFlows } from './spares.js';
 import { downtimeFacts } from './downtime.js';
-import { materialPool, speedConfigs, oeeTargets, shiftCalendar, oeeInputs, oeeEligibility, oeeRecomputeLog, oeeCounters } from './oee.js';
+import { materialPool, speedConfigs, oeeTargets, shiftCalendar, oeeInputs, oeeEligibility, oeeRecomputeLog } from './oee.js';
+import { productionReportsByDeviceId } from './productionReports.js';
 import { programCompare, programBaselines, programHandles } from './programCompare.js';
 import { lifecycleTasks, assetChangeRecords, idleApplications, scrapApplications } from './lifecycle.js';
 
-export const STORE_VERSION = 17; // 快照结构版本：指标目录新增产出计数指标（旧快照绑定 items 回填缺失指标，monitored=false）
+export const STORE_VERSION = 18; // 快照结构版本：OEE 改为报工事件驱动（去累计计数指标，新增 productionReportsByDeviceId）
 
 export const DEMO_META = {
   mode: 'demo',
@@ -65,7 +66,7 @@ export function createDemoState() {
       stockFlowsById: Object.fromEntries(stockFlows.map(f => [f.flowId, f])),
       downtimeFactsById: Object.fromEntries(downtimeFacts.map(d => [d.downtimeId, d])),
       materialPool,
-      oeeCounters,
+      productionReportsByDeviceId,
       speedConfigsById: Object.fromEntries(speedConfigs.map(s => [s.id, s])),
       oeeTargetsByDeviceId: Object.fromEntries(oeeTargets.map(t => [t.deviceId, t])),
       shiftCalendar,

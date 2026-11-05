@@ -12,7 +12,7 @@ export const bindingsByDeviceId = {
     bindingId: 'binding-001-v2', deviceId: 'DEV-001', version: 2, configStatus: '已启用', healthStatus: '正常',
     effectiveFrom: '2026-06-01 09:00', effectiveTo: null, pullCycleSec: 60, lastPullTime: '2026-09-16 16:41:10', pullFailCount: 0, pendingCompensation: 0,
     items: [
-      { iotDeviceId: 'iot-main-001', iotDeviceCode: 'IOT-D-10001', role: 'main', sensorType: '--', enabled: true, metrics: [sel('M.spindle_temp', 'v1.2'), sel('M.coolant_temp', 'v1.2'), sel('M.spindle_speed', 'v1.1'), sel('M.feed_rate', 'v1.1'), sel('S.machine_state', 'v1.3'), sel('S.alarm_code', 'v1.3')] },
+      { iotDeviceId: 'iot-main-001', iotDeviceCode: 'IOT-D-10001', role: 'main', sensorType: '--', enabled: true, metrics: [sel('M.spindle_temp', 'v1.2'), sel('M.coolant_temp', 'v1.2'), sel('M.spindle_speed', 'v1.1'), sel('M.feed_rate', 'v1.1'), sel('S.machine_state', 'v1.3'), sel('S.alarm_code', 'v1.3'), sel('E.production_report', 'v1.0')] },
       { iotDeviceId: 'iot-s-20011', iotDeviceCode: 'IOT-S-20011', role: 'sensor', sensorType: '振动传感器', enabled: true, metrics: [sel('M.vib_amplitude', 'v2.0'), sel('M.bearing_temp', 'v1.0', false)] },
       { iotDeviceId: 'iot-s-20012', iotDeviceCode: 'IOT-S-20012', role: 'sensor', sensorType: '温度传感器', enabled: true, metrics: [sel('M.bearing_temp', 'v1.0')] },
     ],
@@ -21,14 +21,14 @@ export const bindingsByDeviceId = {
     bindingId: 'binding-002-v2', deviceId: 'DEV-002', version: 2, configStatus: '已启用', healthStatus: '延迟',
     effectiveFrom: '2026-08-30 09:00', effectiveTo: null, pullCycleSec: 60, lastPullTime: '2026-09-16 16:38:22', pullFailCount: 0, pendingCompensation: 12,
     items: [
-      { iotDeviceId: 'iot-main-002', iotDeviceCode: 'IOT-D-10002', role: 'main', sensorType: '--', enabled: true, metrics: [sel('M.spindle_temp', 'v1.2'), sel('M.coolant_temp', 'v1.2'), sel('M.spindle_speed', 'v1.1'), sel('S.machine_state', 'v1.3')] },
+      { iotDeviceId: 'iot-main-002', iotDeviceCode: 'IOT-D-10002', role: 'main', sensorType: '--', enabled: true, metrics: [sel('M.spindle_temp', 'v1.2'), sel('M.coolant_temp', 'v1.2'), sel('M.spindle_speed', 'v1.1'), sel('S.machine_state', 'v1.3'), sel('E.production_report', 'v1.0')] },
     ],
   },
   'DEV-003': {
     bindingId: 'binding-003-v1', deviceId: 'DEV-003', version: 1, configStatus: '已启用', healthStatus: '部分中断',
     effectiveFrom: '2026-07-15 14:00', effectiveTo: null, pullCycleSec: 60, lastPullTime: '2026-09-16 16:40:55', pullFailCount: 1, pendingCompensation: 2,
     items: [
-      { iotDeviceId: 'iot-main-003', iotDeviceCode: 'IOT-D-10003', role: 'main', sensorType: '--', enabled: true, metrics: [sel('M.spindle_temp', 'v1.2'), sel('M.spindle_speed', 'v1.1'), sel('S.machine_state', 'v1.3')] },
+      { iotDeviceId: 'iot-main-003', iotDeviceCode: 'IOT-D-10003', role: 'main', sensorType: '--', enabled: true, metrics: [sel('M.spindle_temp', 'v1.2'), sel('M.spindle_speed', 'v1.1'), sel('S.machine_state', 'v1.3'), sel('E.production_report', 'v1.0')] },
       { iotDeviceId: 'iot-s-20031', iotDeviceCode: 'IOT-S-20031', role: 'sensor', sensorType: '振动传感器', enabled: true, metrics: [sel('M.vib_amplitude', 'v2.0')] },
       { iotDeviceId: 'iot-s-20032', iotDeviceCode: 'IOT-S-20032', role: 'sensor', sensorType: '温度传感器', enabled: false, metrics: [sel('M.bearing_temp', 'v1.0')] },
     ],
@@ -37,7 +37,7 @@ export const bindingsByDeviceId = {
     bindingId: 'binding-004-v2', deviceId: 'DEV-004', version: 2, configStatus: '已启用', healthStatus: '正常',
     effectiveFrom: '2026-08-10 08:00', effectiveTo: null, pullCycleSec: 60, lastPullTime: '2026-09-16 16:41:07', pullFailCount: 0, pendingCompensation: 0,
     items: [
-      { iotDeviceId: 'iot-main-004', iotDeviceCode: 'IOT-D-10004', role: 'main', sensorType: '--', enabled: true, metrics: [sel('M.spindle_temp', 'v1.2'), sel('M.oil_pressure', 'v1.0'), sel('M.axis_load', 'v1.0'), sel('S.machine_state', 'v1.3')] },
+      { iotDeviceId: 'iot-main-004', iotDeviceCode: 'IOT-D-10004', role: 'main', sensorType: '--', enabled: true, metrics: [sel('M.spindle_temp', 'v1.2'), sel('M.oil_pressure', 'v1.0'), sel('M.axis_load', 'v1.0'), sel('S.machine_state', 'v1.3'), sel('E.production_report', 'v1.0')] },
       { iotDeviceId: 'iot-s-20041', iotDeviceCode: 'IOT-S-20041', role: 'sensor', sensorType: '温度传感器', enabled: true, metrics: [sel('M.bearing_temp', 'v1.0')] },
     ],
   },
@@ -80,7 +80,7 @@ export const iotProducts = [
     metrics: [
       sel('M.spindle_temp', 'v1.2'), sel('M.coolant_temp', 'v1.2'), sel('M.spindle_speed', 'v1.1'), sel('M.feed_rate', 'v1.1'),
       sel('S.machine_state', 'v1.3'), sel('S.alarm_code', 'v1.3'), sel('M.air_pressure', 'v1.0'), sel('M.motor_current', 'v1.1'),
-      sel('M.oil_pressure', 'v1.0'), sel('M.weld_current', 'v1.0'), sel('M.axis_load', 'v1.0'), sel('M.output', 'v1.1'), sel('M.qualified', 'v1.1'),
+      sel('M.oil_pressure', 'v1.0'), sel('M.weld_current', 'v1.0'), sel('M.axis_load', 'v1.0'), sel('E.production_report', 'v1.0'),
     ],
   },
   { product: '振动传感器 VB12', metrics: [sel('M.vib_amplitude', 'v2.0'), sel('M.bearing_temp', 'v1.0')] },

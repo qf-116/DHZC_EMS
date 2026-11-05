@@ -377,7 +377,8 @@ export function reducer(state, action) {
     }
     case 'binding/setDraftOee': {
       // OEE 计算配置（2026-11-05）：作用于绑定草稿，保存时随草稿整体落库到绑定实体（oee 字段）。
-      // oee: { enabled, stateMetricCode, outputMetricCode, qualifiedMetricCode } —— 候选 = 已勾选监控的指标。
+      // oee: { enabled, stateMetricCode, reportMetricCode } —— 候选 = 已勾选监控的指标；
+      // 报工事件自带报工时间 / 数量 / 合格标记，产量与合格数由事件汇总。
       const key = `draft-${payload.deviceId}`;
       const drafts = state.ui.bindingDraftsByDeviceId || {};
       const draft = drafts[key];

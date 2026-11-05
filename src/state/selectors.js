@@ -4,7 +4,7 @@
 // 之后的重算结果可见（§6.8 / §11.1）。
 // ============================================================
 
-import { computeOee, oeeBlockers, oeeLossBreakdown, computeMttrMtbf, pct, round1, counterWindowDiff } from '../domain/oee.js';
+import { computeOee, oeeBlockers, oeeLossBreakdown, computeMttrMtbf, pct, round1, productionReportWindowStats } from '../domain/oee.js';
 import { availableQty, stockLevel } from '../domain/spare.js';
 import { reportRows as reportSeedRows } from '../data/demoData.js';
 
@@ -226,7 +226,23 @@ function speedFor(state, deviceId) {
     .find(c => c.deviceId === deviceId && c.status === '生效') || null;
 }
 
+// OEE 统计窗口：realtime = 最近 1 小时；daily = 统计日 08:00 ~ 口径截止
+function oeeWindowBounds(state, window, day = null) {
+  const dayKey = day || state.meta.demoDay;
+  if (window === 'realtime') {
+    // 以最后样本时间（数据口径截止）锚定窗口，避免业务动作推进演示时钟后窗口漂移
+    const d = new Date(String(state.meta.lastSampleAt || state.meta.updatedAt || '').replace(' ', 'T'));
+    if (Number.isNaN(d.getTime())) return { day: dayKey, fromTime: '15:41', toTime: '16:41' };
+    const toTime = `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+    const from = new Date(d.getTime() - 60 * 60000);
+    const fromTime = `${String(from.getHours()).padStart(2, '0')}:${String(from.getMinutes()).padStart(2, '0')}`;
+    return { day: dayKey, fromTime, toTime };
+  }
+  return { day: dayKey, fromTime: '08:00', toTime: '16:41' };
+}
+
 // OEE 结果：window='realtime'（最近 1 小时）或 'daily'（按天）
+// 产量 / 合格数由报工事件在窗口内汇总（2026-11-05 口径），不再读取聚合结果。
 // 返回 null 数值字段一律表示「不可计算」，页面必须显示原因而不是 0
 export function selectOeeResult(state, deviceId, { window = 'realtime', day = null } = {}) {
   const inputsMap = state.entities.oeeInputs[window] || {};
@@ -236,6 +252,7 @@ export function selectOeeResult(state, deviceId, { window = 'realtime', day = nu
   const eligibility = state.entities.oeeEligibilityByDeviceId[deviceId] || {};
   const binding = selectBinding(state, deviceId);
   const health = selectHealth(state, deviceId);
+  const bounds = oeeWindowBounds(state, window, day);
 
   const config = {
     hasBinding: binding?.configStatus === '已启用'
@@ -246,8 +263,10 @@ export function selectOeeResult(state, deviceId, { window = 'realtime', day = nu
   };
   if (!raw) {
     return {
-      deviceId, window, day: day || state.meta.demoDay,
+      deviceId, window, day: bounds.day,
       availability: null, performance: null, quality: null, oee: null,
+      output: null, qualified: null,
+      reportCount: 0, reportMetricCode: null, reportWindow: { from: bounds.fromTime, to: bounds.toTime },
       plannedDowntimeMinutes: null, blockers: ['该窗口无生产数据'], dataStatus: '无生产数据',
       eligibility, target: state.entities.oeeTargetsByDeviceId[deviceId]?.target ?? null,
     };
@@ -259,57 +278,65 @@ export function selectOeeResult(state, deviceId, { window = 'realtime', day = nu
   let plannedWindow = day || state.meta.demoDay;
   if (window === 'realtime') {
     // 实时窗口为最近 1 小时：计划停机只取与该区间的交集分钟
-    const toMs = new Date(String(state.meta.updatedAt || state.meta.lastSampleAt || '').replace(' ', 'T')).getTime();
+    const toMs = new Date(String(state.meta.lastSampleAt || state.meta.updatedAt || '').replace(' ', 'T')).getTime();
     if (!Number.isNaN(toMs)) plannedWindow = { fromMs: toMs - 60 * 60000, toMs };
   }
   const plannedDowntimeMinutesValue = plannedDowntimeMinutes(state, deviceId, plannedWindow);
-  // OEE 计算配置（2026-11-05，绑定 oee 字段）：未参与 → 不计算；参与但映射缺失 → 列入 blocker（合格数可留空 → 质量率/OEE 不可算）
+  // OEE 计算配置（绑定 oee 字段）：未参与 → 不计算；参与但映射缺失 → 列入 blocker。
+  // 状态指标（可用率）+ 报工事件（性能率 + 质量率）两项必映射。
   const oeeCfg = binding?.oee;
   const oeeCfgBlockers = [];
+  const reportMetricCode = oeeCfg?.enabled
+    ? (oeeCfg.reportMetricCode || (oeeCfg.outputMetricCode ? 'E.production_report' : null))
+    : 'E.production_report';
+  const reportStats = reportMetricCode
+    ? productionReportWindowStats(state.entities.productionReportsByDeviceId?.[deviceId] || [], {
+        day: bounds.day,
+        fromTime: bounds.fromTime,
+        toTime: bounds.toTime,
+        metricCode: reportMetricCode,
+      })
+    : { count: null, output: null, qualified: null, firstReportTime: null, lastReportTime: null };
+  const output = reportStats.output;
+  const qualified = reportStats.qualified;
+  const reportCount = reportStats.count;
   if (oeeCfg && oeeCfg.enabled === false) {
     return {
-      deviceId, window, day: day || state.meta.demoDay,
+      deviceId, window, day: bounds.day,
       availability: null, performance: null, quality: null, oee: null,
-      loadMinutes: raw?.loadMinutes ?? null, runMinutes: raw?.runMinutes ?? null,
+      loadMinutes: raw.loadMinutes ?? null, runMinutes: raw.runMinutes ?? null,
       plannedDowntimeMinutes: null, idealSpeed: null, actualSpeed: null,
-      output: raw?.output ?? null, qualified: raw?.qualified ?? null,
-      materialCode: raw?.materialCode || null, dataComplete: raw?.dataComplete || '--',
+      output, qualified, reportCount, reportMetricCode,
+      reportWindow: { from: bounds.fromTime, to: bounds.toTime },
+      firstReportTime: reportStats.firstReportTime, lastReportTime: reportStats.lastReportTime,
+      materialCode: raw.materialCode || null, dataComplete: raw.dataComplete || '--',
       dataStatus: '未纳入 OEE 计算', blockers: ['该设备未纳入 OEE 计算（绑定配置）'], eligibility, target: null,
     };
   }
   if (oeeCfg && oeeCfg.enabled) {
     if (!oeeCfg.stateMetricCode) oeeCfgBlockers.push('OEE 状态指标未映射（可用率不可计算）');
-    if (!oeeCfg.outputMetricCode) oeeCfgBlockers.push('OEE 产量指标未映射（性能率不可计算）');
+    if (!reportMetricCode) oeeCfgBlockers.push('OEE 报工事件未映射（性能率/质量率不可计算）');
   }
-  const blockers = [...oeeCfgBlockers, ...oeeBlockers({ ...raw }, config)];
-  const oeeQualityBlocked = oeeCfg && oeeCfg.enabled && !oeeCfg.qualifiedMetricCode;
-  // 产量 / 合格数取映射指标的计数器窗口差值（2026-11-05 口径）：
-  // 实时窗口 = 最近 1 小时差值；日窗口 = 当日 08:00 起累计差值。无计数器数据时回退快照值。
-  const oeeMapOut = (oeeCfg?.enabled && oeeCfg.outputMetricCode) || 'M.output';
-  const oeeMapQual = (oeeCfg?.enabled && oeeCfg.qualifiedMetricCode) || 'M.qualified';
-  const toTime = String(day || state.meta.updatedAt || '').slice(11, 16) || '16:41';
-  const fromTime = window === 'realtime'
-    ? (() => { const d = new Date(String(state.meta.updatedAt || '').replace(' ', 'T')); if (Number.isNaN(d.getTime())) return '15:41'; d.setMinutes(d.getMinutes() - 60); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; })()
-    : '08:00';
-  const output = counterWindowDiff(state, deviceId, oeeMapOut, fromTime, toTime) ?? raw.output;
-  const qualified = counterWindowDiff(state, deviceId, oeeMapQual, fromTime, toTime) ?? raw.qualified;
-  const resultRaw = blockers.length ? { availability: null, performance: null, quality: null, oee: null } : computeOee({
+  const input = {
+    ...raw,
+    output: reportMetricCode ? output : null,
+    qualified: reportMetricCode ? qualified : null,
+    reportCount,
+  };
+  const blockers = [...oeeCfgBlockers, ...oeeBlockers(input, config)];
+  const result = blockers.length ? { availability: null, performance: null, quality: null, oee: null } : computeOee({
     loadMinutes: raw.loadMinutes,
     plannedDowntimeMinutes: plannedDowntimeMinutesValue,
     runMinutes: raw.runMinutes,
     idealSpeed: config.idealSpeedPerHour,
-    actualSpeed: config.idealSpeedPerHour != null && raw.runMinutes > 0
+    actualSpeed: config.idealSpeedPerHour != null && raw.runMinutes > 0 && output != null
       ? round1((output / raw.runMinutes) * 60) : null,
     output,
     qualified,
   });
-  const result = oeeQualityBlocked && !blockers.length
-    ? { ...resultRaw, quality: null, oee: null }
-    : resultRaw;
-  if (oeeQualityBlocked && !blockers.length) blockers.push('合格数指标未映射，质量率不可计算');
   const performanceOver = (result.performance != null && result.performance > 100);
   return {
-    deviceId, window, day: day || state.meta.demoDay,
+    deviceId, window, day: bounds.day,
     ...result,
     loadMinutes: raw.loadMinutes,
     runMinutes: raw.runMinutes,
@@ -317,16 +344,42 @@ export function selectOeeResult(state, deviceId, { window = 'realtime', day = nu
     idealSpeedSec: speedCfg?.idealSpeedSec ?? null,
     idealSpeedPerHour: config.idealSpeedPerHour,
     performanceOver,
-    actualSpeed: config.idealSpeedPerHour != null && raw.runMinutes > 0 ? round1((output / raw.runMinutes) * 60) : null,
+    actualSpeed: config.idealSpeedPerHour != null && raw.runMinutes > 0 && output != null
+      ? round1((output / raw.runMinutes) * 60) : null,
     output,
     qualified,
-    counterWindow: { from: fromTime, to: toTime },
+    reportCount,
+    reportMetricCode,
+    reportWindow: { from: bounds.fromTime, to: bounds.toTime },
+    firstReportTime: reportStats.firstReportTime,
+    lastReportTime: reportStats.lastReportTime,
     dataComplete: raw.dataComplete || '--',
     dataStatus: blockers.length ? (oeeCfgBlockers.length ? 'OEE 映射不完整' : '不可计算') : '正常',
     blockers,
     eligibility,
     target: state.entities.oeeTargetsByDeviceId[deviceId]?.target ?? null,
   };
+}
+
+// 报工事件明细：按统计窗口过滤（默认最近 1 小时；daily 为统计日 08:00 ~ 口径截止）
+export function selectProductionReports(state, deviceId, { window = 'realtime', day = null, metricCode = 'E.production_report' } = {}) {
+  const reports = state.entities.productionReportsByDeviceId?.[deviceId] || [];
+  const bounds = oeeWindowBounds(state, window, day);
+  return reports
+    .filter((r) => {
+      if (metricCode && r.metricCode !== metricCode) return false;
+      const ts = String(r.reportTime || '');
+      if (ts.slice(0, 10) !== bounds.day) return false;
+      const hm = ts.slice(11, 16);
+      return hm >= bounds.fromTime && hm <= bounds.toTime;
+    })
+    .sort((a, b) => (a.reportTime < b.reportTime ? -1 : 1));
+}
+
+// 报工汇总（报表范围聚合用）：day 为空时取统计日全天事件
+export function selectProductionReportStats(state, deviceId, day = null, metricCode = 'E.production_report') {
+  const reports = state.entities.productionReportsByDeviceId?.[deviceId] || [];
+  return productionReportWindowStats(reports, { day: day || state.meta.demoDay, metricCode });
 }
 
 export function selectOeeRealtimeRows(state) {

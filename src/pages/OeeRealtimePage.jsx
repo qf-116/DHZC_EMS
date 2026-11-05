@@ -1,14 +1,15 @@
 import React, { useMemo, useState } from 'react';
-import { Table, Tag, Button, Input, Select, Space, Tooltip } from 'antd';
+import { Drawer, Table, Tag, Button, Input, Select, Space, Tooltip, Typography } from 'antd';
 import { Link } from 'react-router-dom';
 import { Search } from 'lucide-react';
 import { useDemoState } from '../state/DemoStore.jsx';
 import {
-  selectOeeRealtimeRows, selectOeeResult, selectAllDevices,
+  selectOeeRealtimeRows, selectOeeResult, selectAllDevices, selectProductionReports,
 } from '../state/selectors.js';
 import PageHeader from '../components/PageHeader.jsx';
 import MetricTile from '../components/MetricTile.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
+import ProductionReportTable from '../components/ProductionReportTable.jsx';
 
 // 实时 OEE：全部数字由 selectOeeRealtimeRows 派生，页面不写死任何 OEE 值。
 // null = 不可计算（显示 '--'，悬停显示 blockers 原因），严格区别于 0。
@@ -29,6 +30,7 @@ export default function OeeRealtimePage() {
   const state = useDemoState();
   const [dept, setDept] = useState('all');
   const [kw, setKw] = useState('');
+  const [recordDeviceId, setRecordDeviceId] = useState(null);
 
   const devices = useMemo(() => selectAllDevices(state), [state]);
 
@@ -86,6 +88,7 @@ export default function OeeRealtimePage() {
   const rateCell = (v, r) => (v == null
     ? <Tooltip title={blockersText(r)}><span style={{ color: '#8a97a3' }}>--</span></Tooltip>
     : <span style={{ fontVariantNumeric: 'tabular-nums' }}>{v}%</span>);
+  const recordRow = rows.find(r => r.deviceId === recordDeviceId) || null;
 
   return (
     <>
@@ -127,6 +130,12 @@ export default function OeeRealtimePage() {
           { title: '负荷时间', width: 100, render: (_, r) => minutesText(r.loadMinutes) },
           { title: '计划停机时间', width: 120, render: (_, r) => minutesText(r.plannedDowntimeMinutes) },
           { title: '运行时间', width: 100, render: (_, r) => minutesText(r.runMinutes) },
+          {
+            title: '报工记录', width: 90,
+            render: (_, r) => (r.reportCount > 0
+              ? <Button type="link" size="small" style={{ padding: 0 }} onClick={() => setRecordDeviceId(r.deviceId)}>{r.reportCount} 条</Button>
+              : <span style={{ color: '#8a97a3' }}>--</span>),
+          },
           { title: '可用率', width: 90, render: (_, r) => rateCell(r.availability, r) },
           { title: '理论生产速度', width: 120, render: (_, r) => speedText(r.idealSpeedSec) },
           { title: '实际平均节拍', width: 120, render: (_, r) => (r.actualSpeed > 0 ? `${Math.round((3600 / r.actualSpeed) * 10) / 10} 秒/件` : '--') },
@@ -137,6 +146,29 @@ export default function OeeRealtimePage() {
           { title: '数据状态', dataIndex: 'dataStatus', width: 100, render: v => (v === '正常' ? <Tag color="success">正常</Tag> : <Tag>{v || '--'}</Tag>) },
         ]}
       />
+      <Drawer
+        title={recordRow ? `报工记录 · ${recordRow.device?.name || recordRow.deviceId}` : '报工记录'}
+        width={1000}
+        open={!!recordDeviceId}
+        onClose={() => setRecordDeviceId(null)}
+        destroyOnHidden
+      >
+        {recordRow && (
+          <>
+            <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
+              统计窗口 {recordRow.reportWindow?.from} ~ {recordRow.reportWindow?.to} · 窗口内 {recordRow.reportCount} 条报工 ·
+              产量 {recordRow.output ?? '--'} 件 / 合格 {recordRow.qualified ?? '--'} 件。产量与合格数均由报工事件汇总，不接受聚合结果上报。
+            </Typography.Paragraph>
+            <ProductionReportTable
+              state={state}
+              reports={selectProductionReports(state, recordDeviceId, {
+                window: 'realtime',
+                metricCode: recordRow.reportMetricCode || 'E.production_report',
+              })}
+            />
+          </>
+        )}
+      </Drawer>
     </>
   );
 }

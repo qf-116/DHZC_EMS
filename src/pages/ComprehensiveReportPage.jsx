@@ -9,7 +9,7 @@ import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
-import { selectReportRows, selectExportTasks, selectAllDevices } from '../state/selectors.js';
+import { selectReportRows, selectExportTasks, selectAllDevices, selectProductionReportStats } from '../state/selectors.js';
 
 // 窗口内计划停机分钟（计划停机+换模，只影响可用率分母）——与 selectors 内同一口径
 function plannedDowntimeMinutes(state, deviceId, day) {
@@ -39,9 +39,10 @@ const pctTag = (v, tip) => {
 };
 
 // 设备综合运行分析报表（2026-11-04 范围聚合口径）
-// - OEE 三率：由 oeeInputs.daily（负荷/运行分钟、产量、合格数）+ 停机事实（计划停机分钟）+ 速度配置，
-//   在统计日期范围内<b>逐日累加后重算</b>——可用率 = Σ运行 ÷ Σ(负荷 − 计划停机)；
-//   性能率 = Σ产量 ÷ Σ(理想速度 × 运行小时)；质量率 = Σ合格 ÷ Σ产量；OEE = 三率乘积（非各日平均）。
+// - OEE 三率：由 oeeInputs.daily（负荷/运行分钟）+ 生产报工事件（产量/合格数）
+//   + 停机事实（计划停机分钟）+ 速度配置，在统计日期范围内<b>逐日累加后重算</b>——
+//   可用率 = Σ运行 ÷ Σ(负荷 − 计划停机)；性能率 = Σ报工产量 ÷ Σ(理想速度 × 运行小时)；
+//   质量率 = Σ合格报工 ÷ Σ报工产量；OEE = 三率乘积（非各日平均）。
 // - 运行状态 / 稼动率 / 报警数 / 参数不一致数：当日快照口径（演示快照仅覆盖统计日 demoDay，
 //   范围不含统计日时这些列显示 '--'，不伪造 0）。
 // - 「数据完整率」列已按需求方确认删除（2026-11-04）。
@@ -103,8 +104,9 @@ export default function ComprehensiveReportPage() {
         a.load += raw.loadMinutes ?? 0;
         a.run += raw.runMinutes ?? 0;
         a.planned += planned ?? 0;
-        a.output += raw.output ?? 0;
-        a.qualified += raw.qualified ?? 0;
+        const reportStats = selectProductionReportStats(state, deviceId, day);
+        a.output += reportStats.output ?? 0;
+        a.qualified += reportStats.qualified ?? 0;
         const speed = speedFor(state, deviceId);
         const perHour = (speed?.idealSpeedSec > 0) ? 3600 / speed.idealSpeedSec : null;
         if (perHour && (raw.runMinutes ?? 0) >= 0) {

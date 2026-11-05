@@ -37,24 +37,25 @@ export const shiftCalendar = [
   { shiftId: 'night', name: '夜班', timeRange: '20:00 - 08:00（次日）', appliesTo: '全部设备', version: 1, effectiveFrom: '2026-01-01' },
 ];
 
-// oeeInputsByDeviceId：统计窗口原始输入（由监测数据与生产/质量点位汇总）
-// realtime：最近 1 小时滚动窗口；daily：按天统计（演示覆盖 09-01 ~ 09-16）
+// oeeInputsByDeviceId：统计窗口的时段与物料输入（产量 / 合格数不再存结果，
+// 由 productionReports 报工事件在窗口内汇总）
+// realtime：最近 1 小时滚动窗口；daily：按天统计（演示覆盖 2026-09-16）
 export const oeeInputs = {
   realtime: {
-    // 性能率 = 实际速度 / 理想速度，实际速度 = 产量/运行分钟×60；产量上限 = 理想速度×运行小时
-    'DEV-001': { loadMinutes: 60, runMinutes: 45, materialCode: 'XN010102-000001', output: 21, qualified: 20, dataComplete: '99.9%' },
-    'DEV-002': { loadMinutes: 60, runMinutes: 42, materialCode: 'XN010102-000001', output: 17, qualified: 16, dataComplete: '98.8%' },
-    'DEV-003': { loadMinutes: 60, runMinutes: 20, materialCode: 'XN020105-000003', output: 3, qualified: 3, dataComplete: '99.1%' },
-    'DEV-004': { loadMinutes: 60, runMinutes: 18, materialCode: 'XN010102-000002', output: 2, qualified: 2, dataComplete: '99.7%' },
+    // 性能率 = 实际速度 / 理想速度，实际速度 = 报工产量/运行分钟×60
+    'DEV-001': { loadMinutes: 60, runMinutes: 45, materialCode: 'XN010102-000001', dataComplete: '99.9%' },
+    'DEV-002': { loadMinutes: 60, runMinutes: 42, materialCode: 'XN010102-000001', dataComplete: '98.8%' },
+    'DEV-003': { loadMinutes: 60, runMinutes: 20, materialCode: 'XN020105-000003', dataComplete: '99.1%' },
+    'DEV-004': { loadMinutes: 60, runMinutes: 18, materialCode: 'XN010102-000002', dataComplete: '99.7%' },
     // DEV-005 无生产数据：整行显示不可计算原因，不伪造 0
     'DEV-005': null,
   },
   daily: {
-    // { deviceId: { '2026-09-16': { loadMinutes, runMinutes, materialCode, output, qualified } } }
-    'DEV-001': { '2026-09-16': { loadMinutes: 660, runMinutes: 528, materialCode: 'XN010102-000001', output: 225, qualified: 219 } },
-    'DEV-002': { '2026-09-16': { loadMinutes: 660, runMinutes: 502, materialCode: 'XN010102-000001', output: 210, qualified: 204 } },
-    'DEV-003': { '2026-09-16': { loadMinutes: 660, runMinutes: 390, materialCode: 'XN020105-000003', output: 68, qualified: 68 } },
-    'DEV-004': { '2026-09-16': { loadMinutes: 660, runMinutes: 315, materialCode: 'XN010102-000002', output: 46, qualified: 45 } },
+    // { deviceId: { '2026-09-16': { loadMinutes, runMinutes, materialCode } } }
+    'DEV-001': { '2026-09-16': { loadMinutes: 660, runMinutes: 528, materialCode: 'XN010102-000001' } },
+    'DEV-002': { '2026-09-16': { loadMinutes: 660, runMinutes: 502, materialCode: 'XN010102-000001' } },
+    'DEV-003': { '2026-09-16': { loadMinutes: 660, runMinutes: 390, materialCode: 'XN020105-000003' } },
+    'DEV-004': { '2026-09-16': { loadMinutes: 660, runMinutes: 315, materialCode: 'XN010102-000002' } },
     'DEV-005': null,
   },
 };
@@ -75,59 +76,7 @@ export const oeeRecomputeLog = [
 ];
 
 
-// ---------- 产出计数器（2026-11-05）----------
-// M.output / M.qualified 为 PLC 累计计数信号：按时间点记录当日累计值，
-// OEE 计算取「窗口起止累计差值」——实时 OEE = 最近 1 小时差值，日 OEE = 全天差值。
-// 终值与 oeeInputs.daily 的产量 / 合格数一致（口径勾稽）。
-export const oeeCounters = {
-  'DEV-001': {
-    'M.output': [
-      { t: '08:00', cum: 0 }, { t: '09:00', cum: 28 }, { t: '10:00', cum: 57 }, { t: '11:00', cum: 84 },
-      { t: '12:00', cum: 96 }, { t: '13:00', cum: 124 }, { t: '14:00', cum: 152 }, { t: '15:00', cum: 180 },
-      { t: '15:41', cum: 204 }, { t: '16:41', cum: 225 },
-    ],
-    'M.qualified': [
-      { t: '08:00', cum: 0 }, { t: '09:00', cum: 27 }, { t: '10:00', cum: 56 }, { t: '11:00', cum: 82 },
-      { t: '12:00', cum: 94 }, { t: '13:00', cum: 121 }, { t: '14:00', cum: 148 }, { t: '15:00', cum: 175 },
-      { t: '15:41', cum: 199 }, { t: '16:41', cum: 219 },
-    ],
-  },
-  'DEV-002': {
-    'M.output': [
-      { t: '08:00', cum: 0 }, { t: '09:00', cum: 24 }, { t: '10:00', cum: 47 }, { t: '11:00', cum: 70 },
-      { t: '12:00', cum: 82 }, { t: '13:00', cum: 108 }, { t: '14:00', cum: 134 }, { t: '15:00', cum: 158 },
-      { t: '15:41', cum: 193 }, { t: '16:41', cum: 210 },
-    ],
-    'M.qualified': [
-      { t: '08:00', cum: 0 }, { t: '09:00', cum: 23 }, { t: '10:00', cum: 45 }, { t: '11:00', cum: 67 },
-      { t: '12:00', cum: 78 }, { t: '13:00', cum: 103 }, { t: '14:00', cum: 128 }, { t: '15:00', cum: 151 },
-      { t: '15:41', cum: 178 }, { t: '16:41', cum: 194 },
-    ],
-  },
-  'DEV-003': {
-    'M.output': [
-      { t: '08:00', cum: 0 }, { t: '09:00', cum: 12 }, { t: '10:00', cum: 24 }, { t: '11:00', cum: 36 },
-      { t: '12:00', cum: 42 }, { t: '13:00', cum: 54 }, { t: '14:00', cum: 66 }, { t: '15:00', cum: 78 },
-      { t: '15:41', cum: 87 }, { t: '16:41', cum: 90 },
-    ],
-    'M.qualified': [
-      { t: '08:00', cum: 0 }, { t: '09:00', cum: 12 }, { t: '10:00', cum: 24 }, { t: '11:00', cum: 36 },
-      { t: '12:00', cum: 42 }, { t: '13:00', cum: 54 }, { t: '14:00', cum: 66 }, { t: '15:00', cum: 78 },
-      { t: '15:41', cum: 87 }, { t: '16:41', cum: 90 },
-    ],
-  },
-  'DEV-004': {
-    'M.output': [
-      { t: '08:00', cum: 0 }, { t: '09:00', cum: 10 }, { t: '10:00', cum: 20 }, { t: '11:00', cum: 30 },
-      { t: '12:00', cum: 34 }, { t: '13:00', cum: 38 }, { t: '14:00', cum: 42 }, { t: '15:00', cum: 45 },
-      { t: '15:41', cum: 44 }, { t: '16:41', cum: 46 },
-    ],
-    'M.qualified': [
-      { t: '08:00', cum: 0 }, { t: '09:00', cum: 10 }, { t: '10:00', cum: 20 }, { t: '11:00', cum: 30 },
-      { t: '12:00', cum: 34 }, { t: '13:00', cum: 38 }, { t: '14:00', cum: 42 }, { t: '15:00', cum: 45 },
-      { t: '15:41', cum: 44 }, { t: '16:41', cum: 46 },
-    ],
-  },
-};
-
-// 计数器窗口差值：fromTime / toTime 为 'HH:MM'；取 ≤ 时点的最近累计值之差
+// ---------- 报工事件（2026-11-05）----------
+// OEE 产量 / 合格数不再保存聚合结果，由 productionReportsByDeviceId 中的
+// 逐条报工事件（报工时间 / 数量+1 / 是否合格）在统计窗口内汇总。
+// 事件种子见 ./productionReports.js。

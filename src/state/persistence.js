@@ -51,25 +51,43 @@ function migrateParsed(parsed) {
     delete next.entities.healthByDeviceId?.[dev];
     delete next.entities.oeeInputs?.daily?.[dev];
     delete next.entities.oeeInputs?.realtime?.[dev];
-    delete next.entities.oeeCounters?.[dev];
+    delete next.entities.productionReportsByDeviceId?.[dev];
   }
-  // 绑定 items 指标回填（V16）：指标目录新增产出计数指标后，旧快照绑定 items 缺失目录指标 —— 补齐（monitored=false）
+  // 旧指标下线（V18）：OEE 改报工事件口径，删除「加工数量 / 合格数量」聚合指标
+  delete next.entities.metricsByKey['M.output'];
+  delete next.entities.metricsByKey['M.qualified'];
+  const OBSOLETE_METRICS = new Set(['M.output', 'M.qualified']);
+  // 报工事件实体（V18）：旧快照无此结构时补种子（报工事件为只读演示源数据）
+  if (!next.entities.productionReportsByDeviceId) {
+    next.entities.productionReportsByDeviceId = base.entities.productionReportsByDeviceId;
+  }
+  delete next.entities.oeeCounters;
+  // 绑定 items 指标回填（V16/V18）：指标目录新增报工事件指标后，旧快照绑定 items 缺失目录指标 —— 补齐（monitored=false）
   const catalogCodes = Object.keys(base.entities.metricsByKey || {});
   next.entities.bindingsByDeviceId = Object.fromEntries(
-    Object.entries(parsed.entities?.bindingsByDeviceId || {}).map(([id, b]) => {
-      const items = (b.items || []).map((item) => {
-        const have = new Set((item.metrics || []).map((m) => m.metricCode));
-        const filled = [...(item.metrics || []), ...catalogCodes
-          .filter((c) => !have.has(c))
-          .map((c) => ({ metricCode: c, metricVersion: base.entities.metricsByKey[c]?.metricVersion || null, monitored: false }))];
-        return { ...item, metrics: filled };
-      });
-      return [id, { ...b, items }];
-    })
+    Object.entries(next.entities.bindingsByDeviceId || {})
+      .filter(([id]) => !REMOVED_DEVICES.includes(id))
+      .map(([id, b]) => {
+        const items = (b.items || []).map((item) => {
+          const kept = (item.metrics || []).filter((m) => !OBSOLETE_METRICS.has(m.metricCode));
+          const have = new Set(kept.map((m) => m.metricCode));
+          const filled = [...kept, ...catalogCodes
+            .filter((c) => !have.has(c))
+            .map((c) => ({ metricCode: c, metricVersion: base.entities.metricsByKey[c]?.metricVersion || null, monitored: false }))];
+          return { ...item, metrics: filled };
+        });
+        // OEE 配置迁移（V18）：旧「产量指标 / 合格数指标」映射收敛为「报工事件」映射
+        const oee = b.oee ? {
+          enabled: !!b.oee.enabled,
+          stateMetricCode: b.oee.stateMetricCode || null,
+          reportMetricCode: b.oee.reportMetricCode || (b.oee.outputMetricCode ? 'E.production_report' : null),
+        } : b.oee;
+        return [id, { ...b, items, ...(b.oee ? { oee } : {}) }];
+      })
   );
   // 来源设备 product 回填（V15）：旧快照来源设备无产品归属，按名称推断（主控制器→网关 / 振动→VB12 / 温度→TP08）
   next.entities.sourceDevicesById = Object.fromEntries(
-    Object.entries(parsed.entities?.sourceDevicesById || {}).map(([id, s]) => {
+    Object.entries(next.entities.sourceDevicesById || {}).map(([id, s]) => {
       if (s.product) return [id, s];
       const n = `${s.name || ''}${s.iotDeviceCode || ''}`;
       const product = /振动/.test(n) ? '振动传感器 VB12' : /温度/.test(n) ? '温度传感器 TP08' : '工业智能网关 GW200';

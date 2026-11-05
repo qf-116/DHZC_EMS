@@ -1,6 +1,6 @@
 // ============================================================
 // 平台指标清单 + 接入任务（/platform-metrics · 数据接入域）
-// 指标来自 src/data/demo/metrics.js（14 项，含版本 / 单位 / 失效标记，只读，
+// 指标来自 src/data/demo/metrics.js（15 项，含版本 / 单位 / 失效标记，只读，
 // 编辑由平台接入服务提供，本页不自建指标、不改协议/网关/点位）。
 // 接入任务来自 store（selectIngestionTasks，IT-001..004：重试中/部分成功/失败/成功），
 // 展示 failReason / impact / nextStep。搜索/筛选为页面 UI 局部状态。

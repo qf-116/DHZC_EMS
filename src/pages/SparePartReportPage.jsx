@@ -5,6 +5,7 @@ import { Bar, BarChart, CartesianGrid, Legend, ResponsiveContainer, Tooltip, XAx
 import { Download } from 'lucide-react';
 import { App } from 'antd';
 import PageHeader from '../components/PageHeader.jsx';
+import ColTitle from '../components/ColTitle.jsx';
 import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import MetricTile from '../components/MetricTile.jsx';
 import StatusTag from '../components/StatusTag.jsx';
@@ -147,10 +148,10 @@ export default function SparePartReportPage() {
     { title: '覆盖仓库', dataIndex: 'warehouseText', ellipsis: true },
     { title: '现存合计', dataIndex: 'onHand', width: 90, align: 'center', sorter: (a, b) => a.onHand - b.onHand },
     { title: '预留', dataIndex: 'reserved', width: 80, align: 'center' },
-    { title: '可用', dataIndex: 'available', width: 80, align: 'center', render: v => <Tag color="processing">{v}</Tag> },
+    { title: <ColTitle title="可用" tip="可用 = 现存 − 预留（与备件台账统一口径）；未配置显示 --" />, dataIndex: 'available', width: 80, align: 'center', render: v => <Tag color="processing">{v}</Tag> },
     { title: '安全库存', dataIndex: 'safe', width: 90, align: 'center', render: fmt },
     { title: '最大库存', dataIndex: 'max', width: 90, align: 'center', render: fmt },
-    { title: '库存水位', dataIndex: 'level', width: 120, render: v => <StatusTag value={v} /> },
+    { title: <ColTitle title="库存水位" tip="按各仓库现存合计与安全 / 最高库存判定：低于安全库存 / 超储 / 正常（与备件台账判定一致）" />, dataIndex: 'level', width: 120, render: v => <StatusTag value={v} /> },
     { title: '入库累计', dataIndex: 'inboundQty', width: 90, align: 'center', render: v => (v > 0 ? <Tag color="success">+{v}</Tag> : '--') },
     { title: '出库累计', dataIndex: 'outboundQty', width: 90, align: 'center', render: v => (v > 0 ? <Tag color="orange">-{v}</Tag> : '--') },
     { title: '退库累计', dataIndex: 'returnQty', width: 90, align: 'center', render: v => (v > 0 ? <Tag color="success">+{v}</Tag> : '--') },

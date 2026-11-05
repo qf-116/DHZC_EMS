@@ -5,6 +5,7 @@ import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxi
 import { Download } from 'lucide-react';
 import { App } from 'antd';
 import PageHeader from '../components/PageHeader.jsx';
+import ColTitle from '../components/ColTitle.jsx';
 import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import MetricTile from '../components/MetricTile.jsx';
 import StatusTag from '../components/StatusTag.jsx';
@@ -138,14 +139,14 @@ export default function RepairReportPage() {
       render: v => (v > 0 ? <Tag color="error">{v}</Tag> : v),
     },
     {
-      title: 'SLA 达成', key: 'sla', width: 100, align: 'center',
+      title: <ColTitle title="SLA 达成" tip="SLA 达成率 = 已完成工单中「验收时间 ≤ 承诺完成时间」的单数 ÷ 已完成工单数 × 100%（承诺完成 = 创建时间 + 等级时限：紧急 2h / 严重 8h / 一般 24h）" />, key: 'sla', width: 100, align: 'center',
       sorter: (a, b) => (a.slaDone ? a.slaMet / a.slaDone : -1) - (b.slaDone ? b.slaMet / b.slaDone : -1),
       render: (_, r) => (r.slaDone === 0
         ? <Tag title="暂无已完成工单，无法统计 SLA 达成">--</Tag>
         : <Tag color={r.slaMet === r.slaDone ? 'success' : 'warning'}>{r.slaMet}/{r.slaDone}</Tag>),
     },
     {
-      title: '超期未闭环', dataIndex: 'overdueOpen', width: 100, align: 'center',
+      title: <ColTitle title="超期未闭环" tip="未取消且未完成、承诺完成时间早于统计日的工单数；挂起不暂停 SLA 计时" />, dataIndex: 'overdueOpen', width: 100, align: 'center',
       render: v => (v > 0 ? <Tag color="error">{v}</Tag> : v),
     },
   ];

@@ -3,6 +3,7 @@ import { App, Button, Card, DatePicker, Select, Space, Table, Tag, Tooltip } fro
 import dayjs from 'dayjs';
 import { Download } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
+import ColTitle from '../components/ColTitle.jsx';
 import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -197,11 +198,11 @@ export default function ComprehensiveReportPage() {
       render: (_, r) => (r.comp?.state ? <StatusTag value={r.comp.state} /> : '--'),
     },
     {
-      title: '稼动率', key: 'rate', width: 100,
+      title: <ColTitle title="稼动率" tip="稼动率 = 运行 ÷（运行 + 待机 + 故障）× 100%，离线不计入分母（统计日快照口径）" />, key: 'rate', width: 100,
       render: (_, r) => (r.comp?.rate ? <Tag color="success">{r.comp.rate}</Tag> : '--'),
     },
     {
-      title: 'OEE', key: 'oee', width: 100,
+      title: <ColTitle title="OEE" tip="OEE = 可用率 × 性能率 × 质量率（统计范围内逐日累加后重算，非各日平均）；低于目标值橙色标注" />, key: 'oee', width: 90,
       render: (_, r) => (r.agg && r.agg.oee !== null
         ? <Tooltip title={`目标 ${targetOf[r.agg.deviceId] ?? '--'}% · 可用率×性能率×质量率（范围内重算）`}>
             <Tag color={targetOf[r.agg.deviceId] != null && r.agg.oee < targetOf[r.agg.deviceId] ? 'warning' : 'success'}>{r.agg.oee.toFixed(1)}%</Tag>
@@ -209,21 +210,21 @@ export default function ComprehensiveReportPage() {
         : <Tooltip title={r.agg ? `${r.agg.blockers.join('；') || '该范围不可计算'}` : '统计范围内无生产数据'}><Tag>--</Tag></Tooltip>),
     },
     {
-      title: '可用率', key: 'availability', width: 100,
+      title: <ColTitle title="可用率" tip="可用率 = Σ 运行分钟 ÷ Σ（负荷分钟 − 计划停机分钟）× 100%（计划停机 = 当日计划停机 + 换模）" />, key: 'availability', width: 100,
       render: (_, r) => (r.agg
         ? pctTag(r.agg.availability != null ? r.agg.availability.toFixed(1) : null,
           r.agg.availability != null ? '可用率 = Σ运行分钟 ÷ Σ(负荷 − 计划停机)' : (r.agg.blockers.join('；') || '该范围不可计算'))
         : '--'),
     },
     {
-      title: '性能率', key: 'performance', width: 100,
+      title: <ColTitle title="性能率" tip="性能率 = Σ 产量 ÷ Σ（理想速度 × 运行小时）× 100%；理想速度按各日生产物料的生效基准速度取值" />, key: 'performance', width: 100,
       render: (_, r) => (r.agg
         ? pctTag(r.agg.performance != null ? r.agg.performance.toFixed(1) : null,
           r.agg.performance != null ? '性能率 = Σ产量 ÷ Σ(理想速度 × 运行小时)' : (r.agg.blockers.join('；') || '该范围不可计算'))
         : '--'),
     },
     {
-      title: '质量率', key: 'quality', width: 100,
+      title: <ColTitle title="质量率" tip="质量率 = Σ 合格数 ÷ Σ 产量 × 100%" />, key: 'quality', width: 100,
       render: (_, r) => (r.agg
         ? pctTag(r.agg.quality != null ? r.agg.quality.toFixed(1) : null,
           r.agg.quality != null ? '质量率 = Σ合格数 ÷ Σ产量' : '统计范围内无产量数据')

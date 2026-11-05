@@ -3,6 +3,7 @@ import { Alert, App, Button, Card, DatePicker, Select, Space, Table, Tag, Toolti
 import dayjs from 'dayjs';
 import { Download } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
+import ColTitle from '../components/ColTitle.jsx';
 import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -177,26 +178,29 @@ export default function MttrMtbfReportPage() {
     { title: '设备', dataIndex: 'deviceName', width: 160 },
     { title: '车间', dataIndex: 'workshopName', width: 110 },
     {
-      title: '故障次数（已关闭状态事件）', dataIndex: 'faultCount', width: 130, align: 'center',
+      title: <ColTitle title="故障次数" tip="已关闭的设备状态故障类报警事件数（S.machine_state 且状态=已关闭）；未关闭的瞬时抖动不计入" />, dataIndex: 'faultCount', width: 110, align: 'center',
       sorter: (a, b) => a.faultCount - b.faultCount,
       render: v => <Tag color={v >= 5 ? 'error' : v >= 3 ? 'warning' : v > 0 ? 'success' : 'default'}>{v > 0 ? `${v} 次` : '--'}</Tag>,
     },
-    { title: '维修总时长', dataIndex: 'repairTime', width: 110, render: v => v || '--' },
+    { title: <ColTitle title="维修总时长" tip="统计范围内已完成工单的单次修复时长（验收通过 − 开工）之和" />, dataIndex: 'repairTime', width: 110, render: v => v || '--' },
     {
-      title: 'MTTR（平均修复时间）', dataIndex: 'mttr', width: 130,
+      title: <ColTitle title="MTTR" tip="平均修复时间 = Σ 单次修复时长（验收通过 − 开工）÷ 已完成工单数" />, dataIndex: 'mttr', width: 90,
+
       render: (v, r) => (v === null
         ? <Tooltip title={r.sampleNote || '样本量不足，无法计算'}><Tag>--</Tag></Tooltip>
         : <Tooltip title="MTTR = 已完成维修单（开工 → 验收通过）修复时长均值"><Tag color="processing">{fmtDur(v)}</Tag></Tooltip>),
     },
-    { title: '累计运行时长', dataIndex: 'runMinutes', width: 120, render: v => (v > 0 ? fmtDur(v) : '--') },
+    { title: <ColTitle title="运行时长" tip="统计范围内逐日有效运行时长合计" />, dataIndex: 'runMinutes', width: 110, render: v => (v > 0 ? fmtDur(v) : '--') },
     {
-      title: 'MTBF（平均故障间隔）', dataIndex: 'mtbf', width: 130,
+      title: <ColTitle title="MTBF" tip="平均故障间隔 = 累计有效运行时长 ÷ 故障次数" />, dataIndex: 'mtbf', width: 90,
+
       render: (v, r) => (v === null
         ? <Tooltip title={r.sampleNote || '样本量不足，无法计算'}><Tag>--</Tag></Tooltip>
         : <Tooltip title="MTBF = 有效运行时长 ÷ 已关闭状态故障事件数"><Tag color="processing">{fmtDur(v)}</Tag></Tooltip>),
     },
     {
-      title: '可用率', dataIndex: 'availability', width: 100,
+      title: <ColTitle title="可用率" tip="可用率 = 运行时长 ÷（运行时长 + 维修总时长）× 100%；≥98% 绿色" />, dataIndex: 'availability', width: 100,
+
       render: (v, r) => (v === null
         ? <Tooltip title={r.sampleNote || '运行时长或维修时长样本不足'}><Tag>--</Tag></Tooltip>
         : <Tooltip title="可用率 = 运行 ÷（运行 + 故障维修）"><Tag color={parseFloat(v) >= 98 ? 'success' : 'warning'}>{v}</Tag></Tooltip>),

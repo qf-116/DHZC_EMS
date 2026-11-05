@@ -3,6 +3,7 @@ import { Card, Table, Button, Space, Statistic, App, Row, Col, DatePicker } from
 import dayjs from 'dayjs';
 import { FileBarChart, Download } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
+import ColTitle from '../components/ColTitle.jsx';
 import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
@@ -76,7 +77,7 @@ export default function PatrolReportPage() {
     { title: '进行中', dataIndex: 'running', width: 90, align: 'center' },
     { title: '未开始', dataIndex: 'notStarted', width: 90, align: 'center' },
     { title: '逾期', dataIndex: 'overdue', width: 90, align: 'center', render: (v) => (v > 0 ? <span style={{ color: '#cf1322' }}>{v}</span> : v) },
-    { title: '漏检项目数', dataIndex: 'missed', width: 110, align: 'center', render: (v) => (v > 0 ? <span style={{ color: '#cf1322' }}>{v}</span> : v) },
+    { title: <ColTitle title="漏检" tip="漏检项目数 = 各巡检任务未检项之和；跳过设备须填写跳过原因" />, dataIndex: 'missed', width: 110, align: 'center', render: (v) => (v > 0 ? <span style={{ color: '#cf1322' }}>{v}</span> : v) },
     { title: '完成率', dataIndex: 'doneRate', width: 100, align: 'center', render: (v) => (v === null || v === undefined ? '--' : `${v}%`) },
     { title: '计划状态', key: 'status', width: 100, render: (_, r) => {
       const plan = patrolPlans.find(p => p.name === r.plan);

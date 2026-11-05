@@ -3,6 +3,7 @@ import { Card, Table, Tabs, Button, Tooltip, Typography, Modal, Space, Tag, Date
 import dayjs from 'dayjs';
 import { Download } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
+import ColTitle from '../components/ColTitle.jsx';
 import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -132,11 +133,11 @@ export default function MaintenanceReportPage() {
     { title: '已完成', dataIndex: 'done', width: 80 },
     { title: '已关闭', dataIndex: 'closed', width: 80 },
     {
-      title: '计划完成率', dataIndex: 'rate', width: 100,
+      title: <ColTitle title="计划完成率" tip="计划完成率 = 已完成任务数 ÷ 任务总数 × 100%（不含已关闭）" />, dataIndex: 'rate', width: 100,
       render: (v) => <Typography.Text strong={v !== '--'}>{v}</Typography.Text>,
     },
     {
-      title: '异常率', dataIndex: 'abnormalRate', width: 100,
+      title: <ColTitle title="异常率" tip="异常率 = 未正常完成的保养项目数 ÷ 保养项目总数 × 100%（仅设备维度有明细数据）" />, dataIndex: 'abnormalRate', width: 100,
       render: (v, r) => (v === '--' ? <Tooltip title={r.abnormalTip}>--</Tooltip> : <Tooltip title={r.abnormalTip}><Typography.Text type="warning">{v}</Typography.Text></Tooltip>),
     },
     {
@@ -152,7 +153,7 @@ export default function MaintenanceReportPage() {
     { title: '已关闭', dataIndex: 'closed', width: 80 },
     { title: '计划完成率', dataIndex: 'rate', width: 100, render: v => <Typography.Text strong={v !== '--'}>{v}</Typography.Text> },
     {
-      title: '异常率', dataIndex: 'abnormalRate', width: 100,
+      title: <ColTitle title="异常率" tip="异常率 = 未正常完成的保养项目数 ÷ 保养项目总数 × 100%（仅设备维度有明细数据）" />, dataIndex: 'abnormalRate', width: 100,
       render: (v) => <Tooltip title="暂无该执行人的保养项目明细数据，无法计算异常率">--</Tooltip>,
     },
     {

@@ -3,6 +3,7 @@ import { App, Button, Card, DatePicker, Select, Space, Table, Tag } from 'antd';
 import dayjs from 'dayjs';
 import { Download } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
+import ColTitle from '../components/ColTitle.jsx';
 import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -124,8 +125,8 @@ export default function ProductionReportPage() {
     { title: '加工数量', dataIndex: 'processed', width: 100, render: fmt },
     { title: '合格数量', dataIndex: 'qualified', width: 100, render: fmt },
     { title: '不合格数量', dataIndex: 'unqualified', width: 110, render: fmt },
-    { title: '合格率', dataIndex: 'passRate', width: 90, render: v => (v == null || v === '' ? '--' : <Tag color="success">{v}</Tag>) },
-    { title: '平均加工节拍', dataIndex: 'beat', width: 120, render: fmt },
+    { title: <ColTitle title="合格率" tip="合格率 = 汇总合格数量 ÷ 汇总加工数量 × 100%（按合计口径重算，非各日平均）" />, dataIndex: 'passRate', width: 90, render: v => (v == null || v === '' ? '--' : <Tag color="success">{v}</Tag>) },
+    { title: <ColTitle title="平均节拍" tip="平均加工节拍 = Σ（各日节拍 × 各日产量）÷ Σ 产量（按产量加权平均）" />, dataIndex: 'beat', width: 110, render: fmt },
   ];
 
   return (

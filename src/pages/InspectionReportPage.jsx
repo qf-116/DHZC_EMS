@@ -3,6 +3,7 @@ import { Card, Table, Button, Space, Statistic, App, DatePicker } from 'antd';
 import dayjs from 'dayjs';
 import { Download } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
+import ColTitle from '../components/ColTitle.jsx';
 import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
 import StatusTag from '../components/StatusTag.jsx';
@@ -140,8 +141,8 @@ export default function InspectionReportPage() {
             { title: '进行中', dataIndex: 'running', width: 90 },
             { title: '待执行', dataIndex: 'pending', width: 90 },
             { title: '已关闭', dataIndex: 'closed', width: 90 },
-            { title: '逾期数（派生）', dataIndex: 'overdue', width: 120 },
-            { title: '完成率', dataIndex: 'done', width: 100, render: (_, r) => pct(r.done, r.total) },
+            { title: <ColTitle title="逾期数" tip="点检日期早于统计日且未完结（未开始 / 进行中）的任务数（派生计算）" />, dataIndex: 'overdue', width: 110 },
+            { title: <ColTitle title="完成率" tip="完成率 = 已完成任务数 ÷ 任务总数 × 100%" />, dataIndex: 'done', width: 100, render: (_, r) => pct(r.done, r.total) },
             { title: '异常检出率', width: 110, render: () => <span title="暂无异常判定数据">--</span> },
           ]}
         />

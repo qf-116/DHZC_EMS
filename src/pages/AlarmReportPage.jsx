@@ -3,6 +3,7 @@ import { App, Button, Card, DatePicker, Select, Space, Table, Tag, Tooltip } fro
 import dayjs from 'dayjs';
 import { Download } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
+import ColTitle from '../components/ColTitle.jsx';
 import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -165,21 +166,19 @@ export default function AlarmReportPage() {
       title: `${k}级别`, key: `sev-${k}`, width: 90, align: 'center',
       render: (_, r) => (r.severity[k] > 0 ? severityTag(k, r.severity[k]) : '--'),
     })),
-    { title: '重复抑制', dataIndex: 'repeat', width: 100, align: 'center', render: v => (v > 0 ? <Tag color="warning">{v}</Tag> : v) },
+    { title: <ColTitle title="重复抑制" tip="同一设备同一规则存在未关闭事件时再次触发不新建事件，仅合并计数；重复占比过高提示规则需调参" />, dataIndex: 'repeat', width: 100, align: 'center', render: v => (v > 0 ? <Tag color="warning">{v}</Tag> : v) },
     { title: '升级次数', dataIndex: 'escalation', width: 100, align: 'center', render: v => (v > 0 ? <Tag color="error">{v}</Tag> : v) },
     {
-      title: '平均确认时长', key: 'avgAck', width: 120,
+      title: <ColTitle title="平均确认时长" tip="平均确认时长 = Σ（确认时刻 − 触发时刻）÷ 已确认事件数；跨日确认按 +24h 计" />, key: 'avgAck', width: 120,
       render: (_, r) => (r.avgAck || <Tag>--</Tag>),
     },
     {
-      title: '平均关闭时长', key: 'avgClose', width: 120,
+      title: <ColTitle title="平均关闭时长" tip="平均关闭时长 = Σ（关闭时刻 − 触发时刻）÷ 已关闭事件数（关闭时刻取履历「关闭」条目）" />, key: 'avgClose', width: 120,
       render: (_, r) => (r.avgClose || <Tag>--</Tag>),
     },
     {
       title: (
-        <Tooltip title="时限口径：紧急 2h / 重要 8h / 一般 24h（提示不计时限）；未关闭事件按演示时刻判定">
-          <span>SLA 超时</span>
-        </Tooltip>
+        <ColTitle title="SLA 超时" tip="超过等级处理时限的事件条数（紧急 2h / 重要 8h / 一般 24h，提示不计时限）；未关闭事件按演示时刻判定；0 为真实结果" />
       ),
       key: 'slaBreach', width: 110, align: 'center',
       render: (_, r) => (r.slaBreach > 0 ? <Tag color="error">{r.slaBreach} 条</Tag> : <Tag>0</Tag>),

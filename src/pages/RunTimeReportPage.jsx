@@ -3,6 +3,7 @@ import { App, Button, Card, DatePicker, Select, Space, Table, Tag, Tooltip } fro
 import dayjs from 'dayjs';
 import { Download } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
+import ColTitle from '../components/ColTitle.jsx';
 import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -149,13 +150,13 @@ export default function RunTimeReportPage() {
     { title: '待机', dataIndex: 'standby', width: 90 },
     { title: '故障', dataIndex: 'fault', width: 90 },
     { title: '离线', dataIndex: 'offline', width: 90 },
-    { title: '稼动率', dataIndex: 'rate', width: 90, render: (v, r) => (
+    { title: <ColTitle title="稼动率" tip="稼动率 = Σ 运行 ÷（Σ 运行 + Σ 待机 + Σ 故障）× 100%，离线不计入分母（按汇总时长重算，非各日平均）" />, dataIndex: 'rate', width: 90, render: (v, r) => (
       <Tooltip title={`稼动率 = ${r.run} ÷（${r.run} + ${r.standby} + ${r.fault}），离线 ${r.offline} 不计入分母`}><Tag color="success">{v}</Tag></Tooltip>
     ) },
     { title: '状态占比', dataIndex: 'ratio', minWidth: 240 },
-    { title: '切换次数', dataIndex: 'switches', width: 100, sorter: (a, b) => a.switches - b.switches },
-    { title: '最长连续运行', dataIndex: 'maxRun', width: 120, sorter: (a, b) => String(a.maxRun).localeCompare(String(b.maxRun)) },
-    { title: '最长离线', dataIndex: 'maxOffline', width: 100, sorter: (a, b) => String(a.maxOffline).localeCompare(String(b.maxOffline)) },
+    { title: <ColTitle title="切换次数" tip="统计范围内设备状态跳变次数逐日求和" />, dataIndex: 'switches', width: 100, sorter: (a, b) => a.switches - b.switches },
+    { title: <ColTitle title="最长连续运行" tip="统计范围内各日最长连续运行段的最大值；跨天段落连续计算" />, dataIndex: 'maxRun', width: 120, sorter: (a, b) => String(a.maxRun).localeCompare(String(b.maxRun)) },
+    { title: <ColTitle title="最长离线" tip="统计范围内各日最长离线段的最大值" />, dataIndex: 'maxOffline', width: 100, sorter: (a, b) => String(a.maxOffline).localeCompare(String(b.maxOffline)) },
   ];
 
   return (

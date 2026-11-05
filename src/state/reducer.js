@@ -1097,13 +1097,13 @@ export function reducer(state, action) {
     case 'oee/saveSpeed': {
       const cfg = E.speedConfigsById[payload.configId];
       if (!cfg) return reject(state, action, '速度配置不存在');
-      if (!(payload.idealSpeed > 0)) return reject(state, action, '理想速度必须为正数');
-      const updated = { ...cfg, idealSpeed: payload.idealSpeed, version: (cfg.version || 1) + 1, effectiveFrom: dateOnly(at), status: '生效' };
+      if (!(payload.idealSpeedSec > 0)) return reject(state, action, '理论生产速度必须为正数');
+      const updated = { ...cfg, idealSpeedSec: payload.idealSpeedSec, version: (cfg.version || 1) + 1, effectiveFrom: dateOnly(at), status: '生效' };
       let next = setE(state, 'speedConfigsById', cfg.id, updated);
       const rcId = `RC-${dateOnly(at).replaceAll('-', '')}-${seq()}`;
-      next = setE(next, 'oeeRecomputeLogById', rcId, { recomputeId: rcId, deviceId: cfg.deviceId, range: `${dateOnly(at)} 起`, reason: `理想速度配置 v${updated.version} 变更`, at, revision: Object.keys(next.entities.oeeRecomputeLogById).length + 1 });
-      next = addHistory(next, at, 'oee', cfg.id, `理想速度变更为 ${payload.idealSpeed}（v${updated.version}）`, { deviceId: cfg.deviceId });
-      return finish(next, action, true, `速度配置已保存：v${updated.version}，生效 ${dateOnly(at)}；受影响设备 ${cfg.deviceName}，已触发 OEE 重算`, { configId: cfg.id, recomputeId: rcId }, false, at);
+      next = setE(next, 'oeeRecomputeLogById', rcId, { recomputeId: rcId, deviceId: cfg.deviceId, range: `${dateOnly(at)} 起`, reason: `理论生产速度配置 v${updated.version} 变更`, at, revision: Object.keys(next.entities.oeeRecomputeLogById).length + 1 });
+      next = addHistory(next, at, 'oee', cfg.id, `理论生产速度变更为 ${payload.idealSpeedSec} 秒/件（v${updated.version}）`, { deviceId: cfg.deviceId });
+      return finish(next, action, true, `理论生产速度已保存：v${updated.version}，生效 ${dateOnly(at)}；受影响设备 ${cfg.deviceName}，已触发 OEE 重算`, { configId: cfg.id, recomputeId: rcId }, false, at);
     }
     case 'oee/saveConfig': {
       const target = payload.target;

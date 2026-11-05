@@ -454,12 +454,12 @@ export function createDemoActions(state, dispatch) {
     },
 
     // ---------- OEE ----------
-    saveSpeedConfig(configId, idealSpeed) {
+    saveSpeedConfig(configId, idealSpeedSec) {
       const cfg = E.speedConfigsById[configId];
       if (!cfg) return fail('速度配置不存在');
-      if (!(idealSpeed > 0)) return fail('理想速度必须为正数');
-      act('oee/saveSpeed', { configId, idealSpeed }, `speed:${configId}:v${(cfg.version || 1) + 1}`);
-      return { ok: true, message: `速度配置已保存（v${(cfg.version || 1) + 1}），已触发 OEE 重算`, refs: { configId } };
+      if (!(idealSpeedSec > 0)) return fail('理论生产速度必须为正数');
+      act('oee/saveSpeed', { configId, idealSpeedSec }, `speed:${configId}:v${(cfg.version || 1) + 1}`);
+      return { ok: true, message: `理论生产速度已保存（v${(cfg.version || 1) + 1}），已触发 OEE 重算`, refs: { configId } };
     },
     saveOeeConfig(deviceId, target) {
       if (!(target > 0 && target <= 100)) return fail('OEE 目标必须为 0 ~ 100');

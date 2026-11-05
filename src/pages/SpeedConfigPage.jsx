@@ -1,24 +1,24 @@
 import React, { useMemo, useState, useEffect } from 'react';
-import { Table, Button, Input, Space, Modal, Form, InputNumber, DatePicker, Tag, App, Card } from 'antd';
+import { Table, Input, Modal, Form, InputNumber, Tag, App, Card, Tooltip } from 'antd';
+import { Info } from 'lucide-react';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import { selectOeeRecomputeLog } from '../state/selectors.js';
 import PageHeader from '../components/PageHeader.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
 import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 
-// 理想生产速度配置：设备 × 物料的性能率基准（性能率 = 实际速度 / 理想速度）。
-// 数据来自 store（speedConfigsById）；保存走 actions.saveSpeedConfig：版本 +1、
-// 生效日期必填（演示环境生效日期以演示时钟记录），保存后 selector 按新理想速度重算实时/日 OEE。
+// 理论生产速度配置（2026-11-05 简化）：设备级单值，单位「秒/件」——去掉设备 × 物料维度。
+// 性能率 = 产量 ÷ (理论速度 × 运行时间)；换产物料导致速度变化较大时人工调整。
+// 数据来自 store（speedConfigsById）；保存走 actions.saveSpeedConfig：版本 +1 并触发 OEE 重算。
 
 export default function SpeedConfigPage() {
   const state = useDemoState();
   const actions = useDemoActions();
   const { message } = App.useApp();
   const [form] = Form.useForm();
-  const [filters, setFilters] = useState({ deviceCode: '', materialCode: '', materialName: '' });
+  const [filters, setFilters] = useState({ device: '' });
   const [editing, setEditing] = useState(null); // null | row
 
-  // reducer 校验不通过时（actions 层不预判），统一在此反馈
   const lastAction = state.meta.lastAction;
   useEffect(() => {
     if (lastAction && lastAction.ok === false) message.error(lastAction.message);
@@ -33,46 +33,44 @@ export default function SpeedConfigPage() {
   );
 
   const filtered = useMemo(() => {
-    const f = Object.fromEntries(Object.entries(filters).map(([k, v]) => [k, v.trim().toLowerCase()]));
-    return rows.filter(r =>
-      (!f.deviceCode || (r.deviceName || '').toLowerCase().includes(f.deviceCode) || (r.deviceId || '').toLowerCase().includes(f.deviceCode)) &&
-      (!f.materialCode || (r.materialCode || '').toLowerCase().includes(f.materialCode)) &&
-      (!f.materialName || (r.materialName || '').toLowerCase().includes(f.materialName)));
+    const k = (filters.device || '').trim().toLowerCase();
+    if (!k) return rows;
+    return rows.filter(r => `${r.deviceName || ''} ${r.deviceId || ''}`.toLowerCase().includes(k));
   }, [rows, filters]);
 
-  const setF = (k) => (e) => setFilters(s => ({ ...s, [k]: e?.target ? e.target.value : e }));
-
   const handleSubmit = async () => {
-    const v = await form.validateFields(); // 页面只做必填/数值校验；版本与重算交给 actions/reducer
-    const res = actions.saveSpeedConfig(editing.id, v.idealSpeed);
-    if (res.ok) message.success(`${res.message}；保存后实时 OEE 按新理想速度重算`);
+    const v = await form.validateFields();
+    const res = actions.saveSpeedConfig(editing.id, v.idealSpeedSec);
+    if (res.ok) message.success(`${res.message}；保存后实时 / 日 OEE 按新理论速度重算`);
     setEditing(null);
   };
 
   return (
     <>
       <DegradedBanner meta={state.meta} />
-      <PageHeader title="理想生产速度配置" />
-      <FilterBar onQuery={() => {}} onReset={() => setFilters({ deviceCode: '', materialCode: '', materialName: '' })}>
+      <PageHeader
+        title="理论生产速度配置"
+      />
+      <FilterBar onQuery={() => {}} onReset={() => setFilters({ device: '' })}>
         <FilterField label="设备">
-          <Input allowClear placeholder="设备名称 / 编号" style={{ width: 240 }} value={filters.deviceCode} onChange={setF('deviceCode')} />
-        </FilterField>
-        <FilterField label="物料编码">
-          <Input allowClear placeholder="请输入物料编码" style={{ width: 180 }} value={filters.materialCode} onChange={setF('materialCode')} />
-        </FilterField>
-        <FilterField label="物料名称">
-          <Input allowClear placeholder="请输入物料名称" style={{ width: 180 }} value={filters.materialName} onChange={setF('materialName')} />
+          <Input allowClear placeholder="设备名称 / 编号" style={{ width: 240 }} value={filters.device} onChange={(e) => setFilters({ device: e.target.value })} />
         </FilterField>
       </FilterBar>
       <Table
-        rowKey="id" size="small" scroll={{ x: 1100 }}
+        rowKey="id" size="small" scroll={{ x: 760 }}
         dataSource={filtered}
         columns={[
           { title: '设备编号', dataIndex: 'deviceId', width: 100 },
-          { title: '设备名称', dataIndex: 'deviceName', width: 150 },
-          { title: '物料编码', dataIndex: 'materialCode', width: 180 },
-          { title: '物料名称', dataIndex: 'materialName' },
-          { title: '理想生产速度（个/小时）', dataIndex: 'idealSpeed', width: 170, align: 'right', render: v => (v == null ? '--' : v) },
+          { title: '设备名称', dataIndex: 'deviceName', width: 180 },
+          {
+            title: (
+              <Tooltip title="生产一件的理论耗时（秒/件）——性能率 = 理论节拍 × 产量 ÷ 运行时间；换产物料导致速度变化较大时人工调整">
+                <span>理论生产速度（秒/件）<Info size={13} style={{ marginLeft: 3, verticalAlign: '-2px', color: '#8a97a3' }} /></span>
+              </Tooltip>
+            ),
+            dataIndex: 'idealSpeedSec', width: 180, align: 'right',
+            render: v => (v == null ? '--' : `${v} 秒/件`),
+          },
           { title: '版本', dataIndex: 'version', width: 80, align: 'center', render: v => `v${v ?? '--'}` },
           { title: '生效日期', dataIndex: 'effectiveFrom', width: 150 },
           {
@@ -86,32 +84,26 @@ export default function SpeedConfigPage() {
         ]}
       />
       <Modal
-        title={`编辑理想生产速度（${editing?.deviceName || ''} / ${editing?.materialName || ''}）`}
+        title={`编辑理论生产速度（${editing?.deviceName || ''}）`}
         open={!!editing}
         onOk={handleSubmit}
         onCancel={() => setEditing(null)}
         destroyOnHidden
       >
-        <Form form={form} layout="vertical" initialValues={editing ? { idealSpeed: editing.idealSpeed } : undefined}>
-          <Form.Item label="设备 / 物料">
-            <Input disabled value={`${editing?.deviceName || '--'} / ${editing?.materialName || '--'}`} />
+        <Form form={form} layout="vertical" initialValues={editing ? { idealSpeedSec: editing.idealSpeedSec } : undefined}>
+          <Form.Item label="设备">
+            <Input disabled value={editing?.deviceName || '--'} />
           </Form.Item>
           <Form.Item
-            name="idealSpeed" label="理想生产速度（个/小时）"
-            rules={[{ required: true, message: '请输入理想生产速度' }]}
+            name="idealSpeedSec" label="理论生产速度（秒/件）"
+            rules={[{ required: true, message: '请输入理论生产速度' }]}
+            extra="性能率 = 理论节拍 × 产量 ÷ 运行时间；换产物料速度变化较大时请人工调整此值。保存后版本自动 +1 并触发 OEE 重算。"
           >
-            <InputNumber min={0.1} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item
-            name="effectiveFrom" label="生效日期"
-            rules={[{ required: true, message: '请选择生效日期' }]}
-            extra="保存后版本自动 +1"
-          >
-            <DatePicker style={{ width: '100%' }} />
+            <InputNumber min={0.1} style={{ width: '100%' }} addonAfter="秒/件" />
           </Form.Item>
         </Form>
       </Modal>
-      <Card title="最近 OEE 重算记录" size="small">
+      <Card title="最近 OEE 重算记录" size="small" style={{ marginTop: 12 }}>
         {recomputeLogs.length ? (
           <Table
             rowKey="recomputeId" size="small" pagination={false}

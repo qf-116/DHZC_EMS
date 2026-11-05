@@ -83,3 +83,23 @@ export function computeMttrMtbf(repairFacts = [], faultEvents = [], runMinutesTo
     ? round1(runMinutesTotal / faultEvents.length) : null;
   return { mttr, mtbf };
 }
+
+
+// ---------- 产出计数器窗口差值（2026-11-05）----------
+// state.entities.oeeCounters[deviceId][metricCode] = [{ t: 'HH:MM', cum }]（PLC 累计计数采样）；
+// 取 ≤ 时点的最近累计值之差——实时 OEE = 最近 1 小时差值，日 OEE = 全天差值。
+export function counterWindowDiff(state, deviceId, metricCode, fromTime, toTime) {
+  const series = (state?.entities?.oeeCounters?.[deviceId] || {})[metricCode];
+  if (!series || !series.length) return null;
+  const cumAt = (t) => {
+    let v = null;
+    for (const p of series) {
+      if (p.t <= t) v = p.cum; else break;
+    }
+    return v;
+  };
+  const a = cumAt(fromTime);
+  const b = cumAt(toTime);
+  if (a == null || b == null) return null;
+  return Math.max(0, b - a);
+}

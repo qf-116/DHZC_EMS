@@ -4,7 +4,7 @@
 // 之后的重算结果可见（§6.8 / §11.1）。
 // ============================================================
 
-import { computeOee, oeeBlockers, oeeLossBreakdown, computeMttrMtbf, pct, round1 } from '../domain/oee.js';
+import { computeOee, oeeBlockers, oeeLossBreakdown, computeMttrMtbf, pct, round1, counterWindowDiff } from '../domain/oee.js';
 import { availableQty, stockLevel } from '../domain/spare.js';
 import { reportRows as reportSeedRows } from '../data/demoData.js';
 
@@ -220,9 +220,10 @@ function plannedDowntimeMinutes(state, deviceId, windowArg) {
     }, 0);
 }
 
-function speedFor(state, deviceId, materialCode) {
+// 理论生产速度（2026-11-05 设备级单值，单位秒/件；去物料维度）
+function speedFor(state, deviceId) {
   return Object.values(state.entities.speedConfigsById)
-    .find(c => c.deviceId === deviceId && c.materialCode === materialCode && c.status === '生效') || null;
+    .find(c => c.deviceId === deviceId && c.status === '生效') || null;
 }
 
 // OEE 结果：window='realtime'（最近 1 小时）或 'daily'（按天）
@@ -251,8 +252,10 @@ export function selectOeeResult(state, deviceId, { window = 'realtime', day = nu
       eligibility, target: state.entities.oeeTargetsByDeviceId[deviceId]?.target ?? null,
     };
   }
-  const speedCfg = speedFor(state, deviceId, raw.materialCode);
-  config.idealSpeed = speedCfg?.idealSpeed ?? null;
+  const speedCfg = speedFor(state, deviceId);
+  config.idealSpeed = speedCfg?.idealSpeedSec ?? null;
+  // 理论速度 秒/件 → 个/小时（性能率分母口径）；理想产量/小时 = 3600 ÷ 节拍秒
+  config.idealSpeedPerHour = (speedCfg?.idealSpeedSec > 0) ? round1(3600 / speedCfg.idealSpeedSec) : null;
   let plannedWindow = day || state.meta.demoDay;
   if (window === 'realtime') {
     // 实时窗口为最近 1 小时：计划停机只取与该区间的交集分钟
@@ -280,31 +283,44 @@ export function selectOeeResult(state, deviceId, { window = 'realtime', day = nu
   }
   const blockers = [...oeeCfgBlockers, ...oeeBlockers({ ...raw }, config)];
   const oeeQualityBlocked = oeeCfg && oeeCfg.enabled && !oeeCfg.qualifiedMetricCode;
+  // 产量 / 合格数取映射指标的计数器窗口差值（2026-11-05 口径）：
+  // 实时窗口 = 最近 1 小时差值；日窗口 = 当日 08:00 起累计差值。无计数器数据时回退快照值。
+  const oeeMapOut = (oeeCfg?.enabled && oeeCfg.outputMetricCode) || 'M.output';
+  const oeeMapQual = (oeeCfg?.enabled && oeeCfg.qualifiedMetricCode) || 'M.qualified';
+  const toTime = String(day || state.meta.updatedAt || '').slice(11, 16) || '16:41';
+  const fromTime = window === 'realtime'
+    ? (() => { const d = new Date(String(state.meta.updatedAt || '').replace(' ', 'T')); if (Number.isNaN(d.getTime())) return '15:41'; d.setMinutes(d.getMinutes() - 60); return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`; })()
+    : '08:00';
+  const output = counterWindowDiff(state, deviceId, oeeMapOut, fromTime, toTime) ?? raw.output;
+  const qualified = counterWindowDiff(state, deviceId, oeeMapQual, fromTime, toTime) ?? raw.qualified;
   const resultRaw = blockers.length ? { availability: null, performance: null, quality: null, oee: null } : computeOee({
     loadMinutes: raw.loadMinutes,
     plannedDowntimeMinutes: plannedDowntimeMinutesValue,
     runMinutes: raw.runMinutes,
-    idealSpeed: config.idealSpeed,
-    actualSpeed: config.idealSpeed != null && raw.runMinutes > 0
-      ? round1((raw.output / raw.runMinutes) * 60) : null,
-    output: raw.output,
-    qualified: raw.qualified,
+    idealSpeed: config.idealSpeedPerHour,
+    actualSpeed: config.idealSpeedPerHour != null && raw.runMinutes > 0
+      ? round1((output / raw.runMinutes) * 60) : null,
+    output,
+    qualified,
   });
   const result = oeeQualityBlocked && !blockers.length
     ? { ...resultRaw, quality: null, oee: null }
     : resultRaw;
   if (oeeQualityBlocked && !blockers.length) blockers.push('合格数指标未映射，质量率不可计算');
+  const performanceOver = (result.performance != null && result.performance > 100);
   return {
     deviceId, window, day: day || state.meta.demoDay,
     ...result,
     loadMinutes: raw.loadMinutes,
     runMinutes: raw.runMinutes,
     plannedDowntimeMinutes: plannedDowntimeMinutesValue,
-    idealSpeed: config.idealSpeed,
-    actualSpeed: config.idealSpeed != null && raw.runMinutes > 0 ? round1((raw.output / raw.runMinutes) * 60) : null,
-    output: raw.output,
-    qualified: raw.qualified,
-    materialCode: raw.materialCode,
+    idealSpeedSec: speedCfg?.idealSpeedSec ?? null,
+    idealSpeedPerHour: config.idealSpeedPerHour,
+    performanceOver,
+    actualSpeed: config.idealSpeedPerHour != null && raw.runMinutes > 0 ? round1((output / raw.runMinutes) * 60) : null,
+    output,
+    qualified,
+    counterWindow: { from: fromTime, to: toTime },
     dataComplete: raw.dataComplete || '--',
     dataStatus: blockers.length ? (oeeCfgBlockers.length ? 'OEE 映射不完整' : '不可计算') : '正常',
     blockers,

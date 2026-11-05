@@ -16,7 +16,7 @@ import DegradedBanner from '../components/DegradedBanner.jsx';
 
 const pctText = (v) => (v == null ? '--' : `${v}%`);
 const minutesText = (v) => (v == null ? '--' : `${v} 分钟`);
-const speedText = (v) => (v == null ? '--' : `${v} 个/小时`);
+const speedText = (v) => (v == null ? '--' : `${v} 秒/件`);
 
 // 不可计算原因：selector blockers + 资格矩阵原因（如 DEV-005 未配置理想速度 / DEV-006 不参与 OEE）
 function blockersText(row) {
@@ -128,9 +128,11 @@ export default function OeeRealtimePage() {
           { title: '计划停机时间', width: 120, render: (_, r) => minutesText(r.plannedDowntimeMinutes) },
           { title: '运行时间', width: 100, render: (_, r) => minutesText(r.runMinutes) },
           { title: '可用率', width: 90, render: (_, r) => rateCell(r.availability, r) },
-          { title: '理想生产速度', width: 120, render: (_, r) => speedText(r.idealSpeed) },
-          { title: '实际生产速度', width: 120, render: (_, r) => speedText(r.actualSpeed) },
-          { title: '性能率', width: 90, render: (_, r) => rateCell(r.performance, r) },
+          { title: '理论生产速度', width: 120, render: (_, r) => speedText(r.idealSpeedSec) },
+          { title: '实际平均节拍', width: 120, render: (_, r) => (r.actualSpeed > 0 ? `${Math.round((3600 / r.actualSpeed) * 10) / 10} 秒/件` : '--') },
+          { title: '性能率', width: 90, render: (_, r) => (r.performance != null && r.performance > 100
+            ? <Tooltip title="实际速度高于标定理论速度（性能率 > 100%），请复核理论速度配置"><span style={{ color: '#d97706', fontVariantNumeric: 'tabular-nums' }}>{r.performance}% ⚠</span></Tooltip>
+            : rateCell(r.performance, r)) },
           { title: '合格率', width: 90, render: (_, r) => rateCell(r.quality, r) },
           { title: '数据状态', dataIndex: 'dataStatus', width: 100, render: v => (v === '正常' ? <Tag color="success">正常</Tag> : <Tag>{v || '--'}</Tag>) },
         ]}

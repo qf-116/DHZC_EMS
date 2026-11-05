@@ -21,10 +21,10 @@ function plannedDowntimeMinutes(state, deviceId, day) {
       && dateOf(f.start) === day)
     .reduce((s, f) => s + (f.minutes || 0), 0);
 }
-// 生效的理想速度配置（个/小时）——与 selectors 内同一口径
-function speedFor(state, deviceId, materialCode) {
+// 生效的理论生产速度（设备级单值，秒/件）——与 selectors 内同一口径；理想产量/小时 = 3600 ÷ 节拍秒
+function speedFor(state, deviceId) {
   return Object.values(state.entities.speedConfigsById)
-    .find(c => c.deviceId === deviceId && c.materialCode === materialCode && c.status === '生效') || null;
+    .find(c => c.deviceId === deviceId && c.status === '生效') || null;
 }
 
 const THEME = 'comprehensive';
@@ -105,9 +105,10 @@ export default function ComprehensiveReportPage() {
         a.planned += planned ?? 0;
         a.output += raw.output ?? 0;
         a.qualified += raw.qualified ?? 0;
-        const speed = speedFor(state, deviceId, raw.materialCode);
-        if (speed?.idealSpeed > 0 && (raw.runMinutes ?? 0) >= 0) {
-          a.equiv += (speed.idealSpeed / 60) * (raw.runMinutes ?? 0); // 理想速度(个/h)×运行小时 = 理想产量
+        const speed = speedFor(state, deviceId);
+        const perHour = (speed?.idealSpeedSec > 0) ? 3600 / speed.idealSpeedSec : null;
+        if (perHour && (raw.runMinutes ?? 0) >= 0) {
+          a.equiv += (perHour / 60) * (raw.runMinutes ?? 0); // 理想产量/小时 × 运行小时 = 理想产量
         } else if ((raw.runMinutes ?? 0) > 0) {
           a.speedMissing = true;
         }

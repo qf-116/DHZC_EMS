@@ -13,16 +13,14 @@ export const materialPool = [
 ];
 
 // 理想生产速度配置（设备 × 物料，版本与生效时间；修改须经 saveSpeedConfig 动作）
+// 理论生产速度：设备级单值（2026-11-05 简化，去掉设备 × 物料维度）——单位「秒/件」，
+// 与平均加工节拍口径一致；换产物料导致速度变化较大时人工调整。
+// idealSpeedSec = 3600 ÷ 原理论速度（个/小时），保证 OEE 数值连续。
 export const speedConfigs = [
-  { id: 'SC-001-1', deviceId: 'DEV-001', deviceName: 'CNC加工中心-01', materialCode: 'XN010102-000001', materialName: '52S液冷电池插箱（0.5C）', idealSpeed: 30, version: 2, effectiveFrom: '2026-08-12 09:30', status: '生效' },
-  { id: 'SC-001-2', deviceId: 'DEV-001', deviceName: 'CNC加工中心-01', materialCode: 'XN010102-000002', materialName: '52S液冷电池插箱（1C）', idealSpeed: 24, version: 1, effectiveFrom: '2026-08-12 09:30', status: '生效' },
-  { id: 'SC-001-3', deviceId: 'DEV-001', deviceName: 'CNC加工中心-01', materialCode: 'XN020105-000003', materialName: '端板总成', idealSpeed: 40, version: 1, effectiveFrom: '2026-08-12 09:30', status: '生效' },
-  { id: 'SC-002-1', deviceId: 'DEV-002', deviceName: 'CNC加工中心-02', materialCode: 'XN010102-000001', materialName: '52S液冷电池插箱（0.5C）', idealSpeed: 30, version: 1, effectiveFrom: '2026-08-12 09:30', status: '生效' },
-  { id: 'SC-002-2', deviceId: 'DEV-002', deviceName: 'CNC加工中心-02', materialCode: 'XN020301-000004', materialName: '侧板总成', idealSpeed: 36, version: 1, effectiveFrom: '2026-08-12 09:30', status: '生效' },
-  { id: 'SC-003-1', deviceId: 'DEV-003', deviceName: '激光焊接机-03', materialCode: 'XN020105-000003', materialName: '端板总成', idealSpeed: 12, version: 1, effectiveFrom: '2026-08-12 09:30', status: '生效' },
-  // DEV-004 数控铲齿机-04 有速度配置
-  { id: 'SC-004-1', deviceId: 'DEV-004', deviceName: '数控铲齿机-04', materialCode: 'XN010102-000002', materialName: '52S液冷电池插箱（1C）', idealSpeed: 10, version: 2, effectiveFrom: '2026-09-01 08:00', status: '生效' },
-  // DEV-005 未配置速度（演示「未配置基准 → OEE 不可计算」）
+  { id: 'SC-DEV-001', deviceId: 'DEV-001', deviceName: 'CNC加工中心-01', idealSpeedSec: 120, version: 3, effectiveFrom: '2026-08-12 09:30', status: '生效' },
+  { id: 'SC-DEV-002', deviceId: 'DEV-002', deviceName: 'CNC加工中心-02', idealSpeedSec: 120, version: 2, effectiveFrom: '2026-08-12 09:30', status: '生效' },
+  { id: 'SC-DEV-003', deviceId: 'DEV-003', deviceName: '激光焊接机-03', idealSpeedSec: 300, version: 2, effectiveFrom: '2026-08-12 09:30', status: '生效' },
+  { id: 'SC-DEV-004', deviceId: 'DEV-004', deviceName: '数控铲齿机-04', idealSpeedSec: 360, version: 3, effectiveFrom: '2026-09-01 08:00', status: '生效' },
 ];
 
 // OEE 目标（按设备，含适用范围与版本）
@@ -75,3 +73,61 @@ export const oeeEligibility = {
 export const oeeRecomputeLog = [
   { recomputeId: 'RC-20260916-001', deviceId: 'DEV-004', range: '2026-09-16 实时窗口', reason: '停机事实 DT-20260916-901 变更', at: '2026-09-16 16:25:00', revision: 1 },
 ];
+
+
+// ---------- 产出计数器（2026-11-05）----------
+// M.output / M.qualified 为 PLC 累计计数信号：按时间点记录当日累计值，
+// OEE 计算取「窗口起止累计差值」——实时 OEE = 最近 1 小时差值，日 OEE = 全天差值。
+// 终值与 oeeInputs.daily 的产量 / 合格数一致（口径勾稽）。
+export const oeeCounters = {
+  'DEV-001': {
+    'M.output': [
+      { t: '08:00', cum: 0 }, { t: '09:00', cum: 28 }, { t: '10:00', cum: 57 }, { t: '11:00', cum: 84 },
+      { t: '12:00', cum: 96 }, { t: '13:00', cum: 124 }, { t: '14:00', cum: 152 }, { t: '15:00', cum: 180 },
+      { t: '15:41', cum: 204 }, { t: '16:41', cum: 225 },
+    ],
+    'M.qualified': [
+      { t: '08:00', cum: 0 }, { t: '09:00', cum: 27 }, { t: '10:00', cum: 56 }, { t: '11:00', cum: 82 },
+      { t: '12:00', cum: 94 }, { t: '13:00', cum: 121 }, { t: '14:00', cum: 148 }, { t: '15:00', cum: 175 },
+      { t: '15:41', cum: 199 }, { t: '16:41', cum: 219 },
+    ],
+  },
+  'DEV-002': {
+    'M.output': [
+      { t: '08:00', cum: 0 }, { t: '09:00', cum: 24 }, { t: '10:00', cum: 47 }, { t: '11:00', cum: 70 },
+      { t: '12:00', cum: 82 }, { t: '13:00', cum: 108 }, { t: '14:00', cum: 134 }, { t: '15:00', cum: 158 },
+      { t: '15:41', cum: 193 }, { t: '16:41', cum: 210 },
+    ],
+    'M.qualified': [
+      { t: '08:00', cum: 0 }, { t: '09:00', cum: 23 }, { t: '10:00', cum: 45 }, { t: '11:00', cum: 67 },
+      { t: '12:00', cum: 78 }, { t: '13:00', cum: 103 }, { t: '14:00', cum: 128 }, { t: '15:00', cum: 151 },
+      { t: '15:41', cum: 178 }, { t: '16:41', cum: 194 },
+    ],
+  },
+  'DEV-003': {
+    'M.output': [
+      { t: '08:00', cum: 0 }, { t: '09:00', cum: 12 }, { t: '10:00', cum: 24 }, { t: '11:00', cum: 36 },
+      { t: '12:00', cum: 42 }, { t: '13:00', cum: 54 }, { t: '14:00', cum: 66 }, { t: '15:00', cum: 78 },
+      { t: '15:41', cum: 87 }, { t: '16:41', cum: 90 },
+    ],
+    'M.qualified': [
+      { t: '08:00', cum: 0 }, { t: '09:00', cum: 12 }, { t: '10:00', cum: 24 }, { t: '11:00', cum: 36 },
+      { t: '12:00', cum: 42 }, { t: '13:00', cum: 54 }, { t: '14:00', cum: 66 }, { t: '15:00', cum: 78 },
+      { t: '15:41', cum: 87 }, { t: '16:41', cum: 90 },
+    ],
+  },
+  'DEV-004': {
+    'M.output': [
+      { t: '08:00', cum: 0 }, { t: '09:00', cum: 10 }, { t: '10:00', cum: 20 }, { t: '11:00', cum: 30 },
+      { t: '12:00', cum: 34 }, { t: '13:00', cum: 38 }, { t: '14:00', cum: 42 }, { t: '15:00', cum: 45 },
+      { t: '15:41', cum: 44 }, { t: '16:41', cum: 46 },
+    ],
+    'M.qualified': [
+      { t: '08:00', cum: 0 }, { t: '09:00', cum: 10 }, { t: '10:00', cum: 20 }, { t: '11:00', cum: 30 },
+      { t: '12:00', cum: 34 }, { t: '13:00', cum: 38 }, { t: '14:00', cum: 42 }, { t: '15:00', cum: 45 },
+      { t: '15:41', cum: 44 }, { t: '16:41', cum: 46 },
+    ],
+  },
+};
+
+// 计数器窗口差值：fromTime / toTime 为 'HH:MM'；取 ≤ 时点的最近累计值之差

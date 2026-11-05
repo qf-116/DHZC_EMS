@@ -13,7 +13,7 @@ import { normalizeLegacyRule } from '../../domain/alarmRule.js';
 import { repairReports, repairOrders, repairAcceptances } from './repairs.js';
 import { warehouses, spares, stock, inbounds, outbounds, returns, stockFlows } from './spares.js';
 import { downtimeFacts } from './downtime.js';
-import { materialPool, speedConfigs, oeeTargets, shiftCalendar, oeeInputs, oeeEligibility, oeeRecomputeLog } from './oee.js';
+import { materialPool, speedConfigs, oeeTargets, shiftCalendar, oeeInputs, oeeEligibility, oeeRecomputeLog, oeeCounters } from './oee.js';
 import { programCompare, programBaselines, programHandles } from './programCompare.js';
 import { lifecycleTasks, assetChangeRecords, idleApplications, scrapApplications } from './lifecycle.js';
 
@@ -65,6 +65,7 @@ export function createDemoState() {
       stockFlowsById: Object.fromEntries(stockFlows.map(f => [f.flowId, f])),
       downtimeFactsById: Object.fromEntries(downtimeFacts.map(d => [d.downtimeId, d])),
       materialPool,
+      oeeCounters,
       speedConfigsById: Object.fromEntries(speedConfigs.map(s => [s.id, s])),
       oeeTargetsByDeviceId: Object.fromEntries(oeeTargets.map(t => [t.deviceId, t])),
       shiftCalendar,

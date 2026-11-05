@@ -15,14 +15,18 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   App, Alert, Button, Card, Checkbox, Input, Modal, Select, Space, Steps, Switch, Table, Tag, Tooltip, Typography,
 } from 'antd';
-import { Plus, Save, Play, PauseCircle, Pencil, Trash2, Eye, ArrowRight, ArrowLeft } from 'lucide-react';
+import { Plus, Save, Play, PauseCircle, Pencil, Trash2, Eye, ArrowRight, ArrowLeft, LayoutTemplate } from 'lucide-react';
 import PageHeader from '../components/PageHeader.jsx';
 import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import StatusTag from '../components/StatusTag.jsx';
+import OeeTemplateListModal from '../components/OeeTemplateListModal.jsx';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import { selectAllDevices, selectBindingDraft } from '../state/selectors.js';
 import { validateBindingDraft } from '../domain/binding.js';
 import { normalizeMetricMeta } from '../domain/alarmRule.js';
+import {
+  matchOeeTemplates, bestOeeTemplate, templateOeeConfig, oeeConfigOfBinding, oeeConfigSourceLabel,
+} from '../domain/oeeTemplate.js';
 
 // OEE 报工事件候选：只有生产报工事件可作为产量 / 质量来源（报警代码等事件类指标不可映射）
 const OEE_REPORT_METRICS = new Set(['E.production_report']);
@@ -44,6 +48,10 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
   const [productFilter, setProductFilter] = useState('all');
   const [appliedSourceKw, setAppliedSourceKw] = useState('');
   const [appliedProductFilter, setAppliedProductFilter] = useState('all');
+  const [copyOpen, setCopyOpen] = useState(false);             // 从已有设备复制 OEE 配置
+  const [templateOpen, setTemplateOpen] = useState(false);     // 另存为 OEE 模板
+  const [templateForm, setTemplateForm] = useState({ name: '', deviceType: '全部', note: '' });
+  const [templateApplied, setTemplateApplied] = useState(false); // 本次进入向导后是否已自动套用模板
 
   const allDevices = useMemo(() => selectAllDevices(state), [state]);
   const draft = deviceId ? selectBindingDraft(state, deviceId) : null;
@@ -97,6 +105,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
       setAppliedSourceKw('');
       setAppliedProductFilter('all');
       setDevKw('');
+      setTemplateApplied(false);
       // 新建绑定（无预选设备）默认只看未绑定设备；编辑 / 换绑预选设备时保持全部（主设备已固定）
       if (!presetDeviceId) setDevBound('unbound');
       setDevType('all');
@@ -147,16 +156,82 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
     }));
     return [...seen.values()];
   }, [draftItems, state]);
+  const selectedDevice = allDevices.find((d) => d.deviceId === deviceId);
+
+  // OEE 模板（2026-11-05）：按「物联网产品 + 设备类型」匹配；同类型精确模板优先，其次通用模板
+  const primarySource = draftItems.find((i) => i.role === 'main') || draftItems[0] || null;
+  const primaryProduct = primarySource
+    ? (state.entities.sourceDevicesById[primarySource.iotDeviceId]?.product || null)
+    : null;
+  const templateDeviceType = selectedDevice?.type || '全部';
+  const matchingTemplates = useMemo(
+    () => matchOeeTemplates(Object.values(state.entities.oeeTemplatesById || {}), {
+      product: primaryProduct, deviceType: templateDeviceType,
+    }),
+    [state.entities.oeeTemplatesById, primaryProduct, templateDeviceType],
+  );
+  const bestTemplate = matchingTemplates[0] || null;
+  const currentTemplate = oeeCfg.templateId ? state.entities.oeeTemplatesById?.[oeeCfg.templateId] : null;
+  const templateOptions = matchingTemplates.map((t) => ({
+    value: t.templateId, label: `${t.name} · v${t.version}`,
+  }));
+  if (currentTemplate && !templateOptions.some((o) => o.value === currentTemplate.templateId)) {
+    templateOptions.unshift({
+      value: currentTemplate.templateId,
+      label: `${currentTemplate.name} · v${currentTemplate.version}（当前）`,
+    });
+  }
+  const ensureMonitored = (codes) => {
+    const wanted = (codes || []).filter(Boolean);
+    if (!wanted.length) return;
+    draftItems.forEach((item) => (item.metrics || []).forEach((m) => {
+      if (wanted.includes(m.metricCode) && !m.monitored) {
+        actions.setDraftMetricMonitoredValue(deviceId, item, m.metricCode, true);
+      }
+    }));
+  };
+  const applyOeeConfig = (config, label) => {
+    if (!config) return;
+    actions.setDraftOee(deviceId, { ...config, enabled: true });
+    ensureMonitored([config.stateMetricCode, config.reportMetricCode]);
+    if (label) message.success(label);
+  };
+  const applyTemplate = (templateId) => {
+    const template = state.entities.oeeTemplatesById?.[templateId];
+    if (!template) return;
+    applyOeeConfig(
+      templateOeeConfig(template, { enabled: true }),
+      `已套用产品模板「${template.name}」v${template.version}`,
+    );
+  };
   const setOee = (patch) => {
     let next = { ...oeeCfg, ...patch };
     if (patch.enabled === true) {
-      // 开启时自动预选：状态指标取状态类监控指标；报工事件取目录默认事件指标
-      const stateM = monitoredMetricDefs.find((d) => d.dataType === 'state');
-      const reportM = monitoredMetricDefs.find((d) => OEE_REPORT_METRICS.has(d.metricCode));
-      next.stateMetricCode = next.stateMetricCode || (stateM?.metricCode || null);
-      next.reportMetricCode = next.reportMetricCode || (reportM?.metricCode || null);
+      if (!next.stateMetricCode || !next.reportMetricCode) {
+        if (bestTemplate) {
+          // 同产品 / 同类型设备自动套用模板，用户只需确认
+          next = { ...next, ...templateOeeConfig(bestTemplate, { enabled: true }) };
+        } else {
+          // 无模板时回退到按指标目录自动预选（状态类指标 + 生产报工事件）
+          const stateM = monitoredMetricDefs.find((d) => d.dataType === 'state');
+          const reportM = monitoredMetricDefs.find((d) => OEE_REPORT_METRICS.has(d.metricCode));
+          next.stateMetricCode = next.stateMetricCode || (stateM?.metricCode || null);
+          next.reportMetricCode = next.reportMetricCode || (reportM?.metricCode || null);
+          next.configSource = next.configSource || 'manual';
+        }
+      }
+    }
+    if (patch.stateMetricCode !== undefined || patch.reportMetricCode !== undefined) {
+      // 模板带出后手工改选 → 记为设备级覆盖，不影响模板
+      next.configSource = 'manual';
     }
     actions.setDraftOee(deviceId, next);
+    if (patch.enabled === true) {
+      ensureMonitored([next.stateMetricCode, next.reportMetricCode]);
+      if (bestTemplate && next.templateId === bestTemplate.templateId) {
+        message.success(`已自动套用产品模板「${bestTemplate.name}」v${bestTemplate.version}`);
+      }
+    }
   };
   const oeeMetricOptions = (field) => {
     const list = field === 'stateMetricCode'
@@ -167,7 +242,57 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
       label: `${d.name}（${d.metricCode}）· ${d.dataType === 'state' ? '状态' : '事件'}`,
     }));
   };
-  const selectedDevice = allDevices.find((d) => d.deviceId === deviceId);
+  const oeeSourceMeta = oeeConfigSourceLabel(oeeCfg);
+  const metricLabelOf = (code) => {
+    const def = state.entities.metricsByKey[code];
+    return def ? `${def.name}（${code}）` : (code || '--');
+  };
+  const copyCandidates = Object.values(state.entities.bindingsByDeviceId)
+    .filter((b) => b.deviceId !== deviceId)
+    .map((b) => ({ binding: b, config: oeeConfigOfBinding(b), device: state.entities.devicesById[b.deviceId] }))
+    .filter((x) => x.device && x.config && x.config.enabled !== false
+      && x.config.stateMetricCode && x.config.reportMetricCode);
+  const openSaveTemplate = () => {
+    if (!oeeCfg.stateMetricCode || !oeeCfg.reportMetricCode) {
+      message.warning('请先完成状态指标与报工事件映射，再存为模板');
+      return;
+    }
+    // 设备类型精确模板 → 以本设备类型为新范围；通用模板 → 沿用当前设备类型，避免误改通用模板
+    const exactTemplate = matchingTemplates.find((t) => t.deviceType === templateDeviceType) || null;
+    setTemplateForm({
+      name: exactTemplate?.name || `${primaryProduct || '设备'} · ${templateDeviceType} OEE 模板`,
+      deviceType: templateDeviceType,
+      note: exactTemplate?.note || '',
+    });
+    setTemplateOpen(true);
+  };
+  const doSaveTemplate = () => {
+    if (!templateForm.name.trim()) { message.error('模板名称必填'); return; }
+    if (!primaryProduct) { message.error('无法确定物联网产品，不能存为模板'); return; }
+    const r = actions.saveOeeTemplate({
+      templateId: null,
+      name: templateForm.name.trim(),
+      product: primaryProduct,
+      deviceType: templateForm.deviceType || templateDeviceType,
+      note: templateForm.note,
+      sourceDeviceId: deviceId,
+      sourceDeviceName: selectedDevice?.name || null,
+      config: {
+        stateMetricCode: oeeCfg.stateMetricCode,
+        reportMetricCode: oeeCfg.reportMetricCode,
+      },
+    });
+    if (!r.ok) { message.error(r.message); return; }
+    actions.setDraftOee(deviceId, {
+      ...oeeCfg,
+      templateId: r.refs.templateId,
+      templateName: templateForm.name.trim(),
+      templateVersion: r.refs.version,
+      configSource: 'template',
+    });
+    message.success(r.message);
+    setTemplateOpen(false);
+  };
   // 设备绑定情况：已有绑定（含历史停用）即视为「已绑定」——不能重复新建，只能编辑；
   // 未保存的草稿不算已绑定（放弃草稿即可重新新建）
   const boundOf = (devId) => state.entities.bindingsByDeviceId[devId] || null;
@@ -194,6 +319,18 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
     if (step === 1) {
       if (!draftItems.length) { message.warning('请先勾选至少 1 个物联网平台子设备'); return; }
       setStep(2);
+      // 进入第 3 步：同产品 / 同类型设备自动套用 OEE 模板（需开启开关才落库）
+      if (bestTemplate && !templateApplied) {
+        if (draft?.oee?.enabled) {
+          actions.setDraftOee(deviceId, {
+            ...oeeCfg,
+            ...templateOeeConfig(bestTemplate, { enabled: true }),
+          });
+          ensureMonitored([bestTemplate.config?.stateMetricCode, bestTemplate.config?.reportMetricCode]);
+        }
+        setTemplateApplied(true);
+        message.success(`检测到匹配模板「${bestTemplate.name}」v${bestTemplate.version}，开启 OEE 后将自动带出映射`);
+      }
     }
   };
 
@@ -254,6 +391,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
   ];
 
   return (
+    <>
     <Modal
       title={(
         <Space size={8} wrap>
@@ -452,6 +590,28 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
           >
             {oeeCfg.enabled ? (
               <>
+                <div style={{ marginBottom: 10, padding: '8px 10px', background: '#f7fafc', border: '1px solid #e8eef4', borderRadius: 6 }}>
+                  <Space wrap size={8}>
+                    <span style={{ fontSize: 12, color: '#5d6b78' }}>OEE 模板</span>
+                    <Select
+                      size="small" style={{ width: 260 }}
+                      placeholder={templateOptions.length ? '选择产品模板' : '暂无匹配模板'}
+                      disabled={!templateOptions.length}
+                      value={oeeCfg.templateId && templateOptions.some((o) => o.value === oeeCfg.templateId)
+                        ? oeeCfg.templateId
+                        : undefined}
+                      onChange={applyTemplate}
+                      options={templateOptions}
+                      notFoundContent="当前产品 / 设备类型暂无模板"
+                    />
+                    <Button size="small" onClick={() => setCopyOpen(true)}>从已有设备复制</Button>
+                    <Button size="small" onClick={openSaveTemplate}>另存为模板</Button>
+                    <Tag color={oeeSourceMeta.color}>{oeeSourceMeta.label}</Tag>
+                  </Space>
+                  <div style={{ fontSize: 12, color: '#8a97a3', marginTop: 4 }}>
+                    同产品 / 同类型设备共用模板，开启 OEE 时自动带出；模板只带出状态指标与报工事件映射，保存后仍可在本设备单独调整。
+                  </div>
+                </div>
                 <div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 8 }}>
                   OEE 指标映射：状态指标提供运行时长；报工事件逐条记录报工时间、数量（默认 +1）与合格标记，产量 / 合格数由事件在统计窗口内汇总。两项均必映射，候选 = 已勾选监控的指标。
                 </div>
@@ -487,12 +647,115 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
             ) : (
               <div style={{ fontSize: 12, color: '#8a97a3' }}>
                 不参与 OEE 计算：综合运行分析 / 实时 OEE / 大屏中该设备 OEE 显示「未纳入 OEE 计算」；监控指标照常勾选。
+                {bestTemplate && (
+                  <div style={{ marginTop: 4, color: '#1677ff' }}>
+                    检测到匹配模板「{bestTemplate.name}」v{bestTemplate.version}
+                    （{primaryProduct} / {bestTemplate.deviceType}），开启后将自动带出映射。
+                  </div>
+                )}
               </div>
             )}
           </Card>
         </>
       )}
     </Modal>
+
+    <Modal
+      title="从已有设备复制 OEE 配置"
+      width={820}
+      open={copyOpen}
+      onCancel={() => setCopyOpen(false)}
+      footer={<Button onClick={() => setCopyOpen(false)}>关闭</Button>}
+    >
+      <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>
+        复制只带入状态指标与报工事件映射，不改变当前设备的来源与监控勾选；复制后仍可单独调整。
+      </Typography.Paragraph>
+      <Table
+        rowKey={(x) => x.binding.deviceId}
+        size="small"
+        dataSource={copyCandidates}
+        pagination={copyCandidates.length > 8 ? { pageSize: 8, size: 'small' } : false}
+        locale={{ emptyText: '暂无其它已配置 OEE 的设备' }}
+        columns={[
+          { title: '设备', width: 170, render: (_, x) => `${x.device.name}（${x.device.deviceId}）` },
+          { title: '状态指标', width: 210, render: (_, x) => metricLabelOf(x.config.stateMetricCode) },
+          { title: '报工事件', width: 210, render: (_, x) => metricLabelOf(x.config.reportMetricCode) },
+          {
+            title: '配置来源', width: 100,
+            render: (_, x) => {
+              const m = oeeConfigSourceLabel(x.config);
+              return <Tag color={m.color}>{m.label}</Tag>;
+            },
+          },
+          {
+            title: '操作', width: 80,
+            render: (_, x) => (
+              <Button
+                type="link" size="small"
+                onClick={() => {
+                  applyOeeConfig({
+                    ...x.config,
+                    enabled: true,
+                    configSource: 'copy',
+                    copiedFromDeviceId: x.binding.deviceId,
+                    copiedFromDeviceName: x.device.name,
+                  }, `已从 ${x.device.name} 复制 OEE 配置`);
+                  setCopyOpen(false);
+                }}
+              >
+                复制
+              </Button>
+            ),
+          },
+        ]}
+      />
+    </Modal>
+
+    <Modal
+      title="另存为 OEE 模板"
+      width={520}
+      open={templateOpen}
+      onCancel={() => setTemplateOpen(false)}
+      onOk={doSaveTemplate}
+      okText="保存模板"
+    >
+      <Space direction="vertical" size={10} style={{ width: '100%' }}>
+        <div style={{ fontSize: 12, color: '#5d6b78' }}>
+          适用产品：<b>{primaryProduct || '--'}</b> · 当前设备类型：<b>{templateDeviceType}</b>
+        </div>
+        <div>
+          <div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>模板名称</div>
+          <Input
+            value={templateForm.name}
+            onChange={(e) => setTemplateForm((f) => ({ ...f, name: e.target.value }))}
+            placeholder="如：GW200 加工中心 OEE 模板"
+          />
+        </div>
+        <div>
+          <div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>适用范围</div>
+          <Select
+            style={{ width: '100%' }}
+            value={templateForm.deviceType}
+            onChange={(v) => setTemplateForm((f) => ({ ...f, deviceType: v }))}
+            options={[...new Set([templateDeviceType, '全部'])].map((v) => ({
+              value: v, label: v === '全部' ? '全部设备类型（通用模板）' : v,
+            }))}
+          />
+        </div>
+        <div>
+          <div style={{ fontSize: 12, color: '#5d6b78', marginBottom: 4 }}>说明</div>
+          <Input
+            value={templateForm.note}
+            onChange={(e) => setTemplateForm((f) => ({ ...f, note: e.target.value }))}
+            placeholder="选填：适用场景 / 厂商差异说明"
+          />
+        </div>
+        <div style={{ fontSize: 12, color: '#8a97a3' }}>
+          同产品同类型已存在模板时，将发布为新版本；已保存绑定不受影响，新建设备按最新模板带出。
+        </div>
+      </Space>
+    </Modal>
+    </>
   );
 }
 
@@ -670,6 +933,9 @@ function BindingDetailModal({ deviceId, deviceName, open, onClose }) {
   const state = useDemoState();
   const binding = state.entities.bindingsByDeviceId[deviceId];
   const draft = selectBindingDraft(state, deviceId);
+  const oeeCfg = oeeConfigOfBinding(draft || binding);
+  const oeeSource = oeeConfigSourceLabel(oeeCfg);
+  const templateOfBinding = oeeCfg?.templateId ? state.entities.oeeTemplatesById?.[oeeCfg.templateId] : null;
   const items = (draft || binding)?.items || [];
   const sourceNameOf = (i) => i.name || state.entities.sourceDevicesById[i.iotDeviceId]?.name || '--';
   const metricRows = items.flatMap((i) => (i.metrics || []).map((m) => ({
@@ -687,6 +953,24 @@ function BindingDetailModal({ deviceId, deviceName, open, onClose }) {
       onCancel={onClose}
       footer={<Button onClick={onClose}>关闭</Button>}
     >
+      {oeeCfg && (
+        <div style={{ marginBottom: 12, padding: '8px 10px', background: '#f7fafc', border: '1px solid #e8eef4', borderRadius: 6 }}>
+          <Space wrap size={8}>
+            <span style={{ fontSize: 12, color: '#5d6b78' }}>OEE 分析</span>
+            <Tag color={oeeCfg.enabled === false ? 'default' : 'success'}>
+              {oeeCfg.enabled === false ? '不需要' : '需要'}
+            </Tag>
+            <Tag color={oeeSource.color}>{oeeSource.label}</Tag>
+            {templateOfBinding && <span style={{ fontSize: 12 }}>{templateOfBinding.name} · v{templateOfBinding.version}</span>}
+          </Space>
+          {oeeCfg.enabled !== false && (
+            <div style={{ fontSize: 12, color: '#5d6b78', marginTop: 4 }}>
+              状态指标：{state.entities.metricsByKey[oeeCfg.stateMetricCode]?.name || '--'}
+              {' · '}报工事件：{state.entities.metricsByKey[oeeCfg.reportMetricCode]?.name || '--'}
+            </div>
+          )}
+        </div>
+      )}
       <Table
         rowKey="key" size="small"
         dataSource={metricRows}
@@ -714,6 +998,7 @@ export default function BindingOverviewPage() {
   const [disableTarget, setDisableTarget] = useState(null); // { deviceId, deviceName }
   const [deleteTarget, setDeleteTarget] = useState(null);  // { deviceId, deviceName }
   const [detailTarget, setDetailTarget] = useState(null);   // { deviceId, deviceName }
+  const [templateListOpen, setTemplateListOpen] = useState(false); // OEE 模板管理
 
   // 列表只展示正式绑定，未配置设备不再作为列表占位行；新建绑定时在向导第 1 步选择主设备。
   const rows = useMemo(() => selectAllDevices(state).flatMap((d) => {
@@ -723,8 +1008,9 @@ export default function BindingOverviewPage() {
     const metricTotal = binding.items?.reduce((s, i) => s + (i.metrics || []).length, 0) ?? 0;
     const metricMonitored = binding.items?.reduce((s, i) => s + (i.metrics || []).filter((m) => m.monitored).length, 0) ?? 0;
     // 是否需要 OEE 分析：由绑定 OEE 开关派生（无 oee 字段的种子绑定默认需要）
-    const oeeRequired = binding.oee?.enabled !== false;
-    return [{ device: d, binding, status, metricTotal, metricMonitored, oeeRequired }];
+    const oeeCfg = oeeConfigOfBinding(binding);
+    const oeeRequired = oeeCfg?.enabled !== false;
+    return [{ device: d, binding, status, metricTotal, metricMonitored, oeeRequired, oeeCfg }];
   }), [state]);
 
   // 查询条件（实时筛选；规范 §4：关键词 → 下拉 → 重置；2026-10-29 去掉健康状态条件与列）
@@ -793,6 +1079,7 @@ export default function BindingOverviewPage() {
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
           <Button type="primary" icon={<Plus size={14} />} onClick={() => setDraftTarget({})}>新建绑定</Button>
+          <Button icon={<LayoutTemplate size={14} />} onClick={() => setTemplateListOpen(true)}>OEE 模板管理</Button>
         </Space>
         <Table
           rowKey={(r) => r.device.deviceId}
@@ -808,11 +1095,24 @@ export default function BindingOverviewPage() {
               title: '是否需要 OEE 分析', width: 150,
               render: (_, r) => (r.oeeRequired
                 ? (
-                  <Tooltip title="已开启 OEE 计算：需完成状态指标与报工事件映射">
+                  <Tooltip title={`已开启 OEE 计算：需完成状态指标与报工事件映射 · 配置来源：${oeeConfigSourceLabel(r.oeeCfg).label}`}>
                     <Tag color="success" style={{ cursor: 'help' }}>需要</Tag>
                   </Tooltip>
                 )
                 : <Tag>不需要</Tag>),
+            },
+            {
+              title: 'OEE 配置来源', width: 120,
+              render: (_, r) => {
+                if (!r.oeeRequired) return '--';
+                const meta = oeeConfigSourceLabel(r.oeeCfg);
+                const template = r.oeeCfg?.templateId ? state.entities.oeeTemplatesById?.[r.oeeCfg.templateId] : null;
+                return (
+                  <Tooltip title={template ? `${template.name} · v${template.version}（${template.product} / ${template.deviceType}）` : undefined}>
+                    <Tag color={meta.color} style={template ? { cursor: 'help' } : undefined}>{meta.label}</Tag>
+                  </Tooltip>
+                );
+              },
             },
             { title: '拉取周期', width: 90, render: (_, r) => (r.binding ? `${r.binding.pullCycleSec} 秒` : '--') },
             {
@@ -868,6 +1168,7 @@ export default function BindingOverviewPage() {
         open={!!detailTarget}
         onClose={() => setDetailTarget(null)}
       />
+      <OeeTemplateListModal open={templateListOpen} onClose={() => setTemplateListOpen(false)} />
     </>
   );
 }

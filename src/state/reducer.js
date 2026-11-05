@@ -387,6 +387,45 @@ export function reducer(state, action) {
       const next = { ...state, ui: { ...state.ui, bindingDraftsByDeviceId: setIn(drafts, key, { ...draft, oee }) } };
       return finish(next, action, true, oee.enabled ? '已纳入 OEE 计算（请完成 OEE 指标映射）' : '该设备不参与 OEE 计算', { deviceId: payload.deviceId }, false, at);
     }
+    case 'oeeTemplate/save': {
+      // OEE 映射模板（2026-11-05）：按「物联网产品 + 设备类型」保存；同范围再次保存时发布新版本。
+      // 模板只保存 OEE 取数映射，不保存监控勾选与绑定关系。
+      const name = String(payload.name || '').trim();
+      const product = payload.product || null;
+      const deviceType = payload.deviceType || '全部';
+      const config = payload.config || {};
+      if (!name) return reject(state, action, '模板名称必填');
+      if (!product) return reject(state, action, '产品必填，无法确定模板适用范围');
+      if (!config.stateMetricCode) return reject(state, action, '状态指标未映射，不能存为模板');
+      if (!config.reportMetricCode) return reject(state, action, '报工事件未映射，不能存为模板');
+      const templates = E.oeeTemplatesById || {};
+      const base = (payload.templateId && templates[payload.templateId])
+        || Object.values(templates).find(t => t.product === product && (t.deviceType || '全部') === deviceType)
+        || null;
+      const version = (base?.version || 0) + 1;
+      const templateId = base?.templateId || `OT-${String(Object.keys(templates).length + 1).padStart(3, '0')}`;
+      const record = {
+        templateId,
+        name,
+        product,
+        deviceType,
+        version,
+        status: '启用',
+        effectiveFrom: at,
+        updatedAt: at,
+        updatedBy: actor.userName,
+        sourceDeviceId: payload.sourceDeviceId || null,
+        sourceDeviceName: payload.sourceDeviceName || null,
+        config: {
+          stateMetricCode: config.stateMetricCode,
+          reportMetricCode: config.reportMetricCode,
+        },
+        note: payload.note || '',
+      };
+      let next = setE(state, 'oeeTemplatesById', templateId, record);
+      next = addHistory(next, at, 'oee', templateId, `OEE 模板「${name}」v${version} ${base ? '更新' : '创建'}（${product} / ${deviceType}）`, { deviceId: payload.sourceDeviceId });
+      return finish(next, action, true, `OEE 模板「${name}」v${version} 已保存（${product} / ${deviceType}）`, { templateId, version }, false, at);
+    }
     case 'binding/setDraftMonitored': {
       // 监控指标勾选（绑定向导第 3 步，2026-10-27 口径）：作用于未保存的绑定草稿；
       // 指标可以全部不勾选（仅存储不做曲线监控）；保存时随草稿整体落库（binding/save 展开 draft），

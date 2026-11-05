@@ -61,6 +61,8 @@ function migrateParsed(parsed) {
   if (!next.entities.productionReportsByDeviceId) {
     next.entities.productionReportsByDeviceId = base.entities.productionReportsByDeviceId;
   }
+  // OEE 模板实体（V20）：旧快照无此结构时补种子；已有模板按 key 合并保留
+  next.entities.oeeTemplatesById = { ...base.entities.oeeTemplatesById, ...(parsed.entities?.oeeTemplatesById || {}) };
   delete next.entities.oeeCounters;
   // 绑定 items 指标回填（V16/V18）：指标目录新增报工事件指标后，旧快照绑定 items 缺失目录指标 —— 补齐（monitored=false）
   const catalogCodes = Object.keys(base.entities.metricsByKey || {});

@@ -210,6 +210,10 @@ export function createDemoActions(state, dispatch) {
       act('binding/setDraftOee', { deviceId, oee });
       return { ok: true, message: 'OEE 配置已更新（保存后随绑定生效）', refs: { deviceId } };
     },
+    saveOeeTemplate(payload) {
+      // OEE 映射模板：按「物联网产品 + 设备类型」保存；同范围已存在时发布新版本
+      return act('oeeTemplate/save', payload);
+    },
     setDraftMetricMonitored(deviceId, source, metricCode) {
       // 监控指标勾选（绑定向导第 3 步）：作用于未保存草稿，保存时随草稿整体落库
       const iotDeviceId = typeof source === 'object' ? source.iotDeviceId : source;

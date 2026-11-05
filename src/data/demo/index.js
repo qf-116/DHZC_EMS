@@ -15,10 +15,11 @@ import { warehouses, spares, stock, inbounds, outbounds, returns, stockFlows } f
 import { downtimeFacts } from './downtime.js';
 import { materialPool, speedConfigs, oeeTargets, shiftCalendar, oeeInputs, oeeEligibility, oeeRecomputeLog } from './oee.js';
 import { productionReportsByDeviceId } from './productionReports.js';
+import { oeeTemplates } from './oeeTemplates.js';
 import { programCompare, programBaselines, programHandles } from './programCompare.js';
 import { lifecycleTasks, assetChangeRecords, idleApplications, scrapApplications } from './lifecycle.js';
 
-export const STORE_VERSION = 19; // 快照结构版本：绑定列表增加 OEE 分析标识（DEV-006 补「不需要 OEE 分析」配置）
+export const STORE_VERSION = 20; // 快照结构版本：新增 OEE 映射模板（按物联网产品 + 设备类型匹配）
 
 export const DEMO_META = {
   mode: 'demo',
@@ -67,6 +68,7 @@ export function createDemoState() {
       downtimeFactsById: Object.fromEntries(downtimeFacts.map(d => [d.downtimeId, d])),
       materialPool,
       productionReportsByDeviceId,
+      oeeTemplatesById: Object.fromEntries(oeeTemplates.map(t => [t.templateId, t])),
       speedConfigsById: Object.fromEntries(speedConfigs.map(s => [s.id, s])),
       oeeTargetsByDeviceId: Object.fromEntries(oeeTargets.map(t => [t.deviceId, t])),
       shiftCalendar,

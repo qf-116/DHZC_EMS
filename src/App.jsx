@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Routes, Route, Navigate, useLocation, useNavigate, useParams, useSearchParams } from 'react-router-dom';
-import { Layout, Menu, Badge, Button, Drawer, Dropdown, Space } from 'antd';
+import { Layout, Menu, Badge, Button, Modal, Dropdown, Space } from 'antd';
 import {
   Activity, AlarmClock, BookOpen, ClipboardList, DatabaseZap, FileBarChart,
   Gauge, LineChart, Settings2, Truck, CalendarClock,
@@ -422,20 +422,20 @@ export default function App() {
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
             </main>
-            <Drawer
+            <Modal
               title={<div className="spec-title"><BookOpen size={16} /> 需求细则</div>}
-              placement="right"
-              width={480}
+              width="min(1080px, 92vw)"
               open={specOpen}
-              onClose={() => setSpecOpen(false)}
-              styles={{ body: { paddingTop: 0 } }}
+              onCancel={() => setSpecOpen(false)}
+              footer={null}
+              styles={{ body: { paddingTop: 0, maxHeight: '78vh', overflowY: 'auto' } }}
             >
               <Badge status="processing" text={`当前页面：${spec.title}`} />
               <div className="spec-body" style={{ marginTop: 12 }}>{spec.content}</div>
               <div className="spec-note">
                 本面板面向开发说明，不进入生产 UI。
               </div>
-            </Drawer>
+            </Modal>
           </Content>
         </Layout>
       </Layout>

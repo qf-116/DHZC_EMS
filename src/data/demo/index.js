@@ -18,7 +18,7 @@ import { productionReportsByDeviceId } from './productionReports.js';
 import { programCompare, programBaselines, programHandles } from './programCompare.js';
 import { lifecycleTasks, assetChangeRecords, idleApplications, scrapApplications } from './lifecycle.js';
 
-export const STORE_VERSION = 18; // 快照结构版本：OEE 改为报工事件驱动（去累计计数指标，新增 productionReportsByDeviceId）
+export const STORE_VERSION = 19; // 快照结构版本：绑定列表增加 OEE 分析标识（DEV-006 补「不需要 OEE 分析」配置）
 
 export const DEMO_META = {
   mode: 'demo',

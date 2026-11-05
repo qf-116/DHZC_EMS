@@ -722,22 +722,30 @@ export default function BindingOverviewPage() {
     const status = binding.configStatus;
     const metricTotal = binding.items?.reduce((s, i) => s + (i.metrics || []).length, 0) ?? 0;
     const metricMonitored = binding.items?.reduce((s, i) => s + (i.metrics || []).filter((m) => m.monitored).length, 0) ?? 0;
-    return [{ device: d, binding, status, metricTotal, metricMonitored }];
+    // 是否需要 OEE 分析：由绑定 OEE 开关派生（无 oee 字段的种子绑定默认需要）
+    const oeeRequired = binding.oee?.enabled !== false;
+    return [{ device: d, binding, status, metricTotal, metricMonitored, oeeRequired }];
   }), [state]);
 
   // 查询条件（实时筛选；规范 §4：关键词 → 下拉 → 重置；2026-10-29 去掉健康状态条件与列）
   const [kw, setKw] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [oeeFilter, setOeeFilter] = useState('all');
   const [appliedKw, setAppliedKw] = useState('');
   const [appliedStatusFilter, setAppliedStatusFilter] = useState('all');
+  const [appliedOeeFilter, setAppliedOeeFilter] = useState('all');
   const statusOptions = useMemo(() => [...new Set(rows.map((r) => r.status))], [rows]);
   const filteredRows = useMemo(() => rows.filter((r) => {
     const k = appliedKw.trim().toLowerCase();
     if (k && !`${r.device.deviceId} ${r.device.name} ${r.device.assetCode || ''}`.toLowerCase().includes(k)) return false;
     if (appliedStatusFilter !== 'all' && r.status !== appliedStatusFilter) return false;
+    if (appliedOeeFilter !== 'all' && r.oeeRequired !== (appliedOeeFilter === 'required')) return false;
     return true;
-  }), [rows, appliedKw, appliedStatusFilter]);
-  const resetFilters = () => { setKw(''); setStatusFilter('all'); setAppliedKw(''); setAppliedStatusFilter('all'); };
+  }), [rows, appliedKw, appliedStatusFilter, appliedOeeFilter]);
+  const resetFilters = () => {
+    setKw(''); setStatusFilter('all'); setOeeFilter('all');
+    setAppliedKw(''); setAppliedStatusFilter('all'); setAppliedOeeFilter('all');
+  };
 
   const enable = (r) => {
     const res = actions.enableBinding(r.device.deviceId);
@@ -761,7 +769,11 @@ export default function BindingOverviewPage() {
   const bindingTab = (
     <>
       <FilterBar
-        onQuery={() => { setAppliedKw(kw); setAppliedStatusFilter(statusFilter); }}
+        onQuery={() => {
+          setAppliedKw(kw);
+          setAppliedStatusFilter(statusFilter);
+          setAppliedOeeFilter(oeeFilter);
+        }}
         onReset={resetFilters}
       >
         <FilterField label="设备">
@@ -769,6 +781,12 @@ export default function BindingOverviewPage() {
         </FilterField>
         <FilterField label="配置状态">
           <Select style={{ width: 150 }} value={statusFilter} onChange={setStatusFilter} options={[{ value: 'all', label: '全部' }, ...statusOptions.map((s) => ({ value: s, label: s }))]} />
+        </FilterField>
+        <FilterField label="OEE 分析">
+          <Select
+            style={{ width: 130 }} value={oeeFilter} onChange={setOeeFilter}
+            options={[{ value: 'all', label: '全部' }, { value: 'required', label: '需要' }, { value: 'notRequired', label: '不需要' }]}
+          />
         </FilterField>
       </FilterBar>
 
@@ -786,9 +804,16 @@ export default function BindingOverviewPage() {
             { title: '设备名称', width: 130, render: (_, r) => r.device.name },
             { title: '来源设备数', width: 100, render: (_, r) => `${(r.binding?.items || []).filter((i) => i.enabled).length} 个` },
             { title: '接入指标', width: 90, render: (_, r) => `${r.metricTotal} 项` },
-            { title: 'OEE', width: 90, render: (_, r) => (r.binding?.oee?.enabled === false
-              ? <Tag>未参与</Tag>
-              : <Tag color="success">参与</Tag>) },
+            {
+              title: '是否需要 OEE 分析', width: 150,
+              render: (_, r) => (r.oeeRequired
+                ? (
+                  <Tooltip title="已开启 OEE 计算：需完成状态指标与报工事件映射">
+                    <Tag color="success" style={{ cursor: 'help' }}>需要</Tag>
+                  </Tooltip>
+                )
+                : <Tag>不需要</Tag>),
+            },
             { title: '拉取周期', width: 90, render: (_, r) => (r.binding ? `${r.binding.pullCycleSec} 秒` : '--') },
             {
               title: '配置状态', width: 100,

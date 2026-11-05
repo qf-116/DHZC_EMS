@@ -76,13 +76,14 @@ function migrateParsed(parsed) {
             .map((c) => ({ metricCode: c, metricVersion: base.entities.metricsByKey[c]?.metricVersion || null, monitored: false }))];
           return { ...item, metrics: filled };
         });
-        // OEE 配置迁移（V18）：旧「产量指标 / 合格数指标」映射收敛为「报工事件」映射
+        // OEE 配置迁移（V18/V19）：旧「产量指标 / 合格数指标」映射收敛为「报工事件」映射；
+        // 动力设备 DEV-006 无生产口径，旧快照未显式配置时补为「不需要 OEE 分析」
         const oee = b.oee ? {
           enabled: !!b.oee.enabled,
           stateMetricCode: b.oee.stateMetricCode || null,
           reportMetricCode: b.oee.reportMetricCode || (b.oee.outputMetricCode ? 'E.production_report' : null),
-        } : b.oee;
-        return [id, { ...b, items, ...(b.oee ? { oee } : {}) }];
+        } : (id === 'DEV-006' ? { enabled: false, stateMetricCode: null, reportMetricCode: null } : b.oee);
+        return [id, { ...b, items, ...(oee ? { oee } : {}) }];
       })
   );
   // 来源设备 product 回填（V15）：旧快照来源设备无产品归属，按名称推断（主控制器→网关 / 振动→VB12 / 温度→TP08）

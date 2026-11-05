@@ -51,6 +51,8 @@ export const bindingsByDeviceId = {
   'DEV-006': {
     bindingId: 'binding-006-v2', deviceId: 'DEV-006', version: 2, configStatus: '已启用', healthStatus: '正常',
     effectiveFrom: '2026-08-01 08:30', effectiveTo: null, pullCycleSec: 300, lastPullTime: '2026-09-16 16:40:02', pullFailCount: 0, pendingCompensation: 0,
+    // 动力设备（空压机）无生产口径，不需要 OEE 分析
+    oee: { enabled: false, stateMetricCode: null, reportMetricCode: null },
     items: [
       { iotDeviceId: 'iot-main-006', iotDeviceCode: 'IOT-D-10006', role: 'main', sensorType: '--', enabled: true, metrics: [sel('M.air_pressure', 'v1.0'), sel('M.motor_current', 'v1.1'), sel('S.machine_state', 'v1.3')] },
     ],

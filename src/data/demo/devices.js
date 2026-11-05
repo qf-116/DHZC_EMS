@@ -41,16 +41,30 @@ export const devices = [
     assetNo: '22100226', lifecycleStatus: '在用', owner: '李明', enableDate: '2022-05-20', buyDate: '2022-04-15',
     oeeEligible: false,
   },
-  {
-    deviceId: 'DEV-007', assetCode: 'MT2024A1207', name: '数控磨床', model: 'MK-1320', type: '磨床', brand: '上海机床',
-    organizationId: 'org-demo', workshopId: 'workshop-2', workshopName: '二号车间', lineId: 'line-3', lineName: '铲齿线', stationId: 'station-07', stationName: '3号工位',
-    assetNo: '22100227', lifecycleStatus: '停用', owner: '王强', enableDate: '2021-09-01', buyDate: '2021-08-10',
-    oeeEligible: false,
-  },
+
   {
     deviceId: 'DEV-008', assetCode: 'MT2024A1208', name: '普通车床', model: 'CA6140', type: '车床', brand: '大连机床',
     organizationId: 'org-demo', workshopId: 'workshop-1', workshopName: '一号车间', lineId: 'line-1', lineName: '加工一线', stationId: 'station-08', stationName: '4号工位',
     assetNo: '22100228', lifecycleStatus: '报废/归档', owner: '张三', enableDate: '2018-03-15', buyDate: '2018-02-01',
     oeeEligible: false,
+  },
+  // 2026-11-05 新增 3 台在用未绑定设备：新建绑定向导第 1 步可绑定设备由 1 台（报废）扩充至 4 台
+  {
+    deviceId: 'DEV-009', assetCode: 'MT2024A1209', name: '数控车床-09', model: 'CK-6150', type: '车床', brand: '大连机床',
+    organizationId: 'org-demo', workshopId: 'workshop-1', workshopName: '一号车间', lineId: 'line-1', lineName: '加工一线', stationId: 'station-09', stationName: '5号工位',
+    assetNo: '22100229', lifecycleStatus: '在用', owner: '张三', enableDate: '2025-06-01', buyDate: '2025-05-20',
+    oeeEligible: true,
+  },
+  {
+    deviceId: 'DEV-010', assetCode: 'MT2024A1210', name: '钻攻中心-10', model: 'DT-500', type: '钻攻中心', brand: '台群精机',
+    organizationId: 'org-demo', workshopId: 'workshop-1', workshopName: '一号车间', lineId: 'line-1', lineName: '加工一线', stationId: 'station-10', stationName: '6号工位',
+    assetNo: '22100230', lifecycleStatus: '在用', owner: '李明', enableDate: '2025-08-10', buyDate: '2025-07-28',
+    oeeEligible: true,
+  },
+  {
+    deviceId: 'DEV-011', assetCode: 'MT2024A1211', name: '加工中心-11', model: 'VMC-1060', type: '加工中心', brand: '沈阳机床',
+    organizationId: 'org-demo', workshopId: 'workshop-2', workshopName: '二号车间', lineId: 'line-3', lineName: '铲齿线', stationId: 'station-11', stationName: '4号工位',
+    assetNo: '22100231', lifecycleStatus: '在用', owner: '王强', enableDate: '2025-09-15', buyDate: '2025-09-01',
+    oeeEligible: true,
   },
 ];

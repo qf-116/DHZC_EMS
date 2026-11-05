@@ -16,6 +16,9 @@ function migrateParsed(parsed) {
   const next = {
     ...parsed,
     version: STORE_VERSION,
+    // meta / ui 结构补齐：旧快照缺失字段（如 ui.bindingDraftsByDeviceId 容器）从种子补齐
+    meta: { ...base.meta, ...(parsed.meta || {}) },
+    ui: { ...base.ui, ...(parsed.ui || {}) },
     entities: {
       ...base.entities,
       ...parsed.entities,
@@ -26,6 +29,44 @@ function migrateParsed(parsed) {
   delete next.entities.alarmBatchesById;
   // 绑定模板管理下线（V14）：模板数据与向导模板预填一并移除
   if (next.ui && next.ui.bindingTemplates) delete next.ui.bindingTemplates;
+  // 主数据目录合并（2026-11-05）：设备 / 来源设备 / 指标 / 映射 / 速度配置等种子目录按 key 合并——
+  // 新种子补充新增条目（如新设备、新指标），旧快照已有条目保留用户修改，避免目录类新增永远进不来
+  const catalogMergeKeys = ['devicesById', 'sourceDevicesById', 'metricsByKey', 'crosswalkByDeviceId', 'crosswalkByAssetCode', 'speedConfigsById'];
+  for (const k of catalogMergeKeys) {
+    if (base.entities[k]) next.entities[k] = { ...base.entities[k], ...(parsed.entities?.[k] || {}) };
+  }
+  // 种子移除设备清理（V17）：DEV-007（已停用绑定、无业务关联）从种子删除，旧快照同步移除
+  const REMOVED_DEVICES = ['DEV-007'];
+  for (const dev of REMOVED_DEVICES) {
+    delete next.entities.devicesById[dev];
+    delete next.entities.crosswalkByDeviceId?.[dev];
+    delete next.entities.crosswalkByAssetCode?.[`MT2024A12${dev.slice(-2)}`];
+    if (next.entities.bindingsByDeviceId?.[dev]) {
+      const bid = next.entities.bindingsByDeviceId[dev].bindingId;
+      delete next.entities.bindingsByDeviceId[dev];
+      for (const [vk, v] of Object.entries(next.entities.bindingVersionsById || {})) {
+        if (v.bindingId === bid) delete next.entities.bindingVersionsById[vk];
+      }
+    }
+    delete next.entities.healthByDeviceId?.[dev];
+    delete next.entities.oeeInputs?.daily?.[dev];
+    delete next.entities.oeeInputs?.realtime?.[dev];
+    delete next.entities.oeeCounters?.[dev];
+  }
+  // 绑定 items 指标回填（V16）：指标目录新增产出计数指标后，旧快照绑定 items 缺失目录指标 —— 补齐（monitored=false）
+  const catalogCodes = Object.keys(base.entities.metricsByKey || {});
+  next.entities.bindingsByDeviceId = Object.fromEntries(
+    Object.entries(parsed.entities?.bindingsByDeviceId || {}).map(([id, b]) => {
+      const items = (b.items || []).map((item) => {
+        const have = new Set((item.metrics || []).map((m) => m.metricCode));
+        const filled = [...(item.metrics || []), ...catalogCodes
+          .filter((c) => !have.has(c))
+          .map((c) => ({ metricCode: c, metricVersion: base.entities.metricsByKey[c]?.metricVersion || null, monitored: false }))];
+        return { ...item, metrics: filled };
+      });
+      return [id, { ...b, items }];
+    })
+  );
   // 来源设备 product 回填（V15）：旧快照来源设备无产品归属，按名称推断（主控制器→网关 / 振动→VB12 / 温度→TP08）
   next.entities.sourceDevicesById = Object.fromEntries(
     Object.entries(parsed.entities?.sourceDevicesById || {}).map(([id, s]) => {

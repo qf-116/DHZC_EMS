@@ -40,15 +40,26 @@ export const deviceCrosswalk = [
     ledgerRecordId: 'ledger-006', bindingId: 'binding-006-v2', oeeDeviceId: null, screenDeviceId: null,
     iotMainDeviceId: 'iot-main-006', organizationId: 'org-demo', workshopId: 'workshop-power', lineId: '', stationId: 'station-06',
   },
-  {
-    deviceId: 'DEV-007', assetCode: 'MT2024A1207', monitorCode: 'DEV-007', name: '数控磨床',
-    ledgerRecordId: 'ledger-007', bindingId: 'binding-007-v1', oeeDeviceId: null, screenDeviceId: null,
-    iotMainDeviceId: 'iot-main-007', organizationId: 'org-demo', workshopId: 'workshop-2', lineId: 'line-3', stationId: 'station-07',
-  },
+
   {
     deviceId: 'DEV-008', assetCode: 'MT2024A1208', monitorCode: 'DEV-008', name: '普通车床',
     ledgerRecordId: 'ledger-008', bindingId: null, oeeDeviceId: null, screenDeviceId: null,
     iotMainDeviceId: null, organizationId: 'org-demo', workshopId: 'workshop-1', lineId: 'line-1', stationId: 'station-08',
+  },
+  {
+    deviceId: 'DEV-009', assetCode: 'MT2024A1209', monitorCode: 'DEV-009', name: '数控车床-09',
+    ledgerRecordId: 'ledger-009', bindingId: null, oeeDeviceId: null, screenDeviceId: null,
+    iotMainDeviceId: 'iot-main-009', organizationId: 'org-demo', workshopId: 'workshop-1', lineId: 'line-1', stationId: 'station-09',
+  },
+  {
+    deviceId: 'DEV-010', assetCode: 'MT2024A1210', monitorCode: 'DEV-010', name: '钻攻中心-10',
+    ledgerRecordId: 'ledger-010', bindingId: null, oeeDeviceId: null, screenDeviceId: null,
+    iotMainDeviceId: 'iot-main-010', organizationId: 'org-demo', workshopId: 'workshop-1', lineId: 'line-1', stationId: 'station-10',
+  },
+  {
+    deviceId: 'DEV-011', assetCode: 'MT2024A1211', monitorCode: 'DEV-011', name: '加工中心-11',
+    ledgerRecordId: 'ledger-011', bindingId: null, oeeDeviceId: null, screenDeviceId: null,
+    iotMainDeviceId: 'iot-main-011', organizationId: 'org-demo', workshopId: 'workshop-2', lineId: 'line-3', stationId: 'station-11',
   },
 ];
 

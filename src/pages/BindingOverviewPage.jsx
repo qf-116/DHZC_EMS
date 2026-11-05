@@ -35,7 +35,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
   const [step, setStep] = useState(0);                        // 向导步骤：0=选主设备，1=选物联网设备，2=选择监控指标
   const [deviceId, setDeviceId] = useState(null);             // 向导内选定的设备管理台账设备
   const [devKw, setDevKw] = useState('');                     // 第 1 步查询条件：编号/名称/资产编码
-  const [devBound, setDevBound] = useState('all');            // 第 1 步查询条件：是否已绑定
+  const [devBound, setDevBound] = useState(presetDeviceId ? 'all' : 'unbound'); // 第 1 步查询条件：新建绑定默认只看未绑定；编辑（预选设备）看全部
   const [devType, setDevType] = useState('all');              // 第 1 步查询条件：设备类型
   const [sourceKw, setSourceKw] = useState('');               // 来源列表搜索
   const [productFilter, setProductFilter] = useState('all');
@@ -94,7 +94,8 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
       setAppliedSourceKw('');
       setAppliedProductFilter('all');
       setDevKw('');
-      setDevBound('all');
+      // 新建绑定（无预选设备）默认只看未绑定设备；编辑 / 换绑预选设备时保持全部（主设备已固定）
+      if (!presetDeviceId) setDevBound('unbound');
       setDevType('all');
       if (presetDeviceId) {
         const existingDraft = (state.ui.bindingDraftsByDeviceId || {})[`draft-${presetDeviceId}`];
@@ -164,7 +165,9 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
       .map((d) => ({ ...d, bound: !!boundOf(d.deviceId) }))
       .filter((d) => (devBound === 'all' ? true : devBound === 'bound' ? d.bound : !d.bound))
       .filter((d) => (devType === 'all' ? true : d.type === devType))
-      .filter((d) => (!k ? true : `${d.deviceId} ${d.name} ${d.assetCode}`.toLowerCase().includes(k)));
+      .filter((d) => (!k ? true : `${d.deviceId} ${d.name} ${d.assetCode}`.toLowerCase().includes(k)))
+      // 未绑定设备排最前（新建绑定的目标就是未绑定设备），其余按编号排序
+      .sort((a, b) => (a.bound === b.bound ? String(a.deviceId).localeCompare(String(b.deviceId)) : (a.bound ? 1 : -1)));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [allDevices, state.entities.bindingsByDeviceId, devKw, devBound, devType]);
   const deviceTypes = useMemo(() => [...new Set(allDevices.map((d) => d.type).filter(Boolean))], [allDevices]);

@@ -17,7 +17,7 @@ import { materialPool, speedConfigs, oeeTargets, shiftCalendar, oeeInputs, oeeEl
 import { programCompare, programBaselines, programHandles } from './programCompare.js';
 import { lifecycleTasks, assetChangeRecords, idleApplications, scrapApplications } from './lifecycle.js';
 
-export const STORE_VERSION = 15; // 快照结构版本：来源设备 product 字段迁移回填（旧快照按名称推断产品归属）
+export const STORE_VERSION = 17; // 快照结构版本：指标目录新增产出计数指标（旧快照绑定 items 回填缺失指标，monitored=false）
 
 export const DEMO_META = {
   mode: 'demo',

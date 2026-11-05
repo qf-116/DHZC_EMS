@@ -60,7 +60,7 @@ export const health = {
   'DEV-004': { status: '正常', latencySec: 3, lastSampleAt: '16:41:07', qualityRate: '99.67%' },
   'DEV-005': { status: '数据中断', latencySec: null, lastSampleAt: '15:22:30', qualityRate: '0%' },
   'DEV-006': { status: '正常', latencySec: 4, lastSampleAt: '16:40:02', qualityRate: '99.90%' },
-  'DEV-007': { status: '未知', latencySec: null, lastSampleAt: '2026-08-30 18:00', qualityRate: '--' },
+
   'DEV-008': { status: '未知', latencySec: null, lastSampleAt: null, qualityRate: '--' },
 };
 

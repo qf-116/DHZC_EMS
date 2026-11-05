@@ -55,13 +55,7 @@ export const bindingsByDeviceId = {
       { iotDeviceId: 'iot-main-006', iotDeviceCode: 'IOT-D-10006', role: 'main', sensorType: '--', enabled: true, metrics: [sel('M.air_pressure', 'v1.0'), sel('M.motor_current', 'v1.1'), sel('S.machine_state', 'v1.3')] },
     ],
   },
-  'DEV-007': {
-    bindingId: 'binding-007-v1', deviceId: 'DEV-007', version: 1, configStatus: '已停用', healthStatus: '--',
-    effectiveFrom: '2026-03-10 09:00', effectiveTo: '2026-06-30 16:00', pullCycleSec: 60, lastPullTime: '2026-08-30 18:00:00', pullFailCount: 0, pendingCompensation: 0,
-    items: [
-      { iotDeviceId: 'iot-main-007', iotDeviceCode: 'IOT-D-10007', role: 'main', sensorType: '--', enabled: false, metrics: [sel('M.spindle_speed', 'v1.1', false), sel('M.oil_pressure', 'v1.0', false), sel('S.machine_state', 'v1.3', false)] },
-    ],
-  },
+
   // DEV-008 尚未创建绑定：未配置设备不在物联网接入配置列表中占位，通过「新建绑定」向导选择主设备。
 };
 
@@ -75,7 +69,7 @@ export const bindingVersions = [
   { bindingId: 'binding-004-v2', deviceId: 'DEV-004', version: 2, configStatus: '已启用', effectiveFrom: '2026-08-10 08:00', effectiveTo: null, summary: '增加温度子传感器与轴向负载指标' },
   { bindingId: 'binding-006-v1', deviceId: 'DEV-006', version: 1, configStatus: '已停用', effectiveFrom: '2026-01-15 09:00', effectiveTo: '2026-08-01 08:29', summary: '初始绑定' },
   { bindingId: 'binding-006-v2', deviceId: 'DEV-006', version: 2, configStatus: '已启用', effectiveFrom: '2026-08-01 08:30', effectiveTo: null, summary: '采集周期由 60s 调整为 300s' },
-  { bindingId: 'binding-007-v1', deviceId: 'DEV-007', version: 1, configStatus: '已停用', effectiveFrom: '2026-03-10 09:00', effectiveTo: '2026-06-30 16:00', summary: '设备停用后绑定停用' },
+  
 ];
 
 // IoT 来源设备（只读；主设备 + 子传感器）
@@ -106,6 +100,10 @@ export const sourceDevices = [
   { iotDeviceId: 'iot-main-005', iotDeviceCode: 'IOT-D-10005', name: '机器人-05 主控制器', kind: '主设备', product: '工业智能网关 GW200' },
   { iotDeviceId: 'iot-main-006', iotDeviceCode: 'IOT-D-10006', name: '空压机 主控制器', kind: '主设备', product: '工业智能网关 GW200' },
   { iotDeviceId: 'iot-main-007', iotDeviceCode: 'IOT-D-10007', name: '磨床 主控制器', kind: '主设备', product: '工业智能网关 GW200' },
+  // 2026-11-05 新增 3 个未占用 GW200 主控制器：对应新增台账设备 DEV-009 / 010 / 011（新建绑定可选）
+  { iotDeviceId: 'iot-main-009', iotDeviceCode: 'IOT-D-10009', name: '车床-09 主控制器', kind: '主设备', product: '工业智能网关 GW200' },
+  { iotDeviceId: 'iot-main-010', iotDeviceCode: 'IOT-D-10010', name: '钻攻-10 主控制器', kind: '主设备', product: '工业智能网关 GW200' },
+  { iotDeviceId: 'iot-main-011', iotDeviceCode: 'IOT-D-10011', name: '加工-11 主控制器', kind: '主设备', product: '工业智能网关 GW200' },
   { iotDeviceId: 'iot-main-100', iotDeviceCode: 'IOT-D-10100', name: '备用主控制器（未占用）', kind: '主设备', product: '工业智能网关 GW200' },
   { iotDeviceId: 'iot-s-20100', iotDeviceCode: 'IOT-S-20100', name: '备用温度传感器（未占用）', kind: '子传感器', product: '温度传感器 TP08' },
 ];

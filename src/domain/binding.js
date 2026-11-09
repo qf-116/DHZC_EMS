@@ -21,10 +21,11 @@ export function canTransitionBinding(from, to) {
   return (BINDING_TRANSITIONS[from] || []).includes(to);
 }
 
-// 校验一条绑定草稿：至少 1 个启用项、同一绑定内来源编码不重复。
+// 校验一条绑定草稿：至少 1 个启用项、同一绑定内来源编码不重复、MES 主设备必须来自已选来源。
 // 说明：① IoT 来源编码被其它设备占用仅作提示、不作为限制条件（业务允许多台设备绑定同一来源）；
 // ② 2026-10 口径调整：绑定即接入该来源上报的全部指标并存储（指标自动发现，不在绑定时人工勾选），
-//    因此绑定校验不再要求选择指标；监控指标（曲线呈现）在「监控指标配置」中按需勾选，可以不选。
+//    因此绑定校验不再要求选择指标；监控指标（曲线呈现）在「监控指标配置」中按需勾选，可以不选；
+// ③ mesPrimarySourceId 用于 MES 程序文件下发，必须指向本次绑定中一个启用的物联网来源设备。
 // ctx: { sourceDevicesById, metricsByKey }
 export function validateBindingDraft(draft, ctx = {}) {
   const errors = [];
@@ -33,6 +34,9 @@ export function validateBindingDraft(draft, ctx = {}) {
   if (enabled.length === 0) errors.push('至少保留一个启用的 IoT 来源设备');
   const codes = enabled.map(i => i.iotDeviceCode);
   if (new Set(codes).size !== codes.length) errors.push('同一绑定内 IoT 来源编码重复');
+  if (draft.mesPrimarySourceId && !enabled.some(i => i.iotDeviceId === draft.mesPrimarySourceId)) {
+    errors.push('MES 主设备必须是已选且启用的物联网来源设备');
+  }
   return { ok: errors.length === 0, errors };
 }
 

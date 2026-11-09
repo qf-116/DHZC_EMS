@@ -12,6 +12,7 @@ export const bindingsByDeviceId = {
     bindingId: 'binding-001-v2', deviceId: 'DEV-001', version: 2, configStatus: '已启用', healthStatus: '正常',
     effectiveFrom: '2026-06-01 09:00', effectiveTo: null, pullCycleSec: 60, lastPullTime: '2026-09-16 16:41:10', pullFailCount: 0, pendingCompensation: 0,
     oee: { enabled: true, stateMetricCode: 'S.machine_state', reportMetricCode: 'E.production_report', templateId: 'OT-GW200-GEN-V1', templateName: 'GW200 通用 OEE 模板', templateVersion: 1, configSource: 'template' },
+    mesPrimarySourceId: 'iot-main-001',
     items: [
       { iotDeviceId: 'iot-main-001', iotDeviceCode: 'IOT-D-10001', role: 'main', sensorType: '--', enabled: true, metrics: [sel('M.spindle_temp', 'v1.2'), sel('M.coolant_temp', 'v1.2'), sel('M.spindle_speed', 'v1.1'), sel('M.feed_rate', 'v1.1'), sel('S.machine_state', 'v1.3'), sel('S.alarm_code', 'v1.3'), sel('E.production_report', 'v1.0')] },
       { iotDeviceId: 'iot-s-20011', iotDeviceCode: 'IOT-S-20011', role: 'sensor', sensorType: '振动传感器', enabled: true, metrics: [sel('M.vib_amplitude', 'v2.0'), sel('M.bearing_temp', 'v1.0', false)] },
@@ -22,6 +23,7 @@ export const bindingsByDeviceId = {
     bindingId: 'binding-002-v2', deviceId: 'DEV-002', version: 2, configStatus: '已启用', healthStatus: '延迟',
     effectiveFrom: '2026-08-30 09:00', effectiveTo: null, pullCycleSec: 60, lastPullTime: '2026-09-16 16:38:22', pullFailCount: 0, pendingCompensation: 12,
     oee: { enabled: true, stateMetricCode: 'S.machine_state', reportMetricCode: 'E.production_report', configSource: 'manual' },
+    mesPrimarySourceId: 'iot-main-002',
     items: [
       { iotDeviceId: 'iot-main-002', iotDeviceCode: 'IOT-D-10002', role: 'main', sensorType: '--', enabled: true, metrics: [sel('M.spindle_temp', 'v1.2'), sel('M.coolant_temp', 'v1.2'), sel('M.spindle_speed', 'v1.1'), sel('S.machine_state', 'v1.3'), sel('E.production_report', 'v1.0')] },
     ],
@@ -30,6 +32,7 @@ export const bindingsByDeviceId = {
     bindingId: 'binding-003-v1', deviceId: 'DEV-003', version: 1, configStatus: '已启用', healthStatus: '部分中断',
     effectiveFrom: '2026-07-15 14:00', effectiveTo: null, pullCycleSec: 60, lastPullTime: '2026-09-16 16:40:55', pullFailCount: 1, pendingCompensation: 2,
     oee: { enabled: true, stateMetricCode: 'S.machine_state', reportMetricCode: 'E.production_report', templateId: 'OT-GW200-LASER-V1', templateName: 'GW200 激光设备 OEE 模板', templateVersion: 1, configSource: 'template' },
+    mesPrimarySourceId: 'iot-main-003',
     items: [
       { iotDeviceId: 'iot-main-003', iotDeviceCode: 'IOT-D-10003', role: 'main', sensorType: '--', enabled: true, metrics: [sel('M.spindle_temp', 'v1.2'), sel('M.spindle_speed', 'v1.1'), sel('S.machine_state', 'v1.3'), sel('E.production_report', 'v1.0')] },
       { iotDeviceId: 'iot-s-20031', iotDeviceCode: 'IOT-S-20031', role: 'sensor', sensorType: '振动传感器', enabled: true, metrics: [sel('M.vib_amplitude', 'v2.0')] },
@@ -40,6 +43,7 @@ export const bindingsByDeviceId = {
     bindingId: 'binding-004-v2', deviceId: 'DEV-004', version: 2, configStatus: '已启用', healthStatus: '正常',
     effectiveFrom: '2026-08-10 08:00', effectiveTo: null, pullCycleSec: 60, lastPullTime: '2026-09-16 16:41:07', pullFailCount: 0, pendingCompensation: 0,
     oee: { enabled: true, stateMetricCode: 'S.machine_state', reportMetricCode: 'E.production_report', templateId: 'OT-GW200-GEN-V1', templateName: 'GW200 通用 OEE 模板', templateVersion: 1, configSource: 'template' },
+    mesPrimarySourceId: 'iot-main-004',
     items: [
       { iotDeviceId: 'iot-main-004', iotDeviceCode: 'IOT-D-10004', role: 'main', sensorType: '--', enabled: true, metrics: [sel('M.spindle_temp', 'v1.2'), sel('M.oil_pressure', 'v1.0'), sel('M.axis_load', 'v1.0'), sel('S.machine_state', 'v1.3'), sel('E.production_report', 'v1.0')] },
       { iotDeviceId: 'iot-s-20041', iotDeviceCode: 'IOT-S-20041', role: 'sensor', sensorType: '温度传感器', enabled: true, metrics: [sel('M.bearing_temp', 'v1.0')] },
@@ -48,6 +52,7 @@ export const bindingsByDeviceId = {
   'DEV-005': {
     bindingId: 'binding-005-v1', deviceId: 'DEV-005', version: 1, configStatus: '已启用', healthStatus: '数据中断',
     effectiveFrom: '2026-05-20 10:00', effectiveTo: null, pullCycleSec: 60, lastPullTime: '2026-09-16 15:22:30', pullFailCount: 3, pendingCompensation: 5,
+    mesPrimarySourceId: 'iot-main-005',
     items: [
       { iotDeviceId: 'iot-main-005', iotDeviceCode: 'IOT-D-10005', role: 'main', sensorType: '--', enabled: true, metrics: [sel('M.weld_current', 'v1.0'), sel('S.machine_state', 'v1.3')] },
     ],
@@ -57,6 +62,7 @@ export const bindingsByDeviceId = {
     effectiveFrom: '2026-08-01 08:30', effectiveTo: null, pullCycleSec: 300, lastPullTime: '2026-09-16 16:40:02', pullFailCount: 0, pendingCompensation: 0,
     // 动力设备（空压机）无生产口径，不需要 OEE 分析
     oee: { enabled: false, stateMetricCode: null, reportMetricCode: null },
+    mesPrimarySourceId: 'iot-main-006',
     items: [
       { iotDeviceId: 'iot-main-006', iotDeviceCode: 'IOT-D-10006', role: 'main', sensorType: '--', enabled: true, metrics: [sel('M.air_pressure', 'v1.0'), sel('M.motor_current', 'v1.1'), sel('S.machine_state', 'v1.3')] },
     ],

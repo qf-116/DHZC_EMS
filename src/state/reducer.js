@@ -356,7 +356,8 @@ export function reducer(state, action) {
           return { metricCode: def.metricCode, metricVersion: def.metricVersion, monitored: !!prevMetric?.monitored };
         });
       const item = { ...payload.source, enabled: true, metrics: autoMetrics };
-      const next = { ...state, ui: { ...state.ui, bindingDraftsByDeviceId: setIn(drafts, key, { ...draft, items: [...draft.items, item] }) } };
+      const mesPrimarySourceId = draft.mesPrimarySourceId || (!draft.items.length ? item.iotDeviceId : null);
+      const next = { ...state, ui: { ...state.ui, bindingDraftsByDeviceId: setIn(drafts, key, { ...draft, mesPrimarySourceId, items: [...draft.items, item] }) } };
       return finish(next, action, true, `已将 ${item.iotDeviceCode} 加入绑定草稿（自动发现 ${autoMetrics.length} 项指标，保存后全量接入存储）`, { deviceId: payload.deviceId }, false, at);
     }
     case 'binding/discardDraft': {
@@ -372,7 +373,11 @@ export function reducer(state, action) {
       const drafts = state.ui.bindingDraftsByDeviceId || {};
       const draft = drafts[key];
       if (!draft) return reject(state, action, '没有进行中的绑定草稿');
-      const next = { ...state, ui: { ...state.ui, bindingDraftsByDeviceId: setIn(drafts, key, { ...draft, items: draft.items.filter(i => i.iotDeviceId !== payload.iotDeviceId) }) } };
+      const remaining = draft.items.filter(i => i.iotDeviceId !== payload.iotDeviceId);
+      const mesPrimarySourceId = draft.mesPrimarySourceId === payload.iotDeviceId
+        ? (remaining.find(i => i.enabled)?.iotDeviceId || null)
+        : draft.mesPrimarySourceId;
+      const next = { ...state, ui: { ...state.ui, bindingDraftsByDeviceId: setIn(drafts, key, { ...draft, mesPrimarySourceId, items: remaining }) } };
       return finish(next, action, true, '已从绑定草稿移除该来源（未保存）', {}, false, at);
     }
     case 'binding/setDraftOee': {
@@ -386,6 +391,19 @@ export function reducer(state, action) {
       const oee = { ...(draft.oee || {}), ...(payload.oee || {}) };
       const next = { ...state, ui: { ...state.ui, bindingDraftsByDeviceId: setIn(drafts, key, { ...draft, oee }) } };
       return finish(next, action, true, oee.enabled ? '已纳入 OEE 计算（请完成 OEE 指标映射）' : '该设备不参与 OEE 计算', { deviceId: payload.deviceId }, false, at);
+    }
+    case 'binding/setDraftMesPrimary': {
+      // MES 主设备只影响程序文件下发目标，不改变监控/OEE取数；必须是当前草稿已选来源。
+      const key = `draft-${payload.deviceId}`;
+      const drafts = state.ui.bindingDraftsByDeviceId || {};
+      const draft = drafts[key];
+      if (!draft) return reject(state, action, '没有进行中的绑定草稿');
+      const selected = (draft.items || []).filter(i => i.enabled);
+      if (!selected.some(i => i.iotDeviceId === payload.iotDeviceId)) {
+        return reject(state, action, 'MES 主设备必须从已勾选的物联网设备中选择');
+      }
+      const next = { ...state, ui: { ...state.ui, bindingDraftsByDeviceId: setIn(drafts, key, { ...draft, mesPrimarySourceId: payload.iotDeviceId }) } };
+      return finish(next, action, true, 'MES 主设备已设置，程序文件将下发至该物联网设备', { deviceId: payload.deviceId, iotDeviceId: payload.iotDeviceId }, false, at);
     }
     case 'oeeTemplate/save': {
       // OEE 映射模板（2026-11-05）：按「物联网产品 + 设备类型」保存；同范围再次保存时发布新版本。
@@ -484,6 +502,8 @@ export function reducer(state, action) {
       const bindingId = `binding-${payload.deviceId.replace('DEV-', 'D')}-${version >= 10 ? '' : '0'}${version}`;
       const newBinding = {
         ...draft, bindingId, version, configStatus: '待生效',
+        // MES 程序文件下发目标：保存绑定级主来源设备
+        mesPrimarySourceId: draft.mesPrimarySourceId || draft.items?.find(i => i.enabled)?.iotDeviceId || null,
         effectiveFrom: null, effectiveTo: null,
         healthStatus: current?.healthStatus || '--',
         pullCycleSec: draft.pullCycleSec || current?.pullCycleSec || 60,

@@ -19,7 +19,7 @@ import { oeeTemplates } from './oeeTemplates.js';
 import { programCompare, programBaselines, programHandles } from './programCompare.js';
 import { lifecycleTasks, assetChangeRecords, idleApplications, scrapApplications } from './lifecycle.js';
 
-export const STORE_VERSION = 20; // 快照结构版本：新增 OEE 映射模板（按物联网产品 + 设备类型匹配）
+export const STORE_VERSION = 21; // 快照结构版本：新增 MES 程序下发主设备（绑定级 mesPrimarySourceId）
 
 export const DEMO_META = {
   mode: 'demo',

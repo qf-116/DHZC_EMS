@@ -124,6 +124,9 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
                 metrics: [],
               });
             });
+          if (binding?.mesPrimarySourceId) {
+            actions.setDraftMesPrimarySource(presetDeviceId, binding.mesPrimarySourceId);
+          }
         }
       }
     }
@@ -142,6 +145,11 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
   }, [state, deviceId]);
 
   const draftItems = draft?.items || [];
+  const selectedMesPrimaryId = draft?.mesPrimarySourceId || draftItems.find((i) => i.enabled)?.iotDeviceId || null;
+  const mesPrimaryOptions = draftItems.filter((i) => i.enabled).map((i) => ({
+    value: i.iotDeviceId,
+    label: `${i.iotDeviceCode} · ${i.name || state.entities.sourceDevicesById[i.iotDeviceId]?.name || '物联网设备'}`,
+  }));
   const discoveredMetrics = draftItems.reduce((s, i) => s + (i.metrics || []).length, 0);
   const monitoredMetrics = draftItems.reduce((s, i) => s + (i.metrics || []).filter((m) => m.monitored).length, 0);
   // OEE 计算配置（2026-11-05）：候选 = 草稿中已勾选监控的指标；状态指标（可用率）+ 报工事件（产量/质量）两项必映射
@@ -493,6 +501,8 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
             rowSelection={{
               selectedRowKeys: draftItems.map((i) => i.iotDeviceId),
               onChange: toggleSources,
+              // 搜索/分页过滤掉已勾选来源时保留勾选（AntD 默认会把不在当前 dataSource 的 key 丢弃）
+              preserveSelectedRowKeys: true,
               columnWidth: 40,
             }}
             onRow={(s) => ({
@@ -533,6 +543,27 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
           <Typography.Paragraph type="secondary" style={{ fontSize: 12, margin: '8px 0 0' }}>
             已选 <b>{draftItems.length}</b> 个来源 · 自动发现 <b>{discoveredMetrics}</b> 项指标
           </Typography.Paragraph>
+          <div style={{ marginTop: 10, padding: '9px 10px', background: '#f7fafc', border: '1px solid #e8eef4', borderRadius: 6 }}>
+            <Space wrap size={8}>
+              <span style={{ fontSize: 12, color: '#5d6b78' }}>MES 程序下发主设备</span>
+              <Select
+                size="small"
+                style={{ width: 320 }}
+                value={selectedMesPrimaryId || undefined}
+                placeholder={mesPrimaryOptions.length ? '选择已勾选的物联网设备' : '请先勾选物联网设备'}
+                disabled={mesPrimaryOptions.length === 0}
+                options={mesPrimaryOptions}
+                onChange={(value) => {
+                  const r = actions.setDraftMesPrimarySource(deviceId, value);
+                  if (r?.ok === false) message.error(r.message);
+                }}
+              />
+              <Tag color="blue">程序文件将下发至此设备</Tag>
+            </Space>
+            <div style={{ fontSize: 12, color: '#8a97a3', marginTop: 4 }}>
+              上方勾选的物联网设备中选择 1 台作为 MES 程序文件下发目标；只勾选 1 台时自动选中。该设置不影响监控指标、OEE 取数和其他来源设备的数据接入。
+            </div>
+          </div>
         </>
       )}
 

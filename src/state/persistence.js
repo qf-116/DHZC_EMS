@@ -85,7 +85,11 @@ function migrateParsed(parsed) {
           stateMetricCode: b.oee.stateMetricCode || null,
           reportMetricCode: b.oee.reportMetricCode || (b.oee.outputMetricCode ? 'E.production_report' : null),
         } : (id === 'DEV-006' ? { enabled: false, stateMetricCode: null, reportMetricCode: null } : b.oee);
-        return [id, { ...b, items, ...(oee ? { oee } : {}) }];
+        // MES 程序下发主设备（V21）：旧快照无此字段时按首个启用来源回填
+        const enabledItems = items.filter((i) => i.enabled);
+        const mesPrimarySourceId = b.mesPrimarySourceId
+          || (enabledItems.find((i) => i.iotDeviceId)?.iotDeviceId || null);
+        return [id, { ...b, items, ...(oee ? { oee } : {}), mesPrimarySourceId }];
       })
   );
   // 来源设备 product 回填（V15）：旧快照来源设备无产品归属，按名称推断（主控制器→网关 / 振动→VB12 / 温度→TP08）

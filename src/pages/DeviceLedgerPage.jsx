@@ -26,6 +26,7 @@ export default function DeviceLedgerPage() {
   const [kw, setKw] = useState('');
   const [lifecycle, setLifecycle] = useState(null);
   const [workshop, setWorkshop] = useState(null);
+  const [type, setType] = useState(null);
   const [form] = Form.useForm();
   const [ownerPickerOpen, setOwnerPickerOpen] = useState(false);
   const selWorkshop = Form.useWatch('workshopName', form);
@@ -87,6 +88,7 @@ export default function DeviceLedgerPage() {
   const lifecycles = useMemo(() => [...new Set(rows.map(r => r.lifecycleStatus).filter(Boolean))], [rows]);
 
   const filtered = rows
+    .filter(r => !type || r.type === type)
     .filter(r => !lifecycle || r.lifecycleStatus === lifecycle)
     .filter(r => !workshop || r.workshopName === workshop)
     .filter(r => {
@@ -156,13 +158,13 @@ export default function DeviceLedgerPage() {
         <Card size="small" title="设备类型" style={{ width: 200, flexShrink: 0 }}>
           <Tree
             defaultExpandAll
-            defaultSelectedKeys={['all']}
+            selectedKeys={type ? [type] : ['all']}
             treeData={typeTree}
-            onSelect={(keys) => setTypeFilter(keys[0] && keys[0] !== 'all' ? keys[0] : null)}
+            onSelect={(keys) => setType(keys[0] && keys[0] !== 'all' ? keys[0] : null)}
           />
         </Card>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <FilterBar onQuery={() => {}} onReset={() => { setLifecycle(null); setWorkshop(null); setKw(''); }}>
+          <FilterBar onQuery={() => {}} onReset={() => { setType(null); setLifecycle(null); setWorkshop(null); setKw(''); }}>
             <FilterField label="生命周期">
               <Select style={{ width: 130 }} placeholder="请选择" allowClear value={lifecycle} onChange={setLifecycle} options={lifecycles.map(v => ({ value: v, label: v }))} />
             </FilterField>

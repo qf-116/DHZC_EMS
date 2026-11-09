@@ -13,7 +13,7 @@ import {
   sampleTriggered, sampleRecovered, comboTriggered, comboRecovered,
   qualityTriggerHit, NUMERIC_TRIGGER_MODES, applyBatchEditPatch, ruleEditConflict,
 } from '../domain/alarmRule.js';
-import { canRepairTransition } from '../domain/repair.js';
+import { canRepairTransition, SLA_HOURS } from '../domain/repair.js';
 import { validateDowntime } from '../domain/downtime.js';
 import { validateOutbound, validateReturn, outboundIdempotencyKey } from '../domain/spare.js';
 import { validateBindingDraft, canTransitionBinding } from '../domain/binding.js';
@@ -27,6 +27,16 @@ function fmtDemoTime(ms) {
 }
 function timeOnly(ts) { return typeof ts === 'string' && ts.includes(' ') ? ts.split(' ')[1] : (ts || '--'); }
 function dateOnly(ts) { return typeof ts === 'string' && ts.includes(' ') ? ts.split(' ')[0] : (ts || '--'); }
+
+// 承诺完成时间 = 创建时间 + 等级时限（紧急 2h / 严重 8h / 一般 24h），口径与工单详情、派工单一致
+function slaDueAtFrom(createdAt, hours) {
+  const m = typeof createdAt === 'string' && createdAt.match(/^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})/);
+  if (!m || !hours) return '--';
+  const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), Number(m[4]), Number(m[5]));
+  d.setHours(d.getHours() + hours);
+  const p = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`;
+}
 
 // ---------- 不可变辅助 ----------
 const setIn = (map, key, value) => ({ ...map, [key]: value });
@@ -702,15 +712,17 @@ export function reducer(state, action) {
       }
       if (['已关闭'].includes(alarm.status)) return reject(state, action, '已关闭报警不能转维修；如需维修请人工报修');
       const id = `RO-${dateOnly(at).replaceAll('-', '')}-${seq()}`;
+      const level = alarm.severity === '提示' ? '一般' : alarm.severity === '紧急' ? '紧急' : '严重';
+      const slaHours = SLA_HOURS[level];
       const order = {
         repairOrderId: id, code: id, deviceId: alarm.deviceId, deviceName: alarm.deviceName,
         deviceCode: E.crosswalkById[alarm.deviceId]?.assetCode || '--',
         title: `${alarm.name} 维修`, source: 'alarm', alarmId: alarm.id, reportId: null,
-        faultType: payload.faultType || '其他', level: alarm.severity === '提示' ? '一般' : alarm.severity === '紧急' ? '紧急' : '严重',
+        faultType: payload.faultType || '其他', level,
         faultDesc: payload.faultDesc || `${alarm.name}（触发值 ${alarm.trigger}，阈值 ${alarm.threshold}）`,
         status: '待派工', assignee: null, assigneeGroup: null, reporter: actor.userName,
         createdAt: at, assignedAt: null, startedAt: null, submittedAt: null, acceptedAt: null,
-        slaHours: alarm.severity === '紧急' ? 2 : 8, slaDueAt: '--',
+        slaHours, slaDueAt: slaDueAtFrom(at, slaHours),
         downtimeFactId: alarm.relatedDowntimeId, downtimeDuringRepair: true,
         measures: '', verification: '', laborHours: null, parts: [], timeline: [{ type: '创建', time: at, actor: actor.userName, detail: `由报警 ${alarm.id} 转维修生成` }],
         acceptance: null, reworkCount: 0,
@@ -946,14 +958,16 @@ export function reducer(state, action) {
       if (!(payload.faultDesc || '').trim()) return reject(state, action, '故障描述必填');
       const orderId = `RO-${dateOnly(at).replaceAll('-', '')}-${seq()}`;
       const reportId = `BX-${dateOnly(at).replaceAll('-', '')}-${seq()}`;
+      const level = payload.level || '一般';
+      const slaHours = SLA_HOURS[level] || SLA_HOURS['一般'];
       const order = {
         repairOrderId: orderId, code: orderId, deviceId, deviceName: device.name,
         deviceCode: E.crosswalkById[deviceId]?.assetCode || '--',
         title: payload.title || `${device.name} 故障维修`, source: 'report', alarmId: payload.alarmId || null, reportId,
-        faultType: payload.faultType || '其他', level: payload.level || '一般', faultDesc: payload.faultDesc,
+        faultType: payload.faultType || '其他', level, faultDesc: payload.faultDesc,
         status: '待派工', assignee: null, assigneeGroup: null, reporter: actor.userName,
         createdAt: at, assignedAt: null, startedAt: null, submittedAt: null, acceptedAt: null,
-        slaHours: payload.level === '紧急' ? 2 : payload.level === '严重' ? 8 : 24, slaDueAt: '--',
+        slaHours, slaDueAt: slaDueAtFrom(at, slaHours),
         downtimeFactId: null, downtimeDuringRepair: false,
         measures: '', verification: '', laborHours: null, parts: [],
         timeline: [{ type: '创建', time: at, actor: actor.userName, detail: `人工报修：${payload.faultDesc}` }],

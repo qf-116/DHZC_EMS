@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Card, Table, Tag, Button, Space, Select, DatePicker } from 'antd';
+import { Card, Table, Tag, Button, Space, DatePicker } from 'antd';
 import dayjs from 'dayjs';
 import { Bar, BarChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { Download } from 'lucide-react';
@@ -28,9 +28,7 @@ export default function RepairReportPage() {
   const actions = useDemoActions();
   const meta = state.meta;
 
-  // UI 层筛选：设备 / 状态 / 统计日期范围
-  const [device, setDevice] = useState('all');
-  const [status, setStatus] = useState('all');
+  // UI 层筛选：统计日期范围（按工单创建时间过滤）
   const [range, setRange] = useState(null);
 
   // 日期范围过滤助手（按前 10 位日期字符串比较）
@@ -43,19 +41,13 @@ export default function RepairReportPage() {
 
   const orders = useMemo(() => Object.values(state.entities.repairOrdersById), [state]);
   const reports = useMemo(() => Object.values(state.entities.repairReportsById), [state]);
-  const deviceOptions = useMemo(() => {
-    const names = [...new Set(orders.map(o => o.deviceName).filter(Boolean))];
-    return names.map(n => ({ value: n, label: n }));
-  }, [orders]);
 
   const scoped = useMemo(
     () => orders.filter(o => {
       if (!inRange(o.createdAt)) return false; // 统计日期范围：按工单创建时间过滤后再聚合
-      if (device !== 'all' && o.deviceName !== device) return false;
-      if (status !== 'all' && o.status !== status) return false;
       return true;
     }),
-    [orders, device, status, range],
+    [orders, range],
   );
 
   // 按设备聚合
@@ -74,10 +66,13 @@ export default function RepairReportPage() {
       if (row.status[o.status] !== undefined) row.status[o.status] += 1;
       row.rework += (o.reworkCount || 0) > 0 ? 1 : 0; // 返修工单数
       const done = o.status === '已完成';
+      const hasDue = typeof o.slaDueAt === 'string' && o.slaDueAt.includes('-') && !o.slaDueAt.startsWith('--');
       if (done) {
-        row.slaDone += 1;
-        if (o.acceptedAt && o.slaDueAt && o.acceptedAt <= o.slaDueAt) row.slaMet += 1;
-      } else if (o.status !== '已取消' && o.slaDueAt && o.slaDueAt.slice(0, 10) < (meta.demoDay || '')) {
+        if (hasDue) { // 承诺完成时间缺失的工单不参与 SLA 统计（不可判定）
+          row.slaDone += 1;
+          if (o.acceptedAt && o.acceptedAt <= o.slaDueAt) row.slaMet += 1;
+        }
+      } else if (o.status !== '已取消' && hasDue && o.slaDueAt.slice(0, 10) < (meta.demoDay || '')) {
         row.overdueOpen += 1;
       }
       if (o.faultType) row.faultTypes[o.faultType] = (row.faultTypes[o.faultType] || 0) + 1;
@@ -108,14 +103,13 @@ export default function RepairReportPage() {
   );
 
   const currentFilters = {
-    device: device === 'all' ? '' : device,
-    status: status === 'all' ? '' : status,
+    range: range && range[0] && range[1] ? `${range[0].format('YYYY-MM-DD')}~${range[1].format('YYYY-MM-DD')}` : '',
   };
   const handleQuery = () => {
     const res = actions.runReport(THEME, currentFilters);
     res.ok ? message.success(res.message) : message.error(res.message);
   };
-  const handleReset = () => { setDevice('all'); setStatus('all'); setRange(null); };
+  const handleReset = () => { setRange(null); };
   const handleExport = () => {
     const res = actions.createExportTask(THEME, currentFilters);
     res.ok ? message.success(res.message) : message.error(res.message);
@@ -171,12 +165,6 @@ export default function RepairReportPage() {
             ]}
             placeholder={['开始日期', '结束日期']}
           />
-        </FilterField>
-        <FilterField label="设备">
-          <Select value={device} onChange={setDevice} style={{ width: 170 }} showSearch optionFilterProp="label" options={[{ value: 'all', label: '全部设备' }, ...deviceOptions]} />
-        </FilterField>
-        <FilterField label="状态">
-          <Select value={status} onChange={setStatus} style={{ width: 130 }} options={[{ value: 'all', label: '全部状态' }, ...STATUS_KEYS.map(k => ({ value: k, label: k }))]} />
         </FilterField>
       </FilterBar>
       <div className="metric-grid metric-grid--row7" style={{ marginBottom: 12 }}>

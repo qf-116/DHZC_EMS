@@ -92,11 +92,8 @@ export default function RepairReportPage() {
     pendingAccept: a.pendingAccept + r.status['待验收'],
     done: a.done + r.status['已完成'],
     rework: a.rework + r.rework,
-    slaMet: a.slaMet + r.slaMet, slaDone: a.slaDone + r.slaDone,
     overdueOpen: a.overdueOpen + r.overdueOpen,
-  }), { total: 0, pendingDispatch: 0, doing: 0, pendingAccept: 0, done: 0, rework: 0, slaMet: 0, slaDone: 0, overdueOpen: 0 }), [rows]);
-
-  const slaRate = totals.slaDone > 0 ? Math.round((totals.slaMet / totals.slaDone) * 100) : null;
+  }), { total: 0, pendingDispatch: 0, doing: 0, pendingAccept: 0, done: 0, rework: 0, overdueOpen: 0 }), [rows]);
 
   // 故障类型分布（由工单故障类型聚合）
   const faultTypeData = useMemo(() => {
@@ -182,7 +179,7 @@ export default function RepairReportPage() {
           <Select value={status} onChange={setStatus} style={{ width: 130 }} options={[{ value: 'all', label: '全部状态' }, ...STATUS_KEYS.map(k => ({ value: k, label: k }))]} />
         </FilterField>
       </FilterBar>
-      <div className="metric-grid" style={{ marginBottom: 12 }}>
+      <div className="metric-grid metric-grid--row7" style={{ marginBottom: 12 }}>
         <MetricTile label="维修工单" value={totals.total} unit="单" />
         <MetricTile label="报修记录" value={reports.length || '--'} unit={reports.length ? '单' : ''} />
         <MetricTile label="进行中（派工/维修/挂起）" value={totals.doing} unit="单" color="#d46b08" />
@@ -190,7 +187,6 @@ export default function RepairReportPage() {
         <MetricTile label="待验收" value={totals.pendingAccept} unit="单" color="#8d6e63" />
         <MetricTile label="已完成" value={totals.done} unit="单" color="#16a34a" />
         <MetricTile label="返修工单" value={totals.rework} unit="单" color="#dc2626" />
-        <MetricTile label="SLA 达成率" value={slaRate === null ? '--' : `${slaRate}%`} color="#1668dc" />
       </div>
       {faultTypeData.length > 0 && (
         <Card size="small" title="故障类型分布（按工单）" style={{ marginBottom: 12 }}>

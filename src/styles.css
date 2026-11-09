@@ -244,6 +244,10 @@ body {
 /* 自适应铺满一行：无论 4/5/6 块指标都占满整行，不留右侧空白。
    最小列宽 160px：保证 1366 宽笔记本（侧栏 + 留白后内容约 1090px）6 块指标仍为一行 */
 .metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; }
+/* 统计卡片压到 7 个时的紧凑排布：笔记本窄屏也能排成一行（低于 1150px 视口自动折行） */
+.metric-grid--row7 { grid-template-columns: repeat(auto-fit, minmax(126px, 1fr)); gap: 10px; }
+.metric-grid--row7 .metric-tile { padding: 14px 12px; }
+.metric-grid--row7 .metric-value { font-size: 28px; }
 .metric-tile {
   --tile: var(--brand);
   position: relative;

@@ -72,10 +72,10 @@ export default function InspectionReportPage() {
     };
   }), []);
 
-  // 按状态聚合
+  // 按状态聚合（状态口径对齐原型：未开始 / 进行中 / 已完成 / 已关闭）
   const byStatus = useMemo(() => {
-    const order = ['已完成', '进行中', '待执行', '已逾期', '已关闭'];
-    const labelOf = (t) => (isOverdue(t) ? '已逾期' : ({ 未开始: '待执行', 进行中: '进行中', 已完成: '已完成', 已关闭: '已关闭' }[t.status] || t.status));
+    const order = ['已完成', '进行中', '未开始', '已逾期', '已关闭'];
+    const labelOf = (t) => (isOverdue(t) ? '已逾期' : ({ 未开始: '未开始', 进行中: '进行中', 已完成: '已完成', 已关闭: '已关闭' }[t.status] || t.status));
     const map = new Map();
     tasks.forEach(t => {
       const key = labelOf(t);
@@ -139,7 +139,7 @@ export default function InspectionReportPage() {
             { title: '任务总数', dataIndex: 'total', width: 100 },
             { title: '已完成', dataIndex: 'done', width: 90 },
             { title: '进行中', dataIndex: 'running', width: 90 },
-            { title: '待执行', dataIndex: 'pending', width: 90 },
+            { title: '未开始', dataIndex: 'pending', width: 90 },
             { title: '已关闭', dataIndex: 'closed', width: 90 },
             { title: <ColTitle title="逾期数" tip="点检日期早于统计日且未完结（未开始 / 进行中）的任务数（派生计算）" />, dataIndex: 'overdue', width: 110 },
             { title: <ColTitle title="完成率" tip="完成率 = 已完成任务数 ÷ 任务总数 × 100%" />, dataIndex: 'done', width: 100, render: (_, r) => pct(r.done, r.total) },

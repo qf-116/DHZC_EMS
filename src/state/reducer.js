@@ -13,7 +13,7 @@ import {
   sampleTriggered, sampleRecovered, comboTriggered, comboRecovered,
   qualityTriggerHit, NUMERIC_TRIGGER_MODES, applyBatchEditPatch, ruleEditConflict,
 } from '../domain/alarmRule.js';
-import { canRepairTransition, SLA_HOURS } from '../domain/repair.js';
+import { canRepairTransition, SLA_HOURS, HANDLING_METHODS } from '../domain/repair.js';
 import { validateDowntime } from '../domain/downtime.js';
 import { validateOutbound, validateReturn, outboundIdempotencyKey } from '../domain/spare.js';
 import { validateBindingDraft, canTransitionBinding } from '../domain/binding.js';
@@ -69,6 +69,25 @@ function addHistory(state, at, entityType, entityId, summary, detail = {}) {
 function pushTimeline(order, type, actor, detail, at) {
   return { ...order, timeline: [...(order.timeline || []), { type, time: at, actor, detail }] };
 }
+
+// 维修执行录入字段（原型「查看.html」「去维修.html」原文）：
+// 处理方式 / 故障原因 / 维修说明 / 维修类型 / 维修部位 / 维修级别 /
+// 维修开始时间 / 维修结束时间 / 维修人员（多选）/ 维修时间 / 维修图片（≤10）/ 备注。
+// 只写入本次提交实际携带的字段（未携带则保留原值）。
+const EXECUTION_FIELDS = [
+  'handlingMethod', 'faultCause', 'repairDesc', 'repairType', 'repairPart', 'repairLevel',
+  'repairStartTime', 'repairEndTime', 'repairPersonIds', 'repairTime', 'images', 'remark',
+];
+function mergeExecutionFields(order, payload = {}) {
+  const patch = {};
+  for (const f of EXECUTION_FIELDS) {
+    if (payload[f] !== undefined && payload[f] !== null) patch[f] = payload[f];
+  }
+  return { ...order, ...patch };
+}
+
+// 工单可录入维修结果的状态（已派工 / 维修中 / 挂起）
+const EXECUTABLE_STATUS = ['已派工', '维修中', '挂起'];
 
 // 校验不通过 → 不变更事实，只反馈
 function reject(state, action, message, errors = []) {
@@ -961,8 +980,8 @@ export function reducer(state, action) {
       const level = payload.level || '一般';
       const slaHours = SLA_HOURS[level] || SLA_HOURS['一般'];
       const order = {
-        repairOrderId: orderId, code: orderId, deviceId, deviceName: device.name,
-        deviceCode: E.crosswalkById[deviceId]?.assetCode || '--',
+        repairOrderId: orderId, code: orderId, deviceId: payload.deviceId, deviceName: device.name,
+        deviceCode: E.crosswalkById[payload.deviceId]?.assetCode || '--',
         title: payload.title || `${device.name} 故障维修`, source: 'report', alarmId: payload.alarmId || null, reportId,
         faultType: payload.faultType || '其他', level, faultDesc: payload.faultDesc,
         status: '待派工', assignee: null, assigneeGroup: null, reporter: actor.userName,
@@ -970,13 +989,180 @@ export function reducer(state, action) {
         slaHours, slaDueAt: slaDueAtFrom(at, slaHours),
         downtimeFactId: null, downtimeDuringRepair: false,
         measures: '', verification: '', laborHours: null, parts: [],
+        // 维修执行录入字段（原型「查看.html」录入表单）
+        handlingMethod: null, faultCause: '', repairDesc: '', repairType: null, repairPart: null,
+        repairLevel: null, repairStartTime: null, repairEndTime: null, repairPersonIds: [],
+        repairTime: null, images: [], remark: '',
         timeline: [{ type: '创建', time: at, actor: actor.userName, detail: `人工报修：${payload.faultDesc}` }],
         acceptance: null, reworkCount: 0,
       };
-      const report = { reportId, code: reportId, title: order.title, deviceId, deviceName: device.name, deviceCode: order.deviceCode, faultType: order.faultType, level: order.level, faultTime: at, desc: payload.faultDesc, status: '已转工单', creator: actor.userName, createTime: at, linkedRepairOrderId: orderId, source: '人工报修' };
+      const report = {
+        reportId, code: reportId, title: order.title, deviceId: payload.deviceId, deviceName: device.name, deviceCode: order.deviceCode,
+        faultType: order.faultType, level: order.level, faultTime: payload.faultTime || at, desc: payload.faultDesc,
+        // 报修单状态展示由关联工单状态派生（见 domain/repair.js deriveReportStatus）；
+        // 此处 status 仅保留「已取消」等终态覆盖，初始留空表示按工单派生。
+        status: null,
+        creator: actor.userName, createTime: at, reportTime: payload.reportTime || at,
+        reporter: actor.userName, reporterDept: payload.reporterDept || device.workshopName || '--',
+        downtimeFlag: Boolean(payload.downtimeFlag), deviceType: device.type || '--',
+        images: payload.images || [],
+        linkedRepairOrderId: orderId, source: '人工报修',
+      };
       let next = setE(setE(state, 'repairOrdersById', orderId, order), 'repairReportsById', reportId, report);
-      next = addHistory(next, at, 'repair', orderId, '人工报修并生成主工单', { deviceId });
+      next = addHistory(next, at, 'repair', orderId, '人工报修并生成主工单', { deviceId: payload.deviceId });
       return finish(next, action, true, `报修已提交，主工单 ${orderId}（待派工）`, { repairOrderId: orderId, reportId }, false, at);
+    }
+    // 报修单编辑（原型：报修单行操作「编辑」；已派工后不可编辑，只能取消）
+    case 'repair/updateReport': {
+      const report = E.repairReportsById[payload.reportId];
+      if (!report) return reject(state, action, '报修单不存在');
+      const linked = report.linkedRepairOrderId ? E.repairOrdersById[report.linkedRepairOrderId] : null;
+      if (linked && !['待派工', '已取消', '已完成'].includes(linked.status)) {
+        return reject(state, action, '该报修已派工，不能编辑；请先取消维修任务');
+      }
+      const device = E.devicesById[report.deviceId];
+      const updated = {
+        ...report,
+        title: payload.title || report.title,
+        faultType: payload.faultType || report.faultType,
+        level: payload.level || report.level,
+        faultTime: payload.faultTime || report.faultTime,
+        desc: payload.desc ?? report.desc,
+        downtimeFlag: payload.downtimeFlag === undefined ? report.downtimeFlag : Boolean(payload.downtimeFlag),
+        images: payload.images === undefined ? report.images : payload.images,
+        deviceType: device?.type || report.deviceType,
+        updatedAt: at, updatedBy: actor.userName,
+      };
+      let next = setE(state, 'repairReportsById', report.reportId, updated);
+      next = addHistory(next, at, 'repair', report.reportId, '编辑报修单', { deviceId: report.deviceId });
+      return finish(next, action, true, `报修单 ${report.code} 已更新`, { reportId: report.reportId }, false, at);
+    }
+    // 报修单取消（原型：取消需填原因；已指派人员的报修记录不能删除，只能取消）
+    case 'repair/cancelReport': {
+      const report = E.repairReportsById[payload.reportId];
+      if (!report) return reject(state, action, '报修单不存在');
+      if (!(payload.reason || '').trim()) return reject(state, action, '请填写取消原因');
+      const linked = report.linkedRepairOrderId ? E.repairOrdersById[report.linkedRepairOrderId] : null;
+      // 工单正在处理（维修中/挂起/待验收）时不允许直接取消报修
+      if (linked && ['维修中', '挂起', '待验收'].includes(linked.status)) {
+        return reject(state, action, `该报修的维修任务（${linked.code}）当前「${linked.status}」，请先在维修任务侧处理`);
+      }
+      const updated = { ...report, status: '已取消', cancelReason: payload.reason, cancelTime: at, cancelBy: actor.userName };
+      let next = setE(state, 'repairReportsById', report.reportId, updated);
+      // 关联工单尚未开工（待派工/已派工）时一并取消，保持报修与工单状态一致
+      if (linked && ['待派工', '已派工'].includes(linked.status)) {
+        next = setE(next, 'repairOrdersById', linked.repairOrderId,
+          pushTimeline({ ...linked, status: '已取消', cancelReason: payload.reason, cancelTime: at, cancelBy: actor.userName },
+            '取消', actor.userName, `报修单 ${report.code} 取消：${payload.reason}`, at));
+      }
+      next = addHistory(next, at, 'repair', report.reportId, `取消报修单：${payload.reason}`, { deviceId: report.deviceId });
+      return finish(next, action, true, `报修单 ${report.code} 已取消`, { reportId: report.reportId }, false, at);
+    }
+    // 报修单删除（原型：已指派人员的报修记录不能删除，只能取消）
+    case 'repair/deleteReport': {
+      const report = E.repairReportsById[payload.reportId];
+      if (!report) return reject(state, action, '报修单不存在');
+      const linked = report.linkedRepairOrderId ? E.repairOrdersById[report.linkedRepairOrderId] : null;
+      if (linked && !['待派工', '已取消', '已完成'].includes(linked.status)) {
+        return reject(state, action, '该报修已派工，不能删除；请改用「取消」');
+      }
+      const reportsMap = { ...E.repairReportsById };
+      delete reportsMap[report.reportId];
+      let next = setEnt(state, 'repairReportsById', reportsMap);
+      next = addHistory(next, at, 'repair', report.reportId, '删除报修单', { deviceId: report.deviceId });
+      return finish(next, action, true, `报修单 ${report.code} 已删除`, { reportId: report.reportId }, false, at);
+    }
+    // 快速维修：直接添加的维修任务信息（原型「维修任务」规则第 5 条），初始待派工
+    case 'repair/createQuickOrder': {
+      const device = E.devicesById[payload.deviceId];
+      if (!device) return reject(state, action, '设备不存在');
+      if (!(payload.title || '').trim()) return reject(state, action, '维修任务名称必填');
+      if (!(payload.faultDesc || '').trim()) return reject(state, action, '故障描述必填');
+      const orderId = `RO-${dateOnly(at).replaceAll('-', '')}-${seq()}`;
+      const level = payload.level || '一般';
+      const slaHours = SLA_HOURS[level] || SLA_HOURS['一般'];
+      const order = {
+        repairOrderId: orderId, code: orderId, deviceId: payload.deviceId, deviceName: device.name,
+        deviceCode: E.crosswalkById[payload.deviceId]?.assetCode || '--',
+        title: payload.title.trim(), source: 'quick', alarmId: null, reportId: null,
+        faultType: payload.faultType || '其他', level, faultDesc: payload.faultDesc,
+        status: '待派工', assignee: null, assigneeGroup: null, reporter: actor.userName,
+        createdAt: at, assignedAt: null, startedAt: null, submittedAt: null, acceptedAt: null,
+        slaHours, slaDueAt: slaDueAtFrom(at, slaHours),
+        downtimeFactId: null, downtimeDuringRepair: false,
+        measures: '', verification: '', laborHours: null, parts: [],
+        handlingMethod: payload.handlingMethod || null, faultCause: '', repairDesc: payload.repairDesc || '',
+        repairType: payload.repairType || null, repairPart: payload.repairPart || null, repairLevel: null,
+        repairStartTime: null, repairEndTime: null, repairPersonIds: [], repairTime: null,
+        images: [], remark: payload.remark || '',
+        timeline: [{ type: '创建', time: at, actor: actor.userName, detail: `快速维修任务：${payload.title.trim()}` }],
+        acceptance: null, reworkCount: 0,
+      };
+      let next = setE(state, 'repairOrdersById', orderId, order);
+      next = addHistory(next, at, 'repair', orderId, `新增快速维修任务 ${orderId}`, { deviceId: payload.deviceId });
+      return finish(next, action, true, `快速维修任务 ${orderId} 已创建（待派工）`, { repairOrderId: orderId }, false, at);
+    }
+    // 快速维修任务编辑（原型规则：仅快速维修的任务可以编辑）
+    case 'repair/updateQuickOrder': {
+      const order = E.repairOrdersById[payload.repairOrderId];
+      if (!order) return reject(state, action, '维修工单不存在');
+      if (order.source !== 'quick') return reject(state, action, '仅「快速维修」任务可以编辑');
+      if (!['待派工', '已取消'].includes(order.status)) return reject(state, action, `当前状态「${order.status}」不能编辑`);
+      if (!(payload.title || '').trim()) return reject(state, action, '维修任务名称必填');
+      const updated = {
+        ...order,
+        title: payload.title.trim(),
+        faultType: payload.faultType || order.faultType,
+        level: payload.level || order.level,
+        faultDesc: payload.faultDesc ?? order.faultDesc,
+        repairType: payload.repairType || order.repairType,
+        repairPart: payload.repairPart || order.repairPart,
+        remark: payload.remark ?? order.remark,
+        updatedAt: at, updatedBy: actor.userName,
+      };
+      let next = setE(state, 'repairOrdersById', order.repairOrderId, updated);
+      next = addHistory(next, at, 'repair', order.repairOrderId, '编辑快速维修任务', { deviceId: order.deviceId });
+      return finish(next, action, true, `快速维修任务 ${order.code} 已更新`, { repairOrderId: order.repairOrderId }, false, at);
+    }
+    // 快速维修任务删除（原型工具栏「删除」；仅快速维修来源可删）
+    case 'repair/deleteQuickOrder': {
+      const order = E.repairOrdersById[payload.repairOrderId];
+      if (!order) return reject(state, action, '维修工单不存在');
+      if (order.source !== 'quick') return reject(state, action, '仅「快速维修」任务可以删除');
+      if (!['待派工', '已取消'].includes(order.status)) return reject(state, action, `当前状态「${order.status}」不能删除`);
+      const map = { ...E.repairOrdersById };
+      delete map[order.repairOrderId];
+      let next = setEnt(state, 'repairOrdersById', map);
+      next = addHistory(next, at, 'repair', order.repairOrderId, '删除快速维修任务', { deviceId: order.deviceId });
+      return finish(next, action, true, `快速维修任务 ${order.code} 已删除`, { repairOrderId: order.repairOrderId }, false, at);
+    }
+    // 维修任务取消（原型规则第 6 条：取消任务时需要填写取消原因；仅待派工 / 已派工可取消）
+    case 'repair/cancel': {
+      const order = E.repairOrdersById[payload.repairOrderId];
+      if (!order) return reject(state, action, '维修工单不存在');
+      if (!(payload.reason || '').trim()) return reject(state, action, '请填写取消原因');
+      if (!['待派工', '已派工'].includes(order.status)) {
+        return reject(state, action, `当前状态「${order.status}」不能取消（仅「待派工」「已派工」可取消）`);
+      }
+      const updated = { ...order, status: '已取消', cancelReason: payload.reason, cancelTime: at, cancelBy: actor.userName };
+      let next = setE(state, 'repairOrdersById', order.repairOrderId, pushTimeline(updated, '取消', actor.userName, payload.reason, at));
+      next = addHistory(next, at, 'repair', order.repairOrderId, `取消维修任务：${payload.reason}`, { deviceId: order.deviceId });
+      return finish(next, action, true, `${order.code} 已取消`, { repairOrderId: order.repairOrderId }, false, at);
+    }
+    // 维修执行录入（处理方式 / 故障原因 / 维修说明 / 起止时间 / 维修人员 / 维修图片 / 备注）
+    case 'repair/saveExecution': {
+      const order = E.repairOrdersById[payload.repairOrderId];
+      if (!order) return reject(state, action, '维修工单不存在');
+      if (!EXECUTABLE_STATUS.includes(order.status)) {
+        return reject(state, action, `当前状态「${order.status}」不能录入维修结果`);
+      }
+      if (payload.handlingMethod && !HANDLING_METHODS.includes(payload.handlingMethod)) {
+        return reject(state, action, '处理方式取值不合法');
+      }
+      const merged = mergeExecutionFields(order, payload);
+      let next = setE(state, 'repairOrdersById', order.repairOrderId, pushTimeline(merged, '维修录入', actor.userName, `处理方式：${merged.handlingMethod || '--'}`, at));
+      next = addHistory(next, at, 'repair', order.repairOrderId, '录入维修结果', { deviceId: order.deviceId });
+      return finish(next, action, true, `${order.code} 维修结果已保存`, { repairOrderId: order.repairOrderId }, false, at);
     }
     case 'repair/assign': {
       const order = E.repairOrdersById[payload.repairOrderId];
@@ -1029,7 +1215,12 @@ export function reducer(state, action) {
       if (!canRepairTransition(order.status, '待验收')) return reject(state, action, `当前状态「${order.status}」不能提交验收（提交后进入待验收，不直接完成）`);
       if (!(payload.measures || '').trim()) return reject(state, action, '必须填写维修措施');
       if (!(payload.verification || '').trim()) return reject(state, action, '必须填写验证方式/结果');
-      const updated = { ...order, status: '待验收', measures: payload.measures, verification: payload.verification, submittedAt: at, laborHours: payload.laborHours ?? order.laborHours };
+      if (payload.handlingMethod && !HANDLING_METHODS.includes(payload.handlingMethod)) {
+        return reject(state, action, '处理方式取值不合法');
+      }
+      // 维修执行录入字段随提交一并写回工单（处理方式 / 故障原因 / 维修说明 / 起止时间 / 维修人员 / 图片 / 备注）
+      const merged = mergeExecutionFields(order, payload);
+      const updated = { ...merged, status: '待验收', measures: payload.measures, verification: payload.verification, submittedAt: at, laborHours: payload.laborHours ?? order.laborHours };
       let next = setE(state, 'repairOrdersById', order.repairOrderId, pushTimeline(updated, '提交', actor.userName, '提交验收', at));
       next = addHistory(next, at, 'repair', order.repairOrderId, '提交维修结果，进入待验收', { deviceId: order.deviceId });
       return finish(next, action, true, `${order.repairOrderId} 已提交，进入「待验收」；验收通过后设备才恢复`, { repairOrderId: order.repairOrderId }, false, at);
@@ -1067,6 +1258,70 @@ export function reducer(state, action) {
       return reducer(state, { ...action, type: 'repair/accept', payload: { ...payload, result: '返修' }, internal: true });
     }
 
+    // ================= 维修经验库（原型「维修经验库」列表）=================
+    case 'repair/knowledgeCreate': {
+      const d = payload.draft || {};
+      if (!(d.name || '').trim()) return reject(state, action, '维修经验名称必填');
+      if (!(d.faultType || '').trim()) return reject(state, action, '故障类型必填');
+      if (!(d.deviceType || '').trim()) return reject(state, action, '设备类型必填');
+      if (!(d.devicePart || '').trim()) return reject(state, action, '设备部位必填');
+      const id = `RK-${dateOnly(at).replaceAll('-', '')}-${seq()}`;
+      const record = {
+        knowledgeId: id, code: id, name: d.name.trim(),
+        faultType: d.faultType, deviceType: d.deviceType, devicePart: d.devicePart,
+        faultDesc: d.faultDesc || '', faultReason: d.faultReason || '', repairContent: d.repairContent || '',
+        images: d.images || [], remark: d.remark || '',
+        status: '启用', creator: actor.userName, createTime: at, updatedAt: at, updatedBy: actor.userName,
+      };
+      let next = setE(state, 'repairKnowledgeById', id, record);
+      next = addHistory(next, at, 'repair-knowledge', id, `新增维修经验「${record.name}」`, {});
+      return finish(next, action, true, `维修经验「${record.name}」已创建`, { knowledgeId: id }, false, at);
+    }
+    case 'repair/knowledgeUpdate': {
+      const { knowledgeId } = payload;
+      const exist = E.repairKnowledgeById[knowledgeId];
+      if (!exist) return reject(state, action, '维修经验不存在');
+      const d = payload.draft || {};
+      if (!(d.name || '').trim()) return reject(state, action, '维修经验名称必填');
+      const updated = {
+        ...exist,
+        name: d.name.trim(),
+        faultType: d.faultType || exist.faultType,
+        deviceType: d.deviceType || exist.deviceType,
+        devicePart: d.devicePart || exist.devicePart,
+        faultDesc: d.faultDesc ?? exist.faultDesc,
+        faultReason: d.faultReason ?? exist.faultReason,
+        repairContent: d.repairContent ?? exist.repairContent,
+        images: d.images === undefined ? exist.images : d.images,
+        remark: d.remark ?? exist.remark,
+        updatedAt: at, updatedBy: actor.userName,
+      };
+      let next = setE(state, 'repairKnowledgeById', knowledgeId, updated);
+      next = addHistory(next, at, 'repair-knowledge', knowledgeId, `编辑维修经验「${updated.name}」`, {});
+      return finish(next, action, true, `维修经验「${updated.name}」已保存`, { knowledgeId }, false, at);
+    }
+    case 'repair/knowledgeDelete': {
+      const { knowledgeId } = payload;
+      const exist = E.repairKnowledgeById[knowledgeId];
+      if (!exist) return reject(state, action, '维修经验不存在');
+      const map = { ...E.repairKnowledgeById };
+      delete map[knowledgeId];
+      let next = setEnt(state, 'repairKnowledgeById', map);
+      next = addHistory(next, at, 'repair-knowledge', knowledgeId, `删除维修经验「${exist.name}」`, {});
+      return finish(next, action, true, `维修经验「${exist.name}」已删除`, { knowledgeId }, false, at);
+    }
+    case 'repair/knowledgeToggleStatus': {
+      const { knowledgeId } = payload;
+      const exist = E.repairKnowledgeById[knowledgeId];
+      if (!exist) return reject(state, action, '维修经验不存在');
+      const status = payload.status === '停用' ? '停用' : '启用';
+      if (exist.status === status) return reject(state, action, `维修经验已是「${status}」状态`);
+      const updated = { ...exist, status, updatedAt: at, updatedBy: actor.userName };
+      let next = setE(state, 'repairKnowledgeById', knowledgeId, updated);
+      next = addHistory(next, at, 'repair-knowledge', knowledgeId, `${status}维修经验「${exist.name}」`, {});
+      return finish(next, action, true, `维修经验「${exist.name}」已${status}`, { knowledgeId, status }, false, at);
+    }
+
     // ================= 备件 =================
     case 'spare/consume': {
       const { repairOrderId, spareCode, warehouseId, qty, requestId, person } = payload;
@@ -1081,9 +1336,9 @@ export function reducer(state, action) {
       const outboundId = `OB-${dateOnly(at).replaceAll('-', '')}-${seq()}`;
       const spare = E.sparesByCode[spareCode];
       const outbound = {
-        outboundId, code: `ck${dateOnly(at).replaceAll('-', '')}${seq()}`, type: '维修出库', repairOrderId,
+        outboundId, code: `ck${dateOnly(at).replaceAll('-', '')}${seq()}`, type: payload.outboundType || '维修出库', repairOrderId,
         idempotencyKey: idemKey, warehouseId, date: dateOnly(at), status: '已出库', person: person || actor.userName, creator: actor.userName,
-        createTime: at, remark: `维修任务 ${repairOrderId} 领料。`,
+        createTime: at, remark: payload.remark || `维修任务 ${repairOrderId} 领料。`,
         items: [{ spareCode, spareName: spare?.name || spareCode, unit: spare?.unit || '--', qty }],
       };
       let next = setE(state, 'outboundsById', outboundId, outbound);
@@ -1110,6 +1365,15 @@ export function reducer(state, action) {
       if (stockRow) next = setE(next, 'stockByKey', stockKey, { ...stockRow, onHand: stockRow.onHand + qty });
       const flowId = `SF-${returnId}`;
       next = setE(next, 'stockFlowsById', flowId, { flowId, time: at, warehouseId: outbound.warehouseId, spareCode: item.spareCode, type: '退库', qty, balanceAfter: stockRow ? stockRow.onHand + qty : null, ref: returnId, note: reason || '余料退库' });
+      // 余料退库回冲工单领用明细（维修执行页「移除」行即走此处）
+      if (outbound.repairOrderId && next.entities.repairOrdersById[outbound.repairOrderId]) {
+        const order = next.entities.repairOrdersById[outbound.repairOrderId];
+        const parts = (order.parts || []).map(p => (p.outboundId === outboundId
+          ? { ...p, qty: (p.qty || 0) - qty, returnedQty: (p.returnedQty || 0) + qty }
+          : p)).filter(p => (p.outboundId === outboundId ? (p.qty || 0) > 0 : true));
+        next = setE(next, 'repairOrdersById', outbound.repairOrderId,
+          pushTimeline({ ...order, parts }, '退库', actor.userName, `${item.spareName} ×${qty} 余料退库（${outbound.warehouseId}）`, at));
+      }
       next = addHistory(next, at, 'spare', returnId, `退库 ${item.spareName} ×${qty}（${outbound.warehouseId}）`, { outboundId });
       return finish(next, action, true, `退库单 ${returnId}：${item.spareName} ×${qty} 已回冲 ${outbound.warehouseId} 现存`, { returnId }, false, at);
     }

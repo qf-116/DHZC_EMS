@@ -11,6 +11,8 @@ import {
   maintenancePlans,
   maintenancePlanDetails,
   maintenanceTasks,
+  maintenanceItems,
+  maintenanceStandardItemCodes,
 } from '../data/standardData.js';
 import { crosswalkByAssetCode } from '../data/demo/deviceCrosswalk.js';
 
@@ -43,6 +45,7 @@ export default function MaintenancePlanDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [form] = Form.useForm();
   const [patch, setPatch] = useState({});
+  const [itemModalRow, setItemModalRow] = useState(null);
 
   const code = params.get('code') || params.get('id');
   const plan = code ? maintenancePlans.find(r => r.code === code) : null;
@@ -105,6 +108,7 @@ export default function MaintenancePlanDetailPage() {
           <Descriptions.Item label="计划名称">{dash(planView.name)}</Descriptions.Item>
           <Descriptions.Item label="状态"><StatusTag value={plan.status} /></Descriptions.Item>
           <Descriptions.Item label="年度">{dash(plan.year)}</Descriptions.Item>
+          <Descriptions.Item label="保养层级">{dash(planView.tier)}</Descriptions.Item>
           <Descriptions.Item label="保养级别">{dash(plan.level)}</Descriptions.Item>
           <Descriptions.Item label="保养方式">{dash(plan.method)}</Descriptions.Item>
           <Descriptions.Item label="计划日期">{dash(plan.planDate)}</Descriptions.Item>
@@ -128,6 +132,7 @@ export default function MaintenancePlanDetailPage() {
             rowKey="code" size="small" pagination={false}
             dataSource={deviceRows}
             columns={[
+              { title: '序号', width: 60, render: (_, __, i) => i + 1 },
               { title: '设备编号', dataIndex: 'code', width: 130, render: v => v || '--' },
               {
                 title: '设备名称（canonical）', width: 220,
@@ -146,6 +151,14 @@ export default function MaintenancePlanDetailPage() {
               { title: '工位', dataIndex: 'station', width: 100, render: v => dash(v) },
               { title: '关联保养标准', dataIndex: 'standard', width: 200, render: v => dash(v) },
               { title: '保养项目数', dataIndex: 'itemCount', width: 100, render: v => dash(v) },
+              {
+                title: '操作', width: 110,
+                render: (_, r) => (
+                  <Button type="link" size="small" onClick={(e) => { e.stopPropagation(); setItemModalRow(r); }}>
+                    保养项目
+                  </Button>
+                ),
+              },
             ]}
           />
         ) : (
@@ -206,6 +219,43 @@ export default function MaintenancePlanDetailPage() {
           <Form.Item label="执行人" name="executor"><Input /></Form.Item>
           <Form.Item label="备注" name="remark"><Input.TextArea rows={2} maxLength={200} /></Form.Item>
         </Form>
+      </Modal>
+
+      <Modal
+        title={itemModalRow ? `${itemModalRow.name} · 保养项目` : '保养项目'}
+        open={!!itemModalRow}
+        width={860}
+        footer={<Button onClick={() => setItemModalRow(null)}>关闭</Button>}
+        onCancel={() => setItemModalRow(null)}
+        destroyOnHidden
+      >
+        {(() => {
+          // 关联项目口径：种子仅维护了「数控车床月度保养标准」的关联保养项目清单，
+          // 其余标准无关联数据 → 空态提示，不臆造关联关系。
+          const codes = itemModalRow?.standard === '数控车床月度保养标准' ? maintenanceStandardItemCodes : [];
+          const rows = codes.map(c => maintenanceItems.find(i => i.code === c)).filter(Boolean);
+          return rows.length ? (
+            <Table
+              rowKey="code" size="small" pagination={false}
+              dataSource={rows}
+              columns={[
+                { title: '保养项目编号', dataIndex: 'code', width: 170 },
+                { title: '保养项目名称', dataIndex: 'name', width: 190 },
+                { title: '保养部位', dataIndex: 'part', width: 110, render: v => dash(v) },
+                { title: '保养级别', dataIndex: 'level', width: 100, render: v => (v ? <Tag>{v}</Tag> : '--') },
+                { title: '保养要求', dataIndex: 'require', ellipsis: true, render: v => dash(v) },
+              ]}
+              scroll={{ x: 800 }}
+            />
+          ) : (
+            <EmptyState
+              description="该设备暂未关联保养项目"
+              reason={itemModalRow?.standard
+                ? `保养标准「${itemModalRow.standard}」暂无关联保养项目数据`
+                : '该设备未配置保养标准'}
+            />
+          );
+        })()}
       </Modal>
     </>
   );

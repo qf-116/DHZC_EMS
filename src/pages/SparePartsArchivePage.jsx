@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { App, Button, Card, Descriptions, Form, Input, InputNumber, Modal, Select, Space, Table } from 'antd';
+import { Alert, App, Button, Card, Descriptions, Form, Input, InputNumber, Modal, Select, Space, Table, Upload } from 'antd';
 import { Download, Inbox, PackageOpen, Pencil, Plus, Trash2, Upload as UploadIcon } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader.jsx';
@@ -29,6 +29,7 @@ export default function SparePartsArchivePage() {
   const [open, setOpen] = useState(false);
   const [detail, setDetail] = useState(null);
   const [selectedKeys, setSelectedKeys] = useState([]);
+  const [importOpen, setImportOpen] = useState(false);
   const [form] = Form.useForm();
 
   const totals = useMemo(() => selectSpareTotals(state), [state]);
@@ -73,6 +74,24 @@ export default function SparePartsArchivePage() {
     if (!res.ok) { message.error(res.message); return; }
     message.success(res.message);
     setOpen(false);
+  };
+
+  // 导出：当前筛选结果导出为 CSV（字段与列表列一致，演示版本地生成）
+  const exportCsv = () => {
+    if (!filtered.length) { message.warning('当前筛选结果为空，无可导出数据'); return; }
+    const head = ['备品备件名称', '备品备件编号', '规格型号', '品牌', '供应商', '供应商联系人', '供应商联系电话', '现存量', '寿命时长（天）', '安全库存数量', '最高库存上限', '单位', '货期（天）', '用途', '备注', '库存水位', '创建时间', '更新时间', '更新人'];
+    const lines = [head.join(',')].concat(filtered.map(r => [
+      r.name, r.code, r.spec, r.brand, r.supplier, r.contact, r.phone, r.onHand, r.life, r.safe, r.max,
+      r.unit, r.leadTime, r.usage, r.remark, r.level, r.createTime, r.updateTime, r.updater,
+    ].map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')));
+    const blob = new Blob([`﻿${lines.join('\n')}`], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `备件档案_${state.meta.updatedAt ? state.meta.updatedAt.slice(0, 10) : '导出'}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    message.success(`已导出 ${filtered.length} 条备件档案（CSV）`);
   };
 
   const removeOne = (record) => modal.confirm({
@@ -159,8 +178,8 @@ export default function SparePartsArchivePage() {
           <Button icon={<Trash2 size={14} />} onClick={removeSelected}>删除</Button>
           <Button icon={<Inbox size={14} />} onClick={() => navigate('/spare-parts-inbound')}>到货入库</Button>
           <Button icon={<PackageOpen size={14} />} onClick={() => navigate('/spare-parts-outbound')}>领用出库</Button>
-          <Button icon={<UploadIcon size={14} />} onClick={() => message.info('演示版：导入模板字段与新增表单一致（编号系统自动生成），此处不写入备件档案')}>导入</Button>
-          <Button icon={<Download size={14} />} onClick={() => message.info('演示版：导出请在浏览器端导出当前列表数据')}>导出</Button>
+          <Button icon={<UploadIcon size={14} />} onClick={() => setImportOpen(true)}>导入</Button>
+          <Button icon={<Download size={14} />} onClick={exportCsv}>导出</Button>
         </Space>
         <Table
           rowKey="code" size="small" scroll={{ x: 2600 }}
@@ -229,6 +248,32 @@ export default function SparePartsArchivePage() {
             </Form.Item>
           </div>
         </Form>
+      </Modal>
+
+      {/* 导入备品备件（模板字段与新增表单一致，编号系统自动生成；演示版不写入档案） */}
+      <Modal
+        title="导入备品备件"
+        width={680}
+        open={importOpen}
+        onCancel={() => setImportOpen(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setImportOpen(false)}>取消</Button>,
+          <Button key="ok" type="primary" onClick={() => { setImportOpen(false); message.info('演示版：导入仅演示流程与校验提示，不写入备件档案'); }}>开始导入</Button>,
+        ]}
+      >
+        <Alert
+          type="info" showIcon style={{ marginBottom: 12 }}
+          message="导入模板字段与「新增备品备件」表单一致（编号由系统自动生成，模板中无需填写）；成功行提交、失败行不提交。"
+        />
+        <ul style={{ paddingLeft: 18, margin: '0 0 12px', color: '#5d6b78', fontSize: 13, lineHeight: 1.9 }}>
+          <li>模板列：备品备件名称、编号（系统生成，可留空）、规格型号、单位、品牌、寿命时长（天）、安全库存数量、最高库存数量、供应商、供应商联系人、供应商联系电话、货期（天）、用途、备注。</li>
+          <li>必填列：备品备件名称、规格型号、单位；缺失按行提示「缺少必填字段」。</li>
+          <li>安全库存数量 / 最高库存上限 / 寿命时长（天）/ 货期（天）必须是数字且可为小数；安全库存数量大于最高库存数量时提示「安全库存数量不能大于最高库存数量」。</li>
+          <li>校验结果按行返回：行号、字段、原因；错误行不提交，导入完成后给出成功 / 失败行数汇总。</li>
+        </ul>
+        <Upload beforeUpload={() => false} maxCount={1}>
+          <Button icon={<UploadIcon size={14} />}>选择导入文件</Button>
+        </Upload>
       </Modal>
 
       {/* 查看详情 */}

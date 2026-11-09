@@ -1,6 +1,7 @@
 import React, { useRef, useState } from 'react';
 import { Card, Tag, Button, Space, Input, Modal, Form, Select, App } from 'antd';
 import { Wrench } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
 import StatusTag from '../components/StatusTag.jsx';
@@ -17,11 +18,12 @@ const repairStaff = users.filter(u => u.status === '在职' && (u.role === '维�
 const repairPersons = repairStaff.map(v => ({ value: v, label: v }));
 const groups = ['机修班', '电气班', '工艺班'].map(v => ({ value: v, label: v }));
 
-// 待维修看板（store 驱动）：显示所有「待派工」的维修主工单与尚未生成工单的待派工报修单，
-// 按紧急>严重>一般、故障发生时间降序；派工弹窗确认后调 actions 派工/生成维修单，
-// 列表由 DemoStore 状态驱动自动刷新，不做本地副本。
+// 待维修看板（store 驱动）：按原型规则【1】显示所有「待维修、维修中」的任务
+// —— 待派工主工单 + 维修中主工单 + 尚未生成工单的报修单；
+// 按紧急>严重>一般、故障发生时间降序；「去处理」进入维修执行页；派工弹窗确认后调 actions 派工/生成维修单。
 export default function RepairPendingPage() {
   const { message } = App.useApp();
+  const navigate = useNavigate();
   const state = useDemoState();
   const actions = useDemoActions();
   const meta = state.meta;
@@ -37,22 +39,22 @@ export default function RepairPendingPage() {
   const reports = selectAllRepairReports(state);
   const orders = selectAllRepairOrders(state);
 
-  // 待派工条目 = 待派工主工单（报警转维修/报修已生成）∪ 无关联工单的待派工报修单
+  // 待处理条目 = 待派工/维修中主工单 ∪ 无关联工单的报修单
   const activeOrderByReport = (reportId) => orders.find(o => o.reportId === reportId && !['已完成', '已取消'].includes(o.status));
   const items = [
-    ...orders.filter(o => o.status === '待派工').map(o => ({
+    ...orders.filter(o => ['待派工', '维修中'].includes(o.status)).map(o => ({
       key: o.repairOrderId, kind: 'order', orderRef: o.repairOrderId,
       code: o.code, title: o.title, deviceId: o.deviceId,
       device: o.deviceName, deviceCode: o.deviceCode,
       level: o.level, faultType: o.faultType, faultTime: o.createdAt,
       desc: o.faultDesc, status: o.status,
     })),
-    ...reports.filter(r => r.status === '待派工' && !activeOrderByReport(r.reportId)).map(r => ({
+    ...reports.filter(r => !activeOrderByReport(r.reportId) && r.status !== '已取消').map(r => ({
       key: r.reportId, kind: 'report', orderRef: null,
       code: r.code, title: r.title, deviceId: r.deviceId,
       device: r.deviceName, deviceCode: r.deviceCode,
       level: r.level, faultType: r.faultType, faultTime: r.faultTime,
-      desc: r.desc, status: r.status,
+      desc: r.desc, status: '待派工',
     })),
   ];
   const levelRank = { 紧急: 0, 严重: 1, 一般: 2 };
@@ -71,6 +73,12 @@ export default function RepairPendingPage() {
 
   const openDispatch = (r) => { setDispatchItem(r); form.resetFields(); };
 
+  // 「去处理」：已有工单 → 跳维修执行页；尚无工单的报修单 → 先派工
+  const goHandle = (r) => {
+    if (r.orderRef) navigate(`/repair-orders/${r.orderRef}/execute`);
+    else openDispatch(r);
+  };
+
   // 确认派工：
   // - 已有主工单（kind=order）→ 直接 assignRepair
   // - 报修单尚未生成工单（kind=report）→ createRepairReport 生成主工单后派工（动作层按最新状态校验）
@@ -87,7 +95,7 @@ export default function RepairPendingPage() {
     }
     const created = actionsRef.current.createRepairReport({
       deviceId: item.deviceId, title: item.title, faultDesc: item.desc, level: item.level, faultType: item.faultType,
-    });
+    }, `pending-${item.reportId}`);
     if (!created.ok) { message.error(created.message); return; }
     const orderId = created.refs.repairOrderId;
     // 等本批次状态更新提交后（actions 基于最新快照预校验）再派工
@@ -126,8 +134,8 @@ export default function RepairPendingPage() {
       {list.length === 0 ? (
         <Card size="small">
           <EmptyState
-            description="暂无待派工任务"
-            reason={kw || level ? '筛选/搜索条件下没有待派工的报修单或维修工单' : '当前没有待派工的报修单与维修工单'}
+            description="暂无待处理任务"
+            reason={kw || level ? '筛选/搜索条件下没有待维修的报修单或维修工单' : '当前没有待维修与维修中的报修单、工单'}
             next={kw || level}
             onNext={() => { setKw(''); setLevel(null); }}
             nextLabel="清空筛选"
@@ -138,7 +146,12 @@ export default function RepairPendingPage() {
           {list.map(r => (
             <Card size="small" key={r.key}
               title={<Space><span>{r.kind === 'order' ? '维修工单' : '报修单号'}：{r.code}</span><Tag color={levelColor[r.level]}>{r.level}</Tag><StatusTag value={r.status} /></Space>}
-              extra={<Button type="primary" size="small" icon={<Wrench size={13} />} onClick={() => openDispatch(r)}>去处理</Button>}>
+              extra={
+                <Space size={4}>
+                  {r.kind === 'order' && r.status === '待派工' && <Button size="small" onClick={() => openDispatch(r)}>派工</Button>}
+                  <Button type="primary" size="small" icon={<Wrench size={13} />} onClick={() => goHandle(r)}>去处理</Button>
+                </Space>
+              }>
               <div style={{ lineHeight: 1.9, fontSize: 13 }}>
                 <div>报修名称：{r.title || '--'}</div>
                 <div>设备名称：{r.device || '--'}</div>
@@ -152,12 +165,12 @@ export default function RepairPendingPage() {
         </div>
       )}
 
-      {/* 去处理（派工弹窗）：选择维修人后生成/推进维修工单；SLA 按故障等级自动带出 */}
+      {/* 派工弹窗：选择维修人后生成/推进维修工单；SLA 按故障等级自动带出 */}
       <Modal
         title={dispatchItem ? `派工处理（${dispatchItem.code}）` : '派工处理'}
         width={640}
         open={!!dispatchItem}
-        destroyOnClose
+        destroyOnHidden
         confirmLoading={false}
         onCancel={() => setDispatchItem(null)}
         onOk={confirmDispatch}

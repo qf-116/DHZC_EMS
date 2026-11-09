@@ -1,11 +1,12 @@
-import React, { useMemo } from 'react';
-import { Card, Descriptions, Table, Button, Tag, Tooltip } from 'antd';
+import React, { useMemo, useState } from 'react';
+import { Card, Descriptions, Table, Button, Tag, Tooltip, Space, App } from 'antd';
 import { ArrowLeft } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import PageHeader from '../components/PageHeader.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import PatrolSkipModal from '../components/PatrolSkipModal.jsx';
 import { useDemoState } from '../state/DemoStore.jsx';
 import { patrolTasks, patrolTaskDetails, patrolExecItems } from '../data/standardData.js';
 import { crosswalkByAssetCode } from '../data/demo/deviceCrosswalk.js';
@@ -34,7 +35,23 @@ export default function PatrolTaskDetailPage() {
 
   const task = useMemo(() => patrolTasks.find(t => t.code === id) || null, [id]);
 
-  const canExecute = task && ['未开始', '进行中', '已逾期'].includes(task.status);
+  // 跳过巡检（页面内演示状态，不写入演示快照）：{ 设备编码: { reason, at } }
+  const [skips, setSkips] = useState({});
+  const [taskStatus, setTaskStatus] = useState(null);
+  const [skipTarget, setSkipTarget] = useState(null);
+  const { message } = App.useApp();
+
+  const currentStatus = taskStatus || task?.status;
+  const canExecute = task && ['未开始', '进行中', '已逾期'].includes(currentStatus);
+
+  const handleSkip = (reason) => {
+    if (!skipTarget) return;
+    setSkips(prev => ({ ...prev, [skipTarget.code]: { reason, at: '' } }));
+    // 原型规则：跳过巡检后该设备未检项按跳过处理，任务状态进入「进行中」
+    if (currentStatus === '未开始') setTaskStatus('进行中');
+    setSkipTarget(null);
+    message.success(`设备「${skipTarget.name}」已跳过巡检，未检项按跳过处理`);
+  };
 
   if (!task) {
     return (
@@ -65,7 +82,7 @@ export default function PatrolTaskDetailPage() {
         <Descriptions column={3} size="small">
           <Descriptions.Item label="任务编号">{task.code}</Descriptions.Item>
           <Descriptions.Item label="任务名称">{task.name}</Descriptions.Item>
-          <Descriptions.Item label="状态"><StatusTag value={task.status} tip={task.status === '逾期完成' ? '超过计划完成时间后完成' : undefined} /></Descriptions.Item>
+          <Descriptions.Item label="状态"><StatusTag value={currentStatus} tip={task.status === '逾期完成' ? '超过计划完成时间后完成' : undefined} /></Descriptions.Item>
           <Descriptions.Item label="巡检线路（计划）">{task.plan || '--'}</Descriptions.Item>
           <Descriptions.Item label="巡检日期">{task.date || '--'}</Descriptions.Item>
           <Descriptions.Item label="应巡设备数">{task.shouldCount != null ? `${task.shouldCount} 台` : '--'}</Descriptions.Item>
@@ -83,6 +100,7 @@ export default function PatrolTaskDetailPage() {
             { title: '设备编号', dataIndex: 'code', width: 130, fixed: 'left' },
             { title: '设备名称', width: 200, render: (_, r) => <CanonicalDeviceCell code={r.code} seedName={r.name} /> },
             { title: '规格型号', dataIndex: 'model', width: 100, render: v => v || '--' },
+            { title: '设备类型', dataIndex: 'type', width: 110, render: v => v || '--' },
             { title: '所属部门', dataIndex: 'dept', width: 150, render: v => v || '--' },
             { title: '工位', dataIndex: 'station', width: 100, render: v => v || '--' },
             { title: '巡检位置', dataIndex: 'location', width: 100, render: v => v || '--' },
@@ -100,11 +118,22 @@ export default function PatrolTaskDetailPage() {
             },
             { title: '执行时间', dataIndex: 'execTime', width: 150, render: v => v || '--' },
             {
-              title: '跳过原因', dataIndex: 'skipReason', width: 220, ellipsis: true,
-              render: (v, r) => (v ? <Tooltip title={v}><Tag color="orange">跳过</Tag></Tooltip> : '--'),
+              title: '跳过原因', width: 220, ellipsis: true,
+              render: (v, r) => {
+                const reason = skips[r.code]?.reason || v;
+                return reason
+                  ? <Tooltip title={reason}><Tag color="orange">跳过</Tag></Tooltip>
+                  : '--';
+              },
+            },
+            {
+              title: '操作', width: 110, fixed: 'right',
+              render: (_, r) => (
+                <Button type="link" size="small" onClick={() => setSkipTarget(r)}>跳过巡检</Button>
+              ),
             },
           ]}
-          scroll={{ x: 1400 }}
+          scroll={{ x: 1540 }}
         />
       </Card>
       <Card type="inner" size="small" title={<span>巡检项结果表</span>}>
@@ -129,6 +158,13 @@ export default function PatrolTaskDetailPage() {
           scroll={{ x: 1100 }}
         />
       </Card>
+
+      <PatrolSkipModal
+        open={!!skipTarget}
+        deviceLabel={skipTarget ? `${skipTarget.name}（${skipTarget.code}）` : ''}
+        onCancel={() => setSkipTarget(null)}
+        onConfirm={handleSkip}
+      />
     </>
   );
 }

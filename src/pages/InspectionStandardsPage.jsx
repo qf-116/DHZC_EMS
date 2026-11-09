@@ -1,6 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Card, Table, Button, Space, Input, Select, Modal, Form, App, Popconfirm } from 'antd';
-import { useNavigate } from 'react-router-dom';
+import { Card, Table, Button, Space, Input, Select, Modal, Form, App, Popconfirm } from 'antd';import { useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader.jsx';
 import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
@@ -30,15 +29,19 @@ export default function InspectionStandardsPage() {
   const [extraRows, setExtraRows] = useState([]);
   const [deletedCodes, setDeletedCodes] = useState(() => new Set());
   const [patches, setPatches] = useState({});
+  const [selectedKeys, setSelectedKeys] = useState([]);
 
   const rows = useMemo(() => [
     ...extraRows,
     ...inspectionStandards.filter(r => !deletedCodes.has(r.code)).map(r => (patches[r.code] ? { ...r, ...patches[r.code] } : r)),
   ], [extraRows, deletedCodes, patches]);
 
+  // 原型：按照最近修改时间进行倒序排列
   const list = rows
     .filter(r => !status || r.status === status)
-    .filter(r => !kw || (r.code || '').includes(kw) || (r.name || '').includes(kw));
+    .filter(r => !kw || (r.code || '').includes(kw) || (r.name || '').includes(kw))
+    .slice()
+    .sort((a, b) => String(b.updateTime || '').localeCompare(String(a.updateTime || '')));
 
   const nextCode = `XJBZ${(meta.demoDay || '2026-09-16').replaceAll('-', '')}${String(inspectionStandards.length + extraRows.length + 1).padStart(3, '0')}`;
 
@@ -81,6 +84,19 @@ export default function InspectionStandardsPage() {
     message.success(`已删除点检标准「${record.name}」（${record.code}）`);
   };
 
+  // 批量启用 / 禁用（原型工具栏）
+  const handleBatchStatus = (next) => {
+    if (selectedKeys.length === 0) {
+      message.warning('请先勾选要点检标准');
+      return;
+    }
+    selectedKeys.forEach(code => {
+      setPatches(prev => ({ ...prev, [code]: { ...prev[code], status: next } }));
+    });
+    message.success(`已${next === '已启用' ? '启用' : '禁用'} ${selectedKeys.length} 条点检标准`);
+    setSelectedKeys([]);
+  };
+
   return (
     <>
       <PageHeader
@@ -101,10 +117,14 @@ export default function InspectionStandardsPage() {
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
           <Button type="primary" onClick={openCreate}>新增点检标准</Button>
+          <Button onClick={() => handleBatchStatus('已启用')} disabled={selectedKeys.length === 0}>启用</Button>
+          <Button onClick={() => handleBatchStatus('已停用')} disabled={selectedKeys.length === 0}>禁用</Button>
+          <span style={{ color: '#8a97a5', fontSize: 12 }}>已选 {selectedKeys.length} 条</span>
         </Space>
         <Table
           rowKey="code" size="small"
           dataSource={list}
+          rowSelection={{ columnWidth: 40, selectedRowKeys: selectedKeys, onChange: setSelectedKeys }}
           onRow={(r) => ({ onClick: () => navigate(`/inspection-standards/detail?code=${encodeURIComponent(r.code)}`), style: { cursor: 'pointer' } })}
           locale={{ emptyText: <EmptyState description="暂无点检标准" reason={kw || status ? '当前筛选条件下没有点检标准' : '暂无点检标准数据'} /> }}
           columns={[
@@ -116,7 +136,7 @@ export default function InspectionStandardsPage() {
               render: (_, r) => (r.code === ITEM_SNAPSHOT_STANDARD ? inspectionStandardItemCodes.length : '--'),
             },
             { title: '状态', dataIndex: 'status', width: 90, render: v => <StatusTag value={v} /> },
-            { title: '更新时间', dataIndex: 'updateTime', width: 160, render: v => v || '--' },
+            { title: '最近更新时间', dataIndex: 'updateTime', width: 160, render: v => v || '--' },
             { title: '备注', dataIndex: 'remark', ellipsis: true, render: v => v || '--' },
             {
               title: '操作', width: 190, fixed: 'right',

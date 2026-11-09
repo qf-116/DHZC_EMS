@@ -162,6 +162,18 @@ export default function RepairDetailPage() {
           <Descriptions.Item label="提交验收时间">{order.submittedAt || '--'}</Descriptions.Item>
           <Descriptions.Item label="验收完成时间">{order.acceptedAt || '--'}</Descriptions.Item>
           <Descriptions.Item label="工时（小时）">{order.laborHours ?? '--'}</Descriptions.Item>
+          <Descriptions.Item label="处理方式">{order.handlingMethod || '--'}</Descriptions.Item>
+          <Descriptions.Item label="维修类型">{order.repairType || '--'}</Descriptions.Item>
+          <Descriptions.Item label="维修部位">{order.repairPart || '--'}</Descriptions.Item>
+          <Descriptions.Item label="维修级别">{order.repairLevel || '--'}</Descriptions.Item>
+          <Descriptions.Item label="维修开始时间">{order.repairStartTime || '--'}</Descriptions.Item>
+          <Descriptions.Item label="维修结束时间">{order.repairEndTime || '--'}</Descriptions.Item>
+          <Descriptions.Item label="维修人员">{(order.repairPersonIds || []).join('、') || '--'}</Descriptions.Item>
+          <Descriptions.Item label="维修时间">{order.repairTime || '--'}</Descriptions.Item>
+          <Descriptions.Item label="维修图片">{(order.images || []).join('、') || '--'}</Descriptions.Item>
+          <Descriptions.Item label="故障原因" span={2}>{order.faultCause || '--'}</Descriptions.Item>
+          <Descriptions.Item label="维修说明" span={2}>{order.repairDesc || '--'}</Descriptions.Item>
+          <Descriptions.Item label="备注" span={2}>{order.remark || '--'}</Descriptions.Item>
           <Descriptions.Item label="处理措施" span={2}>{order.measures || '--'}</Descriptions.Item>
           <Descriptions.Item label="验证结果" span={2}>{order.verification || '--'}</Descriptions.Item>
         </Descriptions>

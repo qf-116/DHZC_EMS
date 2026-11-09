@@ -21,6 +21,7 @@ const COLOR_MAP = {
   待派工: 'warning', 已派工: 'processing', 挂起: 'warning', 待验收: 'orange', 已完成: 'success', 已取消: 'default',
   // 点检 / 保养 / 巡检任务状态（演示模块）
   待执行: 'processing', 进行中: 'processing', 已逾期: 'error',
+  未开始: 'default', 实施中: 'processing', 已停止: 'warning', 异常: 'error',
   // 生命周期
   在用: 'success', 闲置: 'warning', 停用: 'default', '报废/归档': 'default',
   采购入账待提交: 'processing', 采购入账待修改: 'warning', 使用部门试用确认中: 'processing',

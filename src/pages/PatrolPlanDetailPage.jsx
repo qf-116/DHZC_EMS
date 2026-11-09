@@ -6,8 +6,9 @@ import PageHeader from '../components/PageHeader.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
+import PatrolItemPickerModal from '../components/PatrolItemPickerModal.jsx';
 import { useDemoState } from '../state/DemoStore.jsx';
-import { patrolPlans, patrolPlanDevices, patrolTasks } from '../data/standardData.js';
+import { patrolPlans, patrolPlanDevices, patrolTasks, patrolStandards, patrolItems } from '../data/standardData.js';
 import { crosswalkByAssetCode } from '../data/demo/deviceCrosswalk.js';
 
 // 设备展示统一经 crosswalk canonical 映射（§3.1）：资产编码 → canonical 设备（deviceId/展示名）。
@@ -37,6 +38,8 @@ export default function PatrolPlanDetailPage() {
   const [editOpen, setEditOpen] = useState(false);
   const [form] = Form.useForm();
   const [patch, setPatch] = useState({});
+  const [itemPickerOpen, setItemPickerOpen] = useState(false);
+  const [itemRow, setItemRow] = useState(null);
 
   const plan = useMemo(() => patrolPlans.find(p => p.code === id) || null, [id]);
   const planView = plan ? { ...plan, ...patch } : null;
@@ -127,6 +130,12 @@ export default function PatrolPlanDetailPage() {
             { title: '工位', dataIndex: 'station', width: 100, render: v => v || '--' },
             { title: '巡检标准', dataIndex: 'standard', width: 190, render: v => v || '--' },
             { title: '巡检项目数', dataIndex: 'itemCount', width: 100, align: 'center', render: v => (v != null ? `${v} 项` : '--') },
+            {
+              title: '操作', width: 110,
+              render: (_, r) => (
+                <Button type="link" size="small" onClick={() => { setItemRow(r); setItemPickerOpen(true); }}>巡检项目</Button>
+              ),
+            },
           ]}
         />
       </Card>
@@ -175,6 +184,18 @@ export default function PatrolPlanDetailPage() {
           <Form.Item label="备注" name="remark"><Input.TextArea rows={2} maxLength={200} /></Form.Item>
         </Form>
       </Modal>
+
+      {/* 该设备的巡检项目（只读态） */}
+      <PatrolItemPickerModal
+        open={itemPickerOpen}
+        readOnly
+        title={itemRow ? `巡检项目 · ${itemRow.name}` : '巡检项目'}
+        standards={patrolStandards}
+        items={patrolItems}
+        defaultStandard={itemRow?.standard}
+        assignedCodes={itemRow?.itemCodes || []}
+        onCancel={() => setItemPickerOpen(false)}
+      />
     </>
   );
 }

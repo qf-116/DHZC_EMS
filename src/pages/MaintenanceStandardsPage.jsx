@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Card, Table, Button, Space, Input, Select, Modal, Form, App, Popconfirm } from 'antd';
+import { Card, Table, Button, Space, Input, Select, Modal, Form, App, Popconfirm, Radio, Row, Col } from 'antd';
 import { useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader.jsx';
 import FilterBar, { FilterField } from '../components/FilterBar.jsx';
@@ -7,7 +7,12 @@ import DegradedBanner from '../components/DegradedBanner.jsx';
 import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import { useDemoState } from '../state/DemoStore.jsx';
-import { maintenanceStandards, maintenanceStandardItemCodes } from '../data/standardData.js';
+import {
+  maintenanceStandards,
+  maintenanceStandardDevices,
+  maintenanceStandardItemCodes,
+  maintenanceItems,
+} from '../data/standardData.js';
 
 // 周期类型从标准名称推导（种子数据无独立周期字段，不伪造）：
 // 月度 → 月 / 季度 → 季 / 半年度 → 半年；其余显示 --
@@ -20,8 +25,21 @@ const cycleFromName = (name = '') => {
   return '--';
 };
 
+// 关联数据口径：种子仅提供「数控车床月度保养标准（BYBZ20250301001）」的关联设备与
+// 关联保养项目清单，其余标准无关联数据（弹窗以空选显示，不臆造关联关系）。
+const STANDARD_DEVICE_CODES = maintenanceStandardDevices.map(d => d.code);
+const STANDARD_ITEM_CODES = maintenanceStandardItemCodes;
+
+const deviceOptions = maintenanceStandardDevices.map(d => ({
+  value: d.code,
+  label: `${d.name}（${d.code}）`,
+}));
+const itemOptions = maintenanceItems
+  .filter(i => STANDARD_ITEM_CODES.includes(i.code))
+  .map(i => ({ value: i.code, label: `${i.name}（${i.code}）` }));
+
 // 保养标准列表（范围外演示模块）：列表读自种子 maintenanceStandards；
-// 新增 / 编辑 / 启用停用 / 删除为页面内演示交互（不写入 DemoStore，刷新后恢复快照）。
+// 新增 / 编辑 / 启用禁用 / 删除为页面内演示交互（不写入 DemoStore，刷新后恢复快照）。
 export default function MaintenanceStandardsPage() {
   const navigate = useNavigate();
   const { message } = App.useApp();
@@ -37,6 +55,7 @@ export default function MaintenanceStandardsPage() {
   const [extraRows, setExtraRows] = useState([]);
   const [deletedCodes, setDeletedCodes] = useState(() => new Set());
   const [patches, setPatches] = useState({});
+  const [selectedKeys, setSelectedKeys] = useState([]);
 
   const rows = useMemo(() => [
     ...extraRows,
@@ -57,18 +76,33 @@ export default function MaintenanceStandardsPage() {
   const openCreate = () => {
     setEditing(null);
     form.resetFields();
-    form.setFieldsValue({ code: nextCode, status: '已启用' });
+    form.setFieldsValue({ code: nextCode, status: '已启用', deviceCodes: [], itemCodes: [] });
     setEditorOpen(true);
   };
   const openEdit = (record) => {
     setEditing(record);
     form.resetFields();
-    form.setFieldsValue(record);
+    const hasDeviceData = record.code === 'BYBZ20250301001';
+    const hasItemData = record.code === 'BYBZ20250301001';
+    form.setFieldsValue({
+      ...record,
+      deviceCodes: hasDeviceData ? STANDARD_DEVICE_CODES : (record.deviceCodes || []),
+      itemCodes: hasItemData ? STANDARD_ITEM_CODES : (record.itemCodes || []),
+    });
     setEditorOpen(true);
   };
   const handleSubmit = async () => {
     const values = await form.validateFields();
-    const base = { ...(editing || {}), ...values, updateTime: `${meta.updatedAt || meta.demoDay || ''}` };
+    const { deviceCodes, itemCodes, ...rest } = values;
+    const base = {
+      ...(editing || {}),
+      ...rest,
+      // 关联设备数由已选关联设备推导（区分「未配置」与 0）
+      devices: deviceCodes?.length ?? 0,
+      deviceCodes: deviceCodes || [],
+      itemCodes: itemCodes || [],
+      updateTime: `${meta.updatedAt || meta.demoDay || ''}`,
+    };
     if (editing) {
       setPatches(prev => ({ ...prev, [editing.code]: { ...prev[editing.code], ...base } }));
       message.success(`保养标准「${values.name}」已保存`);
@@ -81,7 +115,7 @@ export default function MaintenanceStandardsPage() {
   const toggleStatus = (record) => {
     const next = record.status === '已启用' ? '已停用' : '已启用';
     setPatches(prev => ({ ...prev, [record.code]: { ...prev[record.code], status: next } }));
-    message.success(`标准「${record.name}」已${next === '已启用' ? '启用' : '停用'}`);
+    message.success(`标准「${record.name}」已${next === '已启用' ? '启用' : '禁用'}`);
   };
   const handleDelete = (record) => {
     if (extraRows.some(r => r.code === record.code)) setExtraRows(prev => prev.filter(r => r.code !== record.code));
@@ -108,10 +142,39 @@ export default function MaintenanceStandardsPage() {
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
           <Button type="primary" onClick={openCreate}>新增保养标准</Button>
+          <Button
+            disabled={!selectedKeys.length}
+            onClick={() => {
+              setPatches(prev => {
+                const next = { ...prev };
+                selectedKeys.forEach(code => { next[code] = { ...next[code], status: '已启用' }; });
+                return next;
+              });
+              message.success(`已启用 ${selectedKeys.length} 个保养标准`);
+              setSelectedKeys([]);
+            }}
+          >
+            启用
+          </Button>
+          <Button
+            disabled={!selectedKeys.length}
+            onClick={() => {
+              setPatches(prev => {
+                const next = { ...prev };
+                selectedKeys.forEach(code => { next[code] = { ...next[code], status: '已停用' }; });
+                return next;
+              });
+              message.success(`已禁用 ${selectedKeys.length} 个保养标准`);
+              setSelectedKeys([]);
+            }}
+          >
+            禁用
+          </Button>
         </Space>
         <Table
           rowKey="code" size="small"
           dataSource={list}
+          rowSelection={{ columnWidth: 40, selectedRowKeys: selectedKeys, onChange: setSelectedKeys }}
           onRow={(r) => ({ onClick: () => navigate(`/maintenance-standards/detail?code=${encodeURIComponent(r.code)}`), style: { cursor: 'pointer' } })}
           locale={{
             emptyText: (
@@ -142,7 +205,7 @@ export default function MaintenanceStandardsPage() {
                 <Space size={0} onClick={(e) => e.stopPropagation()}>
                   <Button type="link" size="small" onClick={() => navigate(`/maintenance-standards/detail?code=${encodeURIComponent(r.code)}`)}>详情</Button>
                   <Button type="link" size="small" onClick={() => openEdit(r)}>编辑</Button>
-                  <Button type="link" size="small" onClick={() => toggleStatus(r)}>{r.status === '已启用' ? '停用' : '启用'}</Button>
+                  <Button type="link" size="small" onClick={() => toggleStatus(r)}>{r.status === '已启用' ? '禁用' : '启用'}</Button>
                   <Popconfirm title="删除该标准？" okButtonProps={{ danger: true }} onConfirm={() => handleDelete(r)}>
                     <Button type="link" size="small" danger>删除</Button>
                   </Popconfirm>
@@ -157,19 +220,41 @@ export default function MaintenanceStandardsPage() {
 
       <Modal
         title={editing ? `编辑保养标准（${editing.code}）` : '新增保养标准'}
-        width={640}
+        width={720}
         open={editorOpen}
         onCancel={() => setEditorOpen(false)}
         onOk={handleSubmit}
         okText={editing ? '保存' : '创建'}
         cancelText="取消"
-        destroyOnClose
+        destroyOnHidden
       >
         <Form form={form} layout="vertical">
-          <Form.Item label="标准编号" name="code"><Input disabled /></Form.Item>
-          <Form.Item label="标准名称" name="name" rules={[{ required: true, message: '请输入标准名称' }]}><Input placeholder="例如：激光焊接机季度保养标准" /></Form.Item>
-          <Form.Item label="状态" name="status" rules={[{ required: true, message: '请选择状态' }]}><Select options={['已启用', '已停用'].map(v => ({ value: v, label: v }))} /></Form.Item>
-          <Form.Item label="备注" name="remark"><Input.TextArea rows={2} maxLength={200} /></Form.Item>
+          <Row gutter={16}>
+            <Col span={12}>
+              <Form.Item label="标准编号" name="code"><Input disabled /></Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="标准名称" name="name" rules={[{ required: true, message: '请输入标准名称' }]}>
+                <Input placeholder="例如：激光焊接机季度保养标准" />
+              </Form.Item>
+            </Col>
+            <Col span={12}>
+              <Form.Item label="状态" name="status" rules={[{ required: true, message: '请选择状态' }]}>
+                {/* 统一文案为「启用 / 禁用」，底层值沿用 已启用 / 已停用 以匹配状态标签配色 */}
+                <Radio.Group optionType="button" buttonStyle="solid"
+                  options={[{ value: '已启用', label: '启用' }, { value: '已停用', label: '禁用' }]} />
+              </Form.Item>
+            </Col>
+          </Row>
+          <Form.Item label="关联设备" name="deviceCodes" extra="种子数据仅维护了「数控车床月度保养标准」的关联设备">
+            <Select mode="multiple" allowClear placeholder="请选择关联设备" options={deviceOptions} />
+          </Form.Item>
+          <Form.Item label="关联保养项目" name="itemCodes" extra="种子数据仅维护了「数控车床月度保养标准」的关联保养项目">
+            <Select mode="multiple" allowClear placeholder="请选择关联保养项目" options={itemOptions} />
+          </Form.Item>
+          <Form.Item label="备注" name="remark">
+            <Input.TextArea rows={2} maxLength={200} />
+          </Form.Item>
         </Form>
       </Modal>
     </>

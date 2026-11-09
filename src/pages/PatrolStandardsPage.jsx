@@ -27,15 +27,19 @@ export default function PatrolStandardsPage() {
   const [extraRows, setExtraRows] = useState([]);
   const [deletedCodes, setDeletedCodes] = useState(() => new Set());
   const [patches, setPatches] = useState({});
+  const [selectedKeys, setSelectedKeys] = useState([]);
 
   const rows = useMemo(() => [
     ...extraRows,
     ...patrolStandards.filter(r => !deletedCodes.has(r.code)).map(r => (patches[r.code] ? { ...r, ...patches[r.code] } : r)),
   ], [extraRows, deletedCodes, patches]);
 
+  // 原型规则：按照最近修改时间进行倒序排列
   const list = rows
     .filter(r => !status || r.status === status)
-    .filter(r => !kw || (r.code || '').includes(kw) || (r.name || '').includes(kw));
+    .filter(r => !kw || (r.code || '').includes(kw) || (r.name || '').includes(kw))
+    .slice()
+    .sort((a, b) => (b.updateTime || '').localeCompare(a.updateTime || ''));
 
   const nextCode = `XJBZ-P${(meta.demoDay || '2026-09-16').replaceAll('-', '')}${String(patrolStandards.length + extraRows.length + 1).padStart(3, '0')}`;
 
@@ -74,6 +78,23 @@ export default function PatrolStandardsPage() {
     message.success(`已删除巡检标准「${record.name}」（${record.code}）`);
   };
 
+  // 批量启用 / 禁用（原型工具栏按钮，配合列表勾选）
+  const batchStatus = (nextStatus) => {
+    if (selectedKeys.length === 0) {
+      message.warning('请先勾选要操作的巡检标准');
+      return;
+    }
+    const set = new Set(selectedKeys);
+    setExtraRows(prev => prev.map(r => (set.has(r.code) ? { ...r, status: nextStatus } : r)));
+    setPatches(prev => {
+      const nextPatches = { ...prev };
+      selectedKeys.forEach(k => { nextPatches[k] = { ...(nextPatches[k] || {}), status: nextStatus }; });
+      return nextPatches;
+    });
+    message.success(`已${nextStatus === '已启用' ? '启用' : '禁用'} ${selectedKeys.length} 条巡检标准`);
+    setSelectedKeys([]);
+  };
+
   return (
     <>
       <PageHeader
@@ -94,9 +115,13 @@ export default function PatrolStandardsPage() {
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
           <Button type="primary" onClick={openCreate}>新增巡检标准</Button>
+          <Button onClick={() => batchStatus('已启用')} disabled={selectedKeys.length === 0}>启用</Button>
+          <Button onClick={() => batchStatus('已停用')} disabled={selectedKeys.length === 0}>禁用</Button>
+          <span style={{ color: '#8a97a5', fontSize: 12 }}>已选 {selectedKeys.length} 条</span>
         </Space>
         <Table
           rowKey="code" size="small" dataSource={list}
+          rowSelection={{ columnWidth: 40, selectedRowKeys: selectedKeys, onChange: setSelectedKeys }}
           onRow={(r) => ({ onClick: () => navigate(`/patrol-standards/detail?code=${encodeURIComponent(r.code)}`), style: { cursor: 'pointer' } })}
           locale={{ emptyText: <EmptyState description="暂无巡检标准" reason={kw || status ? '当前筛选条件下没有巡检标准' : '暂无巡检标准数据'} /> }}
           columns={[
@@ -104,7 +129,7 @@ export default function PatrolStandardsPage() {
             { title: '标准名称', dataIndex: 'name', width: 220 },
             { title: '关联设备数', dataIndex: 'devices', width: 100, render: v => v ?? '--' },
             { title: '状态', dataIndex: 'status', width: 90, render: v => <StatusTag value={v} /> },
-            { title: '更新时间', dataIndex: 'updateTime', width: 160, render: v => v || '--' },
+            { title: '最近更新时间', dataIndex: 'updateTime', width: 160, render: v => v || '--' },
             { title: '备注', dataIndex: 'remark', ellipsis: true, render: v => v || '--' },
             {
               title: '操作', width: 190, fixed: 'right',

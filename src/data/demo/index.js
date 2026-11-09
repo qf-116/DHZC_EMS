@@ -10,7 +10,7 @@ import { bindingsByDeviceId, bindingVersions, sourceDevices } from './bindings.j
 import { samples, trends, health, ingestionTasks, DEMO_TIME, DEMO_LAST_SAMPLE_AT } from './samples.js';
 import { alarmRules, alarmRuleVersions, alarmEvents, notificationDeliveries, notificationPolicies } from './alarms.js';
 import { normalizeLegacyRule } from '../../domain/alarmRule.js';
-import { repairReports, repairOrders, repairAcceptances } from './repairs.js';
+import { repairReports, repairOrders, repairAcceptances, repairKnowledge } from './repairs.js';
 import { warehouses, spares, stock, inbounds, outbounds, returns, stockFlows } from './spares.js';
 import { downtimeFacts } from './downtime.js';
 import { materialPool, speedConfigs, oeeTargets, shiftCalendar, oeeInputs, oeeEligibility, oeeRecomputeLog } from './oee.js';
@@ -19,7 +19,7 @@ import { oeeTemplates } from './oeeTemplates.js';
 import { programCompare, programBaselines, programHandles } from './programCompare.js';
 import { lifecycleTasks, assetChangeRecords, idleApplications, scrapApplications } from './lifecycle.js';
 
-export const STORE_VERSION = 21; // 快照结构版本：新增 MES 程序下发主设备（绑定级 mesPrimarySourceId）
+export const STORE_VERSION = 22; // 快照结构版本：维修执行录入字段（处理方式等）+ 维修经验库入 store
 
 export const DEMO_META = {
   mode: 'demo',
@@ -58,6 +58,7 @@ export function createDemoState() {
       repairReportsById: Object.fromEntries(repairReports.map(r => [r.reportId, r])),
       repairOrdersById: Object.fromEntries(repairOrders.map(r => [r.repairOrderId, r])),
       repairAcceptancesById: Object.fromEntries(repairAcceptances.map(a => [a.acceptanceId, a])),
+      repairKnowledgeById: Object.fromEntries(repairKnowledge.map(k => [k.knowledgeId, k])),
       sparesByCode: Object.fromEntries(spares.map(s => [s.code, s])),
       stockByKey: Object.fromEntries(stock.map(s => [s.stockKey, s])),
       warehousesById: Object.fromEntries(warehouses.map(w => [w.warehouseId, w])),

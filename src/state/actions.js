@@ -350,13 +350,87 @@ export function createDemoActions(state, dispatch) {
       return act('alarm/rule/rollback', { ruleCode, version }, `rollback:${ruleCode}:${version}:${(rule.publishedVersion || '') + 1}`);
     },
     // ---------- 维修 ----------
-    createRepairReport(payload) {
+    createRepairReport(payload, requestId) {
       const { deviceId, faultDesc, level, faultType, title } = payload;
       const device = E.devicesById[deviceId];
       if (!device) return fail('设备不存在');
       if (!(faultDesc || '').trim()) return fail('故障描述必填');
-      act('repair/createReport', { deviceId, faultDesc, level, faultType, title });
-      return { ok: true, message: '报修已提交，生成待派工主工单', refs: { deviceId } };
+      // 幂等键：同一表单提交（requestId 由页面在打开弹窗时生成）重复点击只建一单
+      const key = `create-report:${requestId || `${deviceId}:${title || ''}:${Date.now()}`}`;
+      if (E.idempotencyByKey[key]) {
+        return { ok: true, idempotent: true, message: `重复提交已忽略（幂等）：${E.idempotencyByKey[key].message}`, refs: E.idempotencyByKey[key].refs || {} };
+      }
+      const res = act('repair/createReport', {
+        deviceId, faultDesc, level, faultType, title,
+        faultTime: payload.faultTime || null,
+        reportTime: payload.reportTime || null,
+        reporterDept: payload.reporterDept || null,
+        downtimeFlag: payload.downtimeFlag ?? false,
+        images: payload.images || [],
+      }, key);
+      return res.ok ? { ...res, message: res.message || '报修已提交，生成待派工主工单' } : res;
+    },
+    // 报修单编辑（已派工的报修单不可编辑）
+    updateRepairReport(reportId, payload = {}) {
+      const report = E.repairReportsById[reportId];
+      if (!report) return fail('报修单不存在');
+      return act('repair/updateReport', { reportId, ...payload }, `update-report:${reportId}:v${report.updatedAt || report.createTime || 1}`);
+    },
+    // 报修单取消（需填原因）
+    cancelRepairReport(reportId, reason) {
+      const report = E.repairReportsById[reportId];
+      if (!report) return fail('报修单不存在');
+      if (!(reason || '').trim()) return fail('请填写取消原因');
+      return act('repair/cancelReport', { reportId, reason }, `cancel-report:${reportId}:v${report.createTime || 1}`);
+    },
+    // 报修单删除（已派工的报修单不可删除，只能取消）
+    deleteRepairReport(reportId) {
+      const report = E.repairReportsById[reportId];
+      if (!report) return fail('报修单不存在');
+      return act('repair/deleteReport', { reportId }, `delete-report:${reportId}`);
+    },
+    // 快速维修：直接添加的维修任务（原型「维修任务」规则第 5 条）
+    createQuickRepairOrder(payload = {}) {
+      const device = E.devicesById[payload.deviceId];
+      if (!device) return fail('设备不存在');
+      if (!(payload.title || '').trim()) return fail('维修任务名称必填');
+      if (!(payload.faultDesc || '').trim()) return fail('故障描述必填');
+      const key = `quick-create:${payload.requestId || `${payload.deviceId}:${payload.title}:${Date.now()}`}`;
+      if (E.idempotencyByKey[key]) {
+        return { ok: true, idempotent: true, message: `重复提交已忽略（幂等）：${E.idempotencyByKey[key].message}`, refs: E.idempotencyByKey[key].refs || {} };
+      }
+      return act('repair/createQuickOrder', { ...payload }, key);
+    },
+    // 快速维修任务编辑（仅快速维修来源可编辑）
+    updateQuickRepairOrder(repairOrderId, payload = {}) {
+      const order = E.repairOrdersById[repairOrderId];
+      if (!order) return fail('维修工单不存在');
+      if (order.source !== 'quick') return fail('仅「快速维修」任务可以编辑');
+      return act('repair/updateQuickOrder', { repairOrderId, ...payload }, `quick-update:${repairOrderId}:v${order.reworkCount || 0}`);
+    },
+    // 快速维修任务删除（仅快速维修来源、且未派工）
+    deleteQuickRepairOrder(repairOrderId) {
+      const order = E.repairOrdersById[repairOrderId];
+      if (!order) return fail('维修工单不存在');
+      if (order.source !== 'quick') return fail('仅「快速维修」任务可以删除');
+      if (!['待派工', '已取消'].includes(order.status)) return fail(`当前状态「${order.status}」不能删除`);
+      return act('repair/deleteQuickOrder', { repairOrderId }, `quick-delete:${repairOrderId}`);
+    },
+    // 维修任务取消（需填原因；仅待派工 / 已派工 可取消）
+    cancelRepairOrder(repairOrderId, reason) {
+      const order = E.repairOrdersById[repairOrderId];
+      if (!order) return fail('维修工单不存在');
+      if (!(reason || '').trim()) return fail('请填写取消原因');
+      if (!['待派工', '已派工'].includes(order.status)) {
+        return fail(`当前状态「${order.status}」不能取消（仅「待派工」「已派工」可取消）`);
+      }
+      return act('repair/cancel', { repairOrderId, reason }, `cancel:${repairOrderId}:v${(order.reworkCount || 0) + 1}`);
+    },
+    // 维修执行录入（处理方式 / 故障原因 / 维修说明 / 起止时间 / 维修人员 / 维修图片 / 备注）
+    saveRepairExecution(repairOrderId, payload = {}) {
+      const order = E.repairOrdersById[repairOrderId];
+      if (!order) return fail('维修工单不存在');
+      return act('repair/saveExecution', { repairOrderId, ...payload }, `save-execution:${repairOrderId}:v${(order.reworkCount || 0) + 1}:${(order.timeline || []).length}`);
     },
     assignRepair(repairOrderId, { assignee, assigneeGroup }) {
       const order = E.repairOrdersById[repairOrderId];
@@ -385,12 +459,15 @@ export function createDemoActions(state, dispatch) {
       act('repair/resume', { repairOrderId }, `resume:${repairOrderId}:v${(order.reworkCount || 0) + 1}`);
       return { ok: true, message: '工单已恢复维修', refs: { repairOrderId } };
     },
-    submitRepair(repairOrderId, { measures, verification, laborHours }) {
+    submitRepair(repairOrderId, payload = {}) {
       const order = E.repairOrdersById[repairOrderId];
       if (!order) return fail('维修工单不存在');
       if (!canRepairTransition(order.status, '待验收')) return fail(`当前状态「${order.status}」不能提交验收`);
-      if (!(measures || '').trim() || !(verification || '').trim()) return fail('必须填写维修措施与验证方式');
-      act('repair/submit', { repairOrderId, measures, verification, laborHours }, `submit-repair:${repairOrderId}:v${order.reworkCount || 0}`);
+      if (!(payload.measures || '').trim() || !(payload.verification || '').trim()) return fail('必须填写维修措施与验证方式');
+      const { measures, verification, laborHours, ...execution } = payload;
+      act('repair/submit', {
+        repairOrderId, measures, verification, laborHours, ...execution,
+      }, `submit-repair:${repairOrderId}:v${order.reworkCount || 0}`);
       return { ok: true, message: '已提交，进入「待验收」；验收通过后设备才恢复', refs: { repairOrderId } };
     },
     acceptRepair(repairOrderId, { result = '通过', opinion }) {
@@ -407,8 +484,37 @@ export function createDemoActions(state, dispatch) {
       };
     },
 
+    // ---------- 维修经验库（原型「维修经验库」列表：新增/编辑/删除/启用/停用）----------
+    createRepairKnowledge(draft = {}) {
+      if (!(draft.name || '').trim()) return fail('维修经验名称必填');
+      const key = `knowledge-create:${draft.requestId || draft.knowledgeId || draft.name}`;
+      if (E.idempotencyByKey[key]) {
+        return { ok: true, idempotent: true, message: `重复提交已忽略（幂等）：${E.idempotencyByKey[key].message}`, refs: E.idempotencyByKey[key].refs || {} };
+      }
+      return act('repair/knowledgeCreate', { draft }, key);
+    },
+    updateRepairKnowledge(knowledgeId, draft = {}) {
+      const exist = E.repairKnowledgeById[knowledgeId];
+      if (!exist) return fail('维修经验不存在');
+      if (!(draft.name || '').trim()) return fail('维修经验名称必填');
+      return act('repair/knowledgeUpdate', { knowledgeId, draft }, `knowledge-update:${knowledgeId}:v${exist.updatedAt || exist.createTime || 1}`);
+    },
+    deleteRepairKnowledge(knowledgeId) {
+      const exist = E.repairKnowledgeById[knowledgeId];
+      if (!exist) return fail('维修经验不存在');
+      return act('repair/knowledgeDelete', { knowledgeId }, `knowledge-delete:${knowledgeId}`);
+    },
+    toggleRepairKnowledgeStatus(knowledgeId, status) {
+      const exist = E.repairKnowledgeById[knowledgeId];
+      if (!exist) return fail('维修经验不存在');
+      const target = status === '停用' ? '停用' : '启用';
+      if (exist.status === target) return fail(`维修经验已是「${target}」状态`);
+      // 幂等键带版本时间：启用 → 停用 → 启用 可再次生效（不与上一次同状态请求撞键）
+      return act('repair/knowledgeToggleStatus', { knowledgeId, status: target }, `knowledge-toggle:${knowledgeId}:${target}:v${exist.updatedAt || exist.createTime || 1}`);
+    },
+
     // ---------- 备件 ----------
-    consumeSpare({ repairOrderId, spareCode, warehouseId, qty, requestId, person }) {
+    consumeSpare({ repairOrderId, spareCode, warehouseId, qty, requestId, person, remark }) {
       const order = E.repairOrdersById[repairOrderId];
       if (!order) return fail('维修工单不存在');
       if (!['已派工', '维修中'].includes(order.status)) return fail(`工单状态「${order.status}」不允许领料出库`);
@@ -419,8 +525,10 @@ export function createDemoActions(state, dispatch) {
       if (E.idempotencyByKey[key]) {
         return { ok: true, idempotent: true, message: `重复提交已忽略（幂等）：${E.idempotencyByKey[key].message}`, refs: E.idempotencyByKey[key].refs || {} };
       }
-      act('spare/consume', { repairOrderId, spareCode, warehouseId, qty, requestId, person }, key);
-      return { ok: true, message: `出库成功：${warehouseId} 可用库存 −${qty}，已生成维修出库单`, refs: { repairOrderId, spareCode } };
+      // reducer 为最终裁决方（库存校验在 reducer 内按最新快照再校验一次）
+      const res = act('spare/consume', { repairOrderId, spareCode, warehouseId, qty, requestId, person, remark }, key);
+      if (!res.ok) return res;
+      return { ok: true, message: res.message || `出库成功：${warehouseId} 可用库存 −${qty}`, refs: res.refs || { repairOrderId, spareCode } };
     },
     returnSpare({ outboundId, qty, reason, requestId }) {
       const outbound = E.outboundsById[outboundId];
@@ -433,8 +541,9 @@ export function createDemoActions(state, dispatch) {
       if (E.idempotencyByKey[key]) {
         return { ok: true, idempotent: true, message: `重复提交已忽略（幂等）`, refs: {} };
       }
-      act('spare/return', { outboundId, qty, reason, requestId }, key);
-      return { ok: true, message: `退库成功：${item.spareName} ×${qty} 已回冲 ${outbound.warehouseId}`, refs: { outboundId } };
+      const res = act('spare/return', { outboundId, qty, reason, requestId }, key);
+      if (!res.ok) return res;
+      return { ok: true, message: res.message || `退库成功：${item.spareName} ×${qty} 已回冲 ${outbound.warehouseId}`, refs: res.refs || { outboundId } };
     },
     inboundSpare({ spareCode, warehouseId, qty, requestId, supplier, batch, handler }) {
       if (!(qty > 0)) return fail('入库数量必须为正数');

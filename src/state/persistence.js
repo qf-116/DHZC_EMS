@@ -115,6 +115,37 @@ function migrateParsed(parsed) {
       // 报警规则已无草稿态：历史草稿规则（从未生效）随迁移清理
       .filter(([, rule]) => rule.status !== '草稿')
   );
+  // 维修执行录入字段与维修经验库迁移（V22）：旧工单补齐执行字段（处理方式/故障原因/维修图片等），
+  // 旧报修单补齐报修人/报修部门/报修时间/是否停机/设备类型/故障图片；经验库按 key 合并保留用户新增
+  next.entities.repairOrdersById = Object.fromEntries(
+    Object.entries(next.entities.repairOrdersById || {}).map(([id, o]) => [id, {
+      ...o,
+      handlingMethod: o.handlingMethod ?? null,
+      faultCause: o.faultCause ?? '',
+      repairDesc: o.repairDesc ?? '',
+      repairType: o.repairType ?? null,
+      repairPart: o.repairPart ?? null,
+      repairLevel: o.repairLevel ?? null,
+      repairStartTime: o.repairStartTime ?? null,
+      repairEndTime: o.repairEndTime ?? null,
+      repairPersonIds: o.repairPersonIds ?? [],
+      repairTime: o.repairTime ?? null,
+      images: o.images ?? [],
+      remark: o.remark ?? '',
+    }])
+  );
+  next.entities.repairReportsById = Object.fromEntries(
+    Object.entries(next.entities.repairReportsById || {}).map(([id, r]) => [id, {
+      ...r,
+      reporter: r.reporter ?? r.creator ?? '--',
+      reporterDept: r.reporterDept ?? '--',
+      reportTime: r.reportTime ?? r.createTime ?? '--',
+      downtimeFlag: r.downtimeFlag ?? false,
+      deviceType: r.deviceType ?? '--',
+      images: r.images ?? [],
+    }])
+  );
+  next.entities.repairKnowledgeById = { ...base.entities.repairKnowledgeById, ...(parsed.entities?.repairKnowledgeById || {}) };
   return next;
 }
 

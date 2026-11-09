@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
-import { Card, Table, Button, Space, Input, Select, Modal, Form, App, Popconfirm, InputNumber, DatePicker, Alert } from 'antd';
-import { useNavigate } from 'react-router-dom';
+import { Card, Table, Button, Space, Input, Select, Modal, Form, App, InputNumber, DatePicker, Alert } from 'antd';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import dayjs from 'dayjs';
 import PageHeader from '../components/PageHeader.jsx';
 import FilterBar, { FilterField } from '../components/FilterBar.jsx';
@@ -11,24 +11,36 @@ import { useDemoState } from '../state/DemoStore.jsx';
 import { patrolTasks, patrolPlans } from '../data/standardData.js';
 
 // 巡检任务（范围外演示模块）：列表读自 standardData.js 种子快照。
-// 行点击进入详情，「执行」进入执行页；新增（临时任务，不从计划生成）/ 编辑 / 删除
+// 行点击进入详情，「执行」进入执行页；新增（临时任务，不从计划生成）/ 编辑 / 批量删除
 // 为页面内演示交互（不写入 DemoStore，刷新后恢复快照）。
 // 状态枚举：未开始 / 进行中 / 已完成 / 已逾期 / 逾期完成。
+// 删除为工具栏批量操作（原型行操作无删除），二次确认文案「确认删除该条数据吗？」。
 export default function PatrolTasksPage() {
   const navigate = useNavigate();
-  const { message } = App.useApp();
+  const [params] = useSearchParams();
+  const { message, modal } = App.useApp();
   const state = useDemoState();
   const meta = state.meta;
+
+  const queryPlan = params.get('plan') || '';
 
   const [kw, setKw] = useState('');
   const [kwDraft, setKwDraft] = useState('');
   const [status, setStatus] = useState(null);
+  // 原型筛选项：巡检计划名称、负责人、任务日期（区间）
+  const [planKw, setPlanKw] = useState(queryPlan);
+  const [planKwDraft, setPlanKwDraft] = useState(queryPlan);
+  const [ownerKw, setOwnerKw] = useState('');
+  const [ownerKwDraft, setOwnerKwDraft] = useState('');
+  const [dateRange, setDateRange] = useState(null);
+  const [dateRangeDraft, setDateRangeDraft] = useState(null);
   const [editorOpen, setEditorOpen] = useState(false);
   const [editing, setEditing] = useState(null); // null=新增临时任务，对象=编辑
   const [form] = Form.useForm();
   const [extraRows, setExtraRows] = useState([]);
   const [deletedCodes, setDeletedCodes] = useState(() => new Set());
   const [patches, setPatches] = useState({});
+  const [selectedKeys, setSelectedKeys] = useState([]);
 
   const rows = useMemo(() => [
     ...extraRows,
@@ -39,13 +51,21 @@ export default function PatrolTasksPage() {
 
   const list = useMemo(() => rows
     .filter(r => !status || r.status === status)
+    .filter(r => !planKw || (r.plan || '').toLowerCase().includes(planKw.trim().toLowerCase()))
+    .filter(r => !ownerKw || (r.owner || '').toLowerCase().includes(ownerKw.trim().toLowerCase()))
+    .filter(r => {
+      if (!dateRange || !dateRange[0] || !dateRange[1]) return true;
+      if (!r.date) return false;
+      const d = dayjs(r.date);
+      return !d.isBefore(dateRange[0], 'day') && !d.isAfter(dateRange[1], 'day');
+    })
     .filter(r => {
       const k = (kw || '').trim().toLowerCase();
       if (!k) return true;
       return [r.code, r.name, r.plan, r.owner].some(v => (v || '').toLowerCase().includes(k));
     })
     .slice()
-    .sort((a, b) => (b.date || '').localeCompare(a.date || '')), [rows, kw, status]);
+    .sort((a, b) => (b.date || '').localeCompare(a.date || '')), [rows, kw, status, planKw, ownerKw, dateRange]);
 
   const nextCode = `XJJH-P${(meta.demoDay || '2026-09-16').replaceAll('-', '')}-LS${String(extraRows.length + 1).padStart(3, '0')}`;
 
@@ -74,10 +94,29 @@ export default function PatrolTasksPage() {
     }
     setEditorOpen(false);
   };
-  const handleDelete = (record) => {
-    if (extraRows.some(r => r.code === record.code)) setExtraRows(prev => prev.filter(r => r.code !== record.code));
-    else setDeletedCodes(prev => new Set(prev).add(record.code));
-    message.success(`已删除巡检任务「${record.code}」`);
+
+  const removeRows = (codes) => {
+    const set = new Set(codes);
+    setExtraRows(prev => prev.filter(r => !set.has(r.code)));
+    setDeletedCodes(prev => new Set([...prev, ...codes]));
+  };
+
+  const handleBatchDelete = () => {
+    if (selectedKeys.length === 0) {
+      message.warning('请先勾选要删除的巡检任务');
+      return;
+    }
+    modal.confirm({
+      title: '删除巡检任务',
+      content: '确认删除该条数据吗？',
+      okText: '确认删除', cancelText: '取消',
+      okButtonProps: { danger: true },
+      onOk: () => {
+        removeRows(selectedKeys);
+        setSelectedKeys([]);
+        message.success(`已删除 ${selectedKeys.length} 条巡检任务`);
+      },
+    });
   };
 
   const columns = [
@@ -93,7 +132,7 @@ export default function PatrolTasksPage() {
     },
     { title: '创建时间', dataIndex: 'createTime', width: 160, render: v => v || '--' },
     {
-      title: '操作', width: 190, fixed: 'right',
+      title: '操作', width: 160, fixed: 'right',
       render: (_, r) => (
         <Space size={0} onClick={(e) => e.stopPropagation()}>
           {canExecute(r) && (
@@ -101,15 +140,24 @@ export default function PatrolTasksPage() {
           )}
           <Button type="link" size="small" onClick={() => navigate(`/patrol-tasks/detail?id=${encodeURIComponent(r.code)}`)}>详情</Button>
           <Button type="link" size="small" onClick={() => openEdit(r)}>编辑</Button>
-          {r.status === '未开始' && (
-            <Popconfirm title="删除该任务？" okButtonProps={{ danger: true }} onConfirm={() => handleDelete(r)}>
-              <Button type="link" size="small" danger>删除</Button>
-            </Popconfirm>
-          )}
         </Space>
       ),
     },
   ];
+
+  const applyFilters = () => {
+    setKw(kwDraft);
+    setPlanKw(planKwDraft);
+    setOwnerKw(ownerKwDraft);
+    setDateRange(dateRangeDraft);
+  };
+  const resetFilters = () => {
+    setKw(''); setKwDraft('');
+    setPlanKw(''); setPlanKwDraft('');
+    setOwnerKw(''); setOwnerKwDraft('');
+    setDateRange(null); setDateRangeDraft(null);
+    setStatus(null);
+  };
 
   return (
     <>
@@ -118,10 +166,26 @@ export default function PatrolTasksPage() {
         subtitle={`数据更新于 ${meta.updatedAt}`}
       />
       <DegradedBanner meta={meta} />
-      <FilterBar onQuery={() => setKw(kwDraft)} onReset={() => { setKw(''); setKwDraft(''); setStatus(null); }}>
+      <FilterBar onQuery={applyFilters} onReset={resetFilters}>
         <FilterField label="任务名称">
-          <Input style={{ width: 240 }} placeholder="任务编号 / 线路 / 执行人" allowClear value={kwDraft}
-            onChange={e => { setKwDraft(e.target.value); if (!e.target.value) setKw(''); }} onPressEnter={() => setKw(kwDraft)} />
+          <Input style={{ width: 200 }} placeholder="任务编号 / 名称" allowClear value={kwDraft}
+            onChange={e => { setKwDraft(e.target.value); if (!e.target.value) setKw(''); }} onPressEnter={applyFilters} />
+        </FilterField>
+        <FilterField label="巡检计划名称">
+          <Input style={{ width: 200 }} placeholder="请输入巡检计划名称" allowClear value={planKwDraft}
+            onChange={e => { setPlanKwDraft(e.target.value); if (!e.target.value) setPlanKw(''); }} onPressEnter={applyFilters} />
+        </FilterField>
+        <FilterField label="负责人">
+          <Input style={{ width: 160 }} placeholder="请输入负责人" allowClear value={ownerKwDraft}
+            onChange={e => { setOwnerKwDraft(e.target.value); if (!e.target.value) setOwnerKw(''); }} onPressEnter={applyFilters} />
+        </FilterField>
+        <FilterField label="任务日期">
+          <DatePicker.RangePicker
+            style={{ width: 240 }}
+            value={dateRangeDraft}
+            onChange={setDateRangeDraft}
+            placeholder={['请选择开始结束日期', '请选择开始结束日期']}
+          />
         </FilterField>
         <FilterField label="状态">
           <Select style={{ width: 120 }} allowClear value={status} onChange={setStatus}
@@ -131,11 +195,14 @@ export default function PatrolTasksPage() {
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
           <Button type="primary" onClick={openCreate}>新增临时任务</Button>
+          <Button danger disabled={selectedKeys.length === 0} onClick={handleBatchDelete}>删除</Button>
+          <span style={{ color: '#8a97a5', fontSize: 12 }}>已选 {selectedKeys.length} 条</span>
         </Space>
         <Table
           rowKey="code" size="small" columns={columns} dataSource={list} scroll={{ x: 1440 }}
+          rowSelection={{ columnWidth: 40, selectedRowKeys: selectedKeys, onChange: setSelectedKeys }}
           onRow={(r) => ({ onClick: () => navigate(`/patrol-tasks/detail?id=${encodeURIComponent(r.code)}`), style: { cursor: 'pointer' } })}
-          locale={{ emptyText: <EmptyState description="暂无巡检任务" reason={kw || status ? '当前筛选条件下没有巡检任务' : '暂无巡检任务数据'} /> }}
+          locale={{ emptyText: <EmptyState description="暂无巡检任务" reason={kw || status || planKw || ownerKw || dateRange ? '当前筛选条件下没有巡检任务' : '暂无巡检任务数据'} /> }}
           pagination={{ pageSize: 10, showTotal: t => `共 ${t} 条` }}
         />
       </Card>

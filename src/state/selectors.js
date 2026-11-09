@@ -6,6 +6,7 @@
 
 import { computeOee, oeeBlockers, oeeLossBreakdown, computeMttrMtbf, pct, round1, productionReportWindowStats } from '../domain/oee.js';
 import { availableQty, stockLevel, spareTotals } from '../domain/spare.js';
+import { deriveReportStatus } from '../domain/repair.js';
 import { reportRows as reportSeedRows } from '../data/demoData.js';
 
 // ---------- 设备 ----------
@@ -148,6 +149,37 @@ export function selectAllRepairOrders(state) {
 }
 export function selectAllRepairReports(state) {
   return Object.values(state.entities.repairReportsById).sort((a, b) => (a.createTime < b.createTime ? 1 : -1));
+}
+
+// 报修单状态由关联工单状态派生（原型口径：未处理 / 进行中 / 已完成 / 已取消）
+export function selectReportStatus(state, report) {
+  if (!report) return '未处理';
+  const order = report.linkedRepairOrderId ? state.entities.repairOrdersById[report.linkedRepairOrderId] : null;
+  return deriveReportStatus(order?.status, report.status);
+}
+
+// 报修单 + 派生状态 + 关联工单摘要（故障报修列表用）
+export function selectRepairReportRows(state) {
+  return selectAllRepairReports(state).map(r => {
+    const order = r.linkedRepairOrderId ? state.entities.repairOrdersById[r.linkedRepairOrderId] : null;
+    return {
+      ...r,
+      displayStatus: selectReportStatus(state, r),
+      orderStatus: order?.status || null,
+      orderId: order?.repairOrderId || null,
+      orderCode: order?.code || null,
+      hasActiveOrder: Boolean(order && !['已完成', '已取消'].includes(order.status)),
+    };
+  });
+}
+
+// 维修经验库（原型「维修经验库」列表，按创建时间倒序）
+export function selectAllRepairKnowledge(state) {
+  return Object.values(state.entities.repairKnowledgeById || {}).sort((a, b) => (a.createTime < b.createTime ? 1 : -1));
+}
+
+export function selectRepairKnowledgeById(state, knowledgeId) {
+  return state.entities.repairKnowledgeById?.[knowledgeId] || null;
 }
 
 // ---------- 备件 ----------

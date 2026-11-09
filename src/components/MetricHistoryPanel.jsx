@@ -40,7 +40,7 @@ function buildPulls(deviceId, dateStr, lastMinute) {
 
 export default function MetricHistoryPanel({ device, realtime, metricsByKey, referenceTime = DEMO_TIME }) {
   const reference = dayjs(referenceTime);
-  const cutoff = reference.isValid() ? reference : dayjs(DEMO_TIME);
+  const cutoff = reference.isValid?.() ? reference : dayjs(DEMO_TIME);
   const cutoffDay = cutoff.format('YYYY-MM-DD');
   const cutoffMinute = cutoff.hour() * 60 + cutoff.minute();
   const metricOptions = realtime.metrics || [];

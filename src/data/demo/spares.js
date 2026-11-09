@@ -8,13 +8,17 @@ export const warehouses = [
   { warehouseId: '仓库二', name: '仓库二' },
 ];
 
+// 备件档案（原型「备品备件管理」列表列口径）：
+// 名称/编号/规格型号/品牌/供应商/供应商联系人/供应商联系电话/现存量/寿命时长（天）/
+// 安全库存数量/最高库存上限/单位/货期（天）/用途/备注/创建时间/更新时间/更新人
+// 安全库存数量与最高库存上限是「备件档案级」配置（现存量为所有仓库合计），库存页据此判水位。
 export const spares = [
-  { code: '120001', name: '备件一', spec: '12*12*6', brand: '品牌一', unit: '个', life: 600, safe: 400, max: 1000, remark: '--' },
-  { code: '120002', name: '备件二', spec: '12*12*6', brand: '--', unit: '千克', life: 400, safe: 400, max: 1000, remark: '--' },
-  { code: '120003', name: '备件三', spec: '12*12*6', brand: '--', unit: '米', life: 400, safe: 400, max: 1000, remark: '--' },
-  { code: '120004', name: '备件四', spec: '12*12*6', brand: '品牌一', unit: '个', life: 400, safe: 400, max: 1000, remark: '--' },
-  { code: '120005', name: '备件五', spec: '12*12*6', brand: '品牌二', unit: '个', life: 400, safe: 400, max: 1000, remark: '--' },
-  { code: '120006', name: '空压机滤芯', spec: '2901-x', brand: '阿特拉斯', unit: '个', life: 90, safe: 40, max: 120, remark: '空压机三级保养用' },
+  { code: '120001', name: '备件一', spec: '12*12*6', brand: '品牌一', unit: '个', life: 600, safe: 400, max: 1000, supplier: '供应商一', contact: '王五', phone: '13888888888', leadTime: 15, usage: '--', remark: '--', createTime: '2025-03-31 12:00:00', updateTime: '2025-03-31 12:00:00', updater: '张三' },
+  { code: '120002', name: '备件二', spec: '12*12*6', brand: '--', unit: '千克', life: 400, safe: 400, max: 1000, supplier: '供应商一', contact: '王五', phone: '13888888888', leadTime: 15, usage: '--', remark: '--', createTime: '2025-03-31 12:00:00', updateTime: '2025-03-31 12:00:00', updater: '李四' },
+  { code: '120003', name: '备件三', spec: '12*12*6', brand: '--', unit: '米', life: 400, safe: 400, max: 1000, supplier: '供应商一', contact: '王五', phone: '13888888888', leadTime: 15, usage: '--', remark: '--', createTime: '2025-03-31 12:00:00', updateTime: '2025-03-31 12:00:00', updater: '王五' },
+  { code: '120004', name: '备件四', spec: '12*12*6', brand: '品牌一', unit: '个', life: 400, safe: 400, max: 1000, supplier: '供应商一', contact: '王五', phone: '13888888888', leadTime: 15, usage: '--', remark: '--', createTime: '2025-03-31 12:00:00', updateTime: '2025-03-31 12:00:00', updater: '赵六' },
+  { code: '120005', name: '备件五', spec: '12*12*6', brand: '品牌二', unit: '个', life: 400, safe: 400, max: 1000, supplier: '供应商一', contact: '王五', phone: '13888888888', leadTime: 15, usage: '--', remark: '--', createTime: '2025-03-31 12:00:00', updateTime: '2025-03-31 12:00:00', updater: '唐七' },
+  { code: '120006', name: '空压机滤芯', spec: '2901-x', brand: '阿特拉斯', unit: '个', life: 90, safe: 40, max: 120, supplier: '供应商二', contact: '周强', phone: '13888888888', leadTime: 15, usage: '空压机三级保养用', remark: '空压机三级保养用', createTime: '2025-03-31 12:00:00', updateTime: '2026-08-10 09:00:00', updater: '王五' },
 ];
 
 // stockKey = `${warehouseId}|${spareCode}`

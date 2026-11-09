@@ -65,6 +65,7 @@ import RepairExecutePage from './pages/RepairExecutePage.jsx';
 import RepairDetailPage from './pages/RepairDetailPage.jsx';
 import RepairKnowledgePage from './pages/RepairKnowledgePage.jsx';
 import SparePartsStockPage from './pages/SparePartsStockPage.jsx';
+import SparePartsArchivePage from './pages/SparePartsArchivePage.jsx';
 import SparePartsInboundPage from './pages/SparePartsInboundPage.jsx';
 import SpareInboundDetailPage from './pages/SpareInboundDetailPage.jsx';
 import SparePartsOutboundPage from './pages/SparePartsOutboundPage.jsx';
@@ -145,6 +146,7 @@ const menus = [
     { key: '/repair-knowledge', icon: <BookOpen size={14} />, label: '维修经验库' },
   ] },
   { key: 'spare', icon: <Package size={15} />, label: '备品备件', children: [
+    { key: '/spare-parts-archive', icon: <Package size={14} />, label: '备件档案' },
     { key: '/spare-parts-stock', icon: <Package size={14} />, label: '备件台账' },
     { key: '/spare-parts-inbound', icon: <Package size={14} />, label: '入库记录' },
     { key: '/spare-parts-outbound', icon: <Package size={14} />, label: '出库记录' },
@@ -366,6 +368,7 @@ export default function App() {
                   <Route path="/repair-orders/detail" element={<RepairDetailPage />} />
                   <Route path="/repair-knowledge" element={<RepairKnowledgePage />} />
                   {/* 备品备件 */}
+                  <Route path="/spare-parts-archive" element={<SparePartsArchivePage />} />
                   <Route path="/spare-parts-stock" element={<SparePartsStockPage />} />
                   <Route path="/spare-parts-inbound" element={<SparePartsInboundPage />} />
                   <Route path="/spare-parts-inbound/detail" element={<SpareInboundDetailPage />} />

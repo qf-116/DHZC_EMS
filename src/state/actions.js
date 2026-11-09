@@ -7,7 +7,7 @@
 
 import { canAlarmTransition } from '../domain/alarm.js';
 import { canRepairTransition } from '../domain/repair.js';
-import { validateOutbound, validateReturn } from '../domain/spare.js';
+import { validateOutbound, validateReturn, validateSpareDraft } from '../domain/spare.js';
 
 let actionSeq = 0;
 const nextActionId = () => `demo-action-20260916-${String(++actionSeq).padStart(4, '0')}`;
@@ -440,6 +440,43 @@ export function createDemoActions(state, dispatch) {
       if (!(qty > 0)) return fail('入库数量必须为正数');
       act('spare/inbound', { spareCode, warehouseId, qty, requestId, supplier, batch, handler }, `inbound:${warehouseId}:${spareCode}:${requestId}`);
       return { ok: true, message: '入库成功', refs: { spareCode } };
+    },
+    // 备件档案：新增 / 编辑（编号不可修改，历史出入库记录不受影响）
+    upsertSpare(draft = {}, mode = 'create') {
+      const code = (draft.code || '').trim();
+      const existingCodes = Object.keys(E.sparesByCode).filter(c => c !== code);
+      const check = validateSpareDraft({ ...draft, code }, { existingCodes });
+      if (!check.ok) return fail(Object.values(check.errors)[0] || '备件档案校验未通过');
+      if (mode === 'create') {
+        const key = `spare-create:${code}`;
+        if (E.idempotencyByKey[key]) return { ok: true, idempotent: true, message: '重复提交已忽略（幂等）', refs: { spareCode: code } };
+        act('spare/upsert', { mode, draft: { ...draft, code } }, key);
+        return { ok: true, message: `备件档案 ${draft.name} 已创建（编号 ${code}）`, refs: { spareCode: code } };
+      }
+      if (!E.sparesByCode[code]) return fail(`备件档案 ${code} 不存在`);
+      act('spare/upsert', { mode, draft: { ...draft, code } }, `spare-edit:${code}:v${(E.sparesByCode[code].version || 0) + 1}`);
+      return { ok: true, message: `备件档案 ${draft.name} 已保存（编号不可修改）`, refs: { spareCode: code } };
+    },
+    // 备件档案删除：现存量为 0 时才允许删除；历史出入库记录保留
+    deleteSpare(code) {
+      if (!E.sparesByCode[code]) return fail('备件档案不存在');
+      const total = Object.values(E.stockByKey).filter(r => r.spareCode === code).reduce((s, r) => s + (r.onHand || 0), 0);
+      if (total > 0) return fail(`备件 ${E.sparesByCode[code].name} 现存量为 ${total}，现存量为 0 时才可删除`);
+      act('spare/delete', { code }, `spare-delete:${code}`);
+      return { ok: true, message: `备件档案 ${E.sparesByCode[code].name} 已删除`, refs: { spareCode: code } };
+    },
+    // 领用出库（不关联维修工单）
+    issueSpare({ spareCode, warehouseId, qty, person, reason, requestId, date }) {
+      if (!E.sparesByCode[spareCode]) return fail('备件不存在');
+      const stockRow = E.stockByKey[`${warehouseId}|${spareCode}`];
+      const check = validateOutbound(stockRow, qty);
+      if (!check.ok) return fail(check.error);
+      const key = `outbound:none:${spareCode}:${requestId}`;
+      if (E.idempotencyByKey[key]) {
+        return { ok: true, idempotent: true, message: `重复提交已忽略（幂等）：${E.idempotencyByKey[key].message}`, refs: E.idempotencyByKey[key].refs || {} };
+      }
+      act('spare/issue', { spareCode, warehouseId, qty, person, reason, requestId, date }, key);
+      return { ok: true, message: `领用出库成功：${E.sparesByCode[spareCode].name} ×${qty}`, refs: { spareCode } };
     },
 
     // ---------- 停机 ----------

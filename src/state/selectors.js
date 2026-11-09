@@ -5,7 +5,7 @@
 // ============================================================
 
 import { computeOee, oeeBlockers, oeeLossBreakdown, computeMttrMtbf, pct, round1, productionReportWindowStats } from '../domain/oee.js';
-import { availableQty, stockLevel } from '../domain/spare.js';
+import { availableQty, stockLevel, spareTotals } from '../domain/spare.js';
 import { reportRows as reportSeedRows } from '../data/demoData.js';
 
 // ---------- 设备 ----------
@@ -154,14 +154,28 @@ export function selectAllRepairReports(state) {
 export function selectAvailableStock(state, warehouseId, spareCode) {
   const row = state.entities.stockByKey[`${warehouseId}|${spareCode}`];
   if (!row) return null; // 未配置库存 ≠ 0
-  return { ...row, available: availableQty(row), level: stockLevel(row) };
+  const archive = state.entities.sparesByCode[spareCode] || null;
+  return { ...row, available: availableQty(row), level: stockLevel(row, archive) };
 }
 
+// 库存行读模型：安全库存 / 最高库存 / 寿命时长取自备件档案（档案级配置，库存行不再重复维护）
 export function selectStockRows(state) {
-  return Object.values(state.entities.stockByKey).map(row => ({
-    ...row, available: availableQty(row), level: stockLevel(row),
-    spare: state.entities.sparesByCode[row.spareCode] || null,
-  }));
+  return Object.values(state.entities.stockByKey).map(row => {
+    const spare = state.entities.sparesByCode[row.spareCode] || null;
+    return {
+      ...row,
+      available: availableQty(row),
+      level: stockLevel(row, spare),
+      safe: row.safe ?? spare?.safe ?? null,
+      max: row.max ?? spare?.max ?? null,
+      spare,
+    };
+  });
+}
+
+// 备件现存合计（跨仓库现存量口径）：备件档案与库存页共用
+export function selectSpareTotals(state) {
+  return spareTotals(Object.values(state.entities.stockByKey));
 }
 
 export function selectRepairParts(state, repairOrderId) {

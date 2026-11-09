@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { Card, Table, Button, Space, Input, Select, Tree, App, Modal, Form, DatePicker, Upload, Tag, Row, Col } from 'antd';
+import { Card, Table, Button, Space, Input, Select, Tree, App, Modal, Form, DatePicker, Upload, Tag, Row, Col, Alert } from 'antd';
 import { Upload as UploadIcon, Plus, Download, Printer, Pencil, Trash2 } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import dayjs from 'dayjs';
@@ -22,6 +22,7 @@ export default function DeviceLedgerPage() {
   const meta = state.meta;
 
   const [modalOpen, setModalOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState(null); // null=新增，对象=编辑
   const [kw, setKw] = useState('');
   const [lifecycle, setLifecycle] = useState(null);
@@ -108,6 +109,24 @@ export default function DeviceLedgerPage() {
 
   const openModal = (record) => { setEditing(record || null); setModalOpen(true); };
 
+  // 导出：把当前筛选结果导出为 CSV（演示版本地生成，字段与列表列一致）
+  const exportCsv = () => {
+    if (!filtered.length) { message.warning('当前筛选结果为空，无可导出数据'); return; }
+    const head = ['资产编号', '设备名称', '规格型号', '车间', '产线', '工位', '生命周期', '运行状态', '通信健康', '绑定状态', 'OEE统计', '设备负责人', '启用日期'];
+    const lines = [head.join(',')].concat(filtered.map(r => [
+      r.assetCode, r.name, r.model, r.workshopName, r.lineName, r.stationName, r.lifecycleStatus,
+      r.runStatus || '', r.healthStatus || '', r.bindingStatus, r.oeeEligible ? '是' : '否', r.owner, r.enableDate,
+    ].map(v => `"${String(v ?? '').replace(/"/g, '""')}"`).join(',')));
+    const blob = new Blob([`﻿${lines.join('\n')}`], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `设备台账_${meta.updatedAt ? meta.updatedAt.slice(0, 10) : '导出'}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    message.success(`已导出 ${filtered.length} 条设备档案（CSV）`);
+  };
+
   const confirmDelete = (record) => modal.confirm({
     title: '删除设备档案',
     content: record
@@ -178,9 +197,9 @@ export default function DeviceLedgerPage() {
           <Card size="small">
             <Space wrap style={{ marginBottom: 12 }}>
               <Button type="primary" icon={<Plus size={14} />} onClick={() => openModal(null)}>新增</Button>
-              <Button icon={<Printer size={14} />}>打印二维码</Button>
-              <Button icon={<UploadIcon size={14} />}>导入</Button>
-              <Button icon={<Download size={14} />}>导出</Button>
+              <Button icon={<Printer size={14} />} onClick={() => message.info('二维码按单台设备打印，请进入设备详情页点击「打印二维码」')}>打印二维码</Button>
+              <Button icon={<UploadIcon size={14} />} onClick={() => setImportOpen(true)}>导入</Button>
+              <Button icon={<Download size={14} />} onClick={exportCsv}>导出</Button>
               <Button icon={<Pencil size={14} />} onClick={() => openModal(rows[0] || null)}>编辑</Button>
               <Button danger icon={<Trash2 size={14} />} onClick={() => confirmDelete(null)}>删除</Button>
             </Space>
@@ -196,6 +215,34 @@ export default function DeviceLedgerPage() {
           </Card>
         </div>
       </div>
+
+      {/* 导入设备档案（演示弹窗：给出模板口径与逐行校验规则，不写入演示快照） */}
+      <Modal
+        title="导入设备档案"
+        width={680}
+        open={importOpen}
+        destroyOnClose
+        onCancel={() => setImportOpen(false)}
+        footer={[
+          <Button key="cancel" onClick={() => setImportOpen(false)}>取消</Button>,
+          <Button key="ok" type="primary" onClick={() => { setImportOpen(false); message.info('演示版：导入仅演示流程与校验提示，不写入设备台账'); }}>开始导入</Button>,
+        ]}
+      >
+        <Alert
+          type="info" showIcon style={{ marginBottom: 12 }}
+          message="导入按模板逐行校验，成功行提交、失败行不提交；演示版本不写入台账，仅演示流程与提示。"
+        />
+        <ul style={{ paddingLeft: 18, margin: '0 0 12px', color: '#5d6b78', fontSize: 13, lineHeight: 1.9 }}>
+          <li>模板列：资产编号、设备名称、规格型号、车间、产线、工位、设备类型、设备负责人、启用日期、生命周期、是否参与 OEE 统计。</li>
+          <li>必填列：设备名称、规格型号、车间、设备类型、设备负责人、启用日期；缺失按行提示「缺少必填字段」。</li>
+          <li>资产编号在系统内唯一，重复行提示「资产编号已存在」，不覆盖已有档案。</li>
+          <li>车间 / 产线 / 工位须取自主数据；停用节点下的数据提示「所属组织已停用」。</li>
+          <li>校验结果按行返回：行号、字段、原因；错误行不提交，导入完成后给出成功 / 失败行数汇总。</li>
+        </ul>
+        <Upload beforeUpload={() => false} maxCount={1}>
+          <Button icon={<UploadIcon size={14} />}>选择导入文件</Button>
+        </Upload>
+      </Modal>
 
       {/* 新增/编辑设备档案（演示弹窗：不修改演示快照中的台账事实；字段对齐已上线原型，双列布局） */}
       <Modal

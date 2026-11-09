@@ -190,6 +190,9 @@ export default function LifecycleTasksPage({ mode = null }) {
 
   const modalTitle = mode === 'trial' ? '使用部门试用确认' : mode === 'registration' ? '设备办理手续入账' : selected ? '补充采购入账信息' : '手工新增采购入账';
 
+  // 主按钮文案随当前环节变化（试用 / 入账页签打开的是该环节第一条待办，不再叫「手工新增采购入账」）
+  const primaryLabel = mode === 'trial' ? '办理试用确认' : mode === 'registration' ? '办理设备手续入账' : '手工新增采购入账';
+
   // 入账预览：按采购数量预览将要生成的设备编码（正式编码在提交时由系统生成并写入台账）
   const registrationPreview = mode === 'registration' && selected ? (() => {
     const base = Object.keys(state.entities.devicesById || {}).length;
@@ -227,9 +230,9 @@ export default function LifecycleTasksPage({ mode = null }) {
       </FilterBar>
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
-          <Button type="primary" icon={<FilePlus2 size={14} />} onClick={mode ? openForMode : openCreate}>手工新增采购入账</Button>
+          <Button type="primary" icon={<FilePlus2 size={14} />} onClick={mode ? openForMode : openCreate}>{primaryLabel}</Button>
         </Space>
-        {tasks.length ? <Table rowKey="taskId" size="small" scroll={{ x: 1100 }} dataSource={tasks} columns={columns} pagination={{ pageSize: 8, showTotal: t => `共 ${t} 条` }} /> : <EmptyState description="暂无设备入账流程任务" reason="采购到货任务由采购系统（SRM/WMS）同步生成；直送现场 / 历史设备等补录场景可手工新增" next="手工新增采购入账" onNext={openCreate} />}
+        {tasks.length ? <Table rowKey="taskId" size="small" scroll={{ x: 1100 }} dataSource={tasks} columns={columns} pagination={{ pageSize: 8, showTotal: t => `共 ${t} 条` }} /> : <EmptyState description="暂无设备入账流程任务" reason="采购到货任务由采购系统（SRM/WMS）同步生成；直送现场 / 历史设备等补录场景可手工新增" next={mode === 'trial' ? '办理试用确认' : mode === 'registration' ? '办理设备手续入账' : '手工新增采购入账'} onNext={mode ? openForMode : openCreate} />}
       </Card>
 
       <Modal title={modalTitle} open={modalOpen} width={680} destroyOnClose onCancel={() => { setModalOpen(false); if (mode) navigate('/lifecycle/tasks'); }} onOk={submit} okText={mode === 'trial' ? '提交试用结论' : mode === 'registration' ? '完成设备入账' : '提交'}>

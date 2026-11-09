@@ -25,7 +25,7 @@ const routes = [
   '/repair-pending', '/repair-reports', '/repair-orders',
   '/repair-orders/RO-20260916-001', '/repair-orders/RO-20260916-001/execute', '/repair-orders/RO-20260915-002/accept',
   '/repair-orders/execute', '/repair-orders/detail', '/repair-knowledge',
-  '/spare-parts-stock', '/spare-parts-inbound', '/spare-parts-inbound/detail',
+  '/spare-parts-archive', '/spare-parts-stock', '/spare-parts-inbound', '/spare-parts-inbound/detail',
   '/spare-parts-outbound', '/spare-parts-outbound/detail',
   '/binding-overview', '/binding-templates',
   // 2026-10-27 下线页面旧路由（重定向）：平台指标清单 / 报警规则版本 / 通知策略 / 数据质量报表

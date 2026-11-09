@@ -2,6 +2,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { Card, Table, Button, Space, DatePicker, App, Modal, Form, Select, InputNumber, Input, Typography, Alert } from 'antd';
 import { PackageOpen, Undo2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import dayjs from 'dayjs';
 import PageHeader from '../components/PageHeader.jsx';
 import DegradedBanner from '../components/DegradedBanner.jsx';
 import EmptyState from '../components/EmptyState.jsx';
@@ -24,12 +25,16 @@ export default function SparePartsOutboundPage() {
   const [range, setRange] = useState(null);
   const [typeKw, setTypeKw] = useState(null);
   const [outOpen, setOutOpen] = useState(false);
+  const [issueOpen, setIssueOpen] = useState(false);
   const [retTarget, setRetTarget] = useState(null);
   const [personPickerOpen, setPersonPickerOpen] = useState(false);
+  const [issuePickerOpen, setIssuePickerOpen] = useState(false);
   const [outForm] = Form.useForm();
+  const [issueForm] = Form.useForm();
   const [retForm] = Form.useForm();
   // 幂等 requestId（useRef 计数）：提交成功后才推进，失败/重复提交沿用同一 requestId
   const outReqNo = useRef(1);
+  const issueReqNo = useRef(1);
   const retReqNo = useRef(1);
 
   const { repairOrdersById, sparesByCode, warehousesById, stockByKey, returnsById } = state.entities;
@@ -114,6 +119,40 @@ export default function SparePartsOutboundPage() {
     }
   };
 
+  // ---------- 领用出库（不关联维修工单，车间日常领用） ----------
+  const openIssue = () => {
+    issueForm.resetFields();
+    issueForm.setFieldsValue({ date: dayjs(state.meta.demoDay || '2026-09-16'), person: state.meta.actorContext?.userName || '' });
+    setIssueOpen(true);
+  };
+  const issueSpareCode = Form.useWatch('spareCode', issueForm);
+  const issueWarehouseId = Form.useWatch('warehouseId', issueForm);
+  const issueQty = Form.useWatch('qty', issueForm);
+  const issueStock = issueSpareCode && issueWarehouseId ? stockByKey[`${issueWarehouseId}|${issueSpareCode}`] : null;
+  const issueAvailable = issueStock ? issueStock.onHand - issueStock.reserved : null;
+
+  const submitIssue = (values) => {
+    if (issueAvailable !== null && values.qty > issueAvailable) {
+      message.warning(`出库数量 ${values.qty} 超过该仓库可用库存 ${issueAvailable}，请调整数量`);
+      return;
+    }
+    const requestId = `req-issue-${String(issueReqNo.current).padStart(4, '0')}`;
+    const res = actions.issueSpare({
+      spareCode: values.spareCode,
+      warehouseId: values.warehouseId,
+      qty: values.qty,
+      person: values.person,
+      reason: values.reason,
+      date: values.date?.format('YYYY-MM-DD'),
+      requestId,
+    });
+    message[res.ok ? 'success' : 'error'](res.message);
+    if (res.ok) {
+      issueReqNo.current += 1;
+      setIssueOpen(false);
+    }
+  };
+
   const repairOptions = Object.values(repairOrdersById)
     .filter(o => ['已派工', '维修中'].includes(o.status)) // 未完成且允许领料的工单（actions 同口径校验）
     .map(o => ({ value: o.repairOrderId, label: `${o.code} · ${o.deviceName}（${o.status}）` }));
@@ -147,6 +186,7 @@ export default function SparePartsOutboundPage() {
       <Card size="small">
         <Space wrap style={{ marginBottom: 12 }}>
           <Button type="primary" icon={<PackageOpen size={14} />} onClick={openOutbound}>维修领料出库</Button>
+          <Button icon={<PackageOpen size={14} />} onClick={openIssue}>领用出库</Button>
         </Space>
         {filtered.length === 0 ? (
           <EmptyState description="暂无出库记录" reason="筛选条件下没有匹配的出库单，或尚未执行出库" />
@@ -223,12 +263,66 @@ export default function SparePartsOutboundPage() {
         </Form>
       </Modal>
 
+      {/* 领用出库（车间日常领用，不关联维修工单） */}
+      <Modal
+        title="领用出库"
+        width={640}
+        open={issueOpen}
+        destroyOnClose
+        onCancel={() => setIssueOpen(false)}
+        onOk={() => issueForm.validateFields().then(submitIssue).catch(() => {})}
+        okText="确认出库" cancelText="取消"
+      >
+        <Alert
+          type="info" showIcon style={{ marginBottom: 14 }}
+          message={`出库类型固定为「领用出库」；幂等键：outbound:none:{备件}:req-issue-${String(issueReqNo.current).padStart(4, '0')}`}
+        />
+        <Form form={issueForm} labelCol={{ span: 6 }} wrapperCol={{ span: 16 }}>
+          <Form.Item label="出库类型"><Input value="领用出库" disabled /></Form.Item>
+          <Form.Item label="备件" name="spareCode" rules={[{ required: true, message: '请选择备件' }]}>
+            <Select showSearch optionFilterProp="label" placeholder="请选择备件" options={spareOptions} />
+          </Form.Item>
+          <Form.Item label="出库仓库" name="warehouseId" rules={[{ required: true, message: '请选择出库仓库' }]}>
+            <Select placeholder="请选择仓库" options={warehouseOptions} />
+          </Form.Item>
+          <Form.Item label="出库数量" name="qty" rules={[{ required: true, message: '请输入出库数量' }]}>
+            <InputNumber style={{ width: '100%' }} min={0.01} placeholder="必须为正数且不超过可用库存" />
+          </Form.Item>
+          <Form.Item label="出库人" name="person" rules={[{ required: true, message: '请选择出库人' }]}>
+            <Input
+              readOnly placeholder="点击「选择」从人员主数据选取"
+              addonAfter={<Button type="link" size="small" style={{ margin: -7 }} onClick={() => setIssuePickerOpen(true)}>选择</Button>}
+            />
+          </Form.Item>
+          <Form.Item label="出库日期" name="date" rules={[{ required: true, message: '请选择出库日期' }]}>
+            <DatePicker style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item label="出库说明" name="reason">
+            <Input.TextArea rows={2} maxLength={200} placeholder="例如：车间日常领用" />
+          </Form.Item>
+          <Typography.Text type="secondary" style={{ display: 'block', margin: '-8px 0 12px 88px', fontSize: 12 }}>
+            该仓库可用量：{issueAvailable === null ? '--（该仓库未配置此备件库存）' : issueAvailable}
+            {issueAvailable !== null && issueQty > issueAvailable && (
+              <Typography.Text type="danger">　出库数量超过可用量 {issueAvailable}</Typography.Text>
+            )}
+          </Typography.Text>
+        </Form>
+      </Modal>
+
       {/* 领料人：人员主数据（三方系统来源）弹窗选择，选中后回填 */}
       <UserPickerModal
         open={personPickerOpen}
         title="选择领料人"
         onCancel={() => setPersonPickerOpen(false)}
         onSelect={(u) => { outForm.setFieldsValue({ person: u.name }); setPersonPickerOpen(false); }}
+      />
+
+      {/* 出库人：人员主数据弹窗（领用出库） */}
+      <UserPickerModal
+        open={issuePickerOpen}
+        title="选择出库人"
+        onCancel={() => setIssuePickerOpen(false)}
+        onSelect={(u) => { issueForm.setFieldsValue({ person: u.name }); setIssuePickerOpen(false); }}
       />
 
       {/* 归还（余料退库）：从出库记录发起，数量 ≤ 已出库未归还 */}

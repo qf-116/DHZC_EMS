@@ -1129,6 +1129,84 @@ export function reducer(state, action) {
       return finish(next, action, true, `入库单 ${inboundId}：${spare.name} ×${qty} → ${warehouseId}`, { inboundId }, false, at);
     }
 
+    // 备件档案（原型「备品备件管理」档案维度）：新增 / 编辑 / 删除
+    case 'spare/upsert': {
+      const { mode, draft } = payload;
+      const code = (draft.code || '').trim();
+      const exist = E.sparesByCode[code];
+      if (mode === 'create' && exist) return reject(state, action, `备品备件编号 ${code} 已存在`);
+      if (mode === 'edit' && !exist) return reject(state, action, `备件档案 ${code} 不存在`);
+      const record = {
+        code,
+        name: (draft.name || '').trim(),
+        spec: (draft.spec || '').trim(),
+        brand: draft.brand || '--',
+        unit: draft.unit || '个',
+        life: draft.life === '' || draft.life === undefined || draft.life === null ? null : Number(draft.life),
+        safe: draft.safe === '' || draft.safe === undefined || draft.safe === null ? null : Number(draft.safe),
+        max: draft.max === '' || draft.max === undefined || draft.max === null ? null : Number(draft.max),
+        supplier: draft.supplier || '--',
+        contact: draft.contact || '--',
+        phone: draft.phone || '--',
+        leadTime: draft.leadTime === '' || draft.leadTime === undefined || draft.leadTime === null ? null : Number(draft.leadTime),
+        usage: draft.usage || '--',
+        remark: draft.remark || '--',
+        createTime: exist?.createTime || at,
+        updateTime: at,
+        updater: actor.userName,
+      };
+      const next = setE(state, 'sparesByCode', code, record);
+      const withHist = addHistory(next, at, 'spare', code,
+        mode === 'create' ? `新增备件档案：${record.name}（${code}）` : `编辑备件档案：${record.name}（${code}）`, { spareCode: code });
+      return finish(withHist, action, true,
+        mode === 'create' ? `备件档案 ${record.name} 已创建（编号 ${code}）` : `备件档案 ${record.name} 已保存（编号不可修改）`,
+        { spareCode: code }, false, at);
+    }
+    case 'spare/delete': {
+      const { code } = payload;
+      const exist = E.sparesByCode[code];
+      if (!exist) return reject(state, action, `备件档案 ${code} 不存在`);
+      const total = Object.values(E.stockByKey)
+        .filter(r => r.spareCode === code)
+        .reduce((s, r) => s + (r.onHand || 0), 0);
+      if (total > 0) return reject(state, action, `备件 ${exist.name} 现存量为 ${total}，现存量为 0 时才可删除`);
+      const next = setEnt(state, 'sparesByCode', Object.fromEntries(Object.entries(E.sparesByCode).filter(([k]) => k !== code)));
+      const withHist = addHistory(next, at, 'spare', code,
+        `删除备件档案：${exist.name}（${code}）；历史出入库记录保留`, { spareCode: code });
+      return finish(withHist, action, true, `备件档案 ${exist.name} 已删除`, { spareCode: code }, false, at);
+    }
+    // 领用出库（车间日常领用，不关联维修工单；原型「领用出库」独立单据）
+    case 'spare/issue': {
+      const { spareCode, warehouseId, qty, person, reason, requestId, date } = payload;
+      const spare = E.sparesByCode[spareCode];
+      if (!spare) return reject(state, action, '备件不存在');
+      const stockKey = `${warehouseId}|${spareCode}`;
+      const stockRow = E.stockByKey[stockKey];
+      const check = validateOutbound(stockRow, qty);
+      if (!check.ok) return reject(state, action, check.error);
+      const outboundId = `OB-${dateOnly(at).replaceAll('-', '')}-${seq()}`;
+      const record = {
+        outboundId,
+        code: `ck${dateOnly(at).replaceAll('-', '')}${seq()}`,
+        type: '领用出库',
+        repairOrderId: null,
+        idempotencyKey: outboundIdempotencyKey('none', spareCode, requestId),
+        warehouseId,
+        date: date || dateOnly(at),
+        status: '已出库',
+        person: person || actor.userName,
+        creator: actor.userName,
+        createTime: at,
+        remark: reason || '车间日常领用',
+        items: [{ spareCode, spareName: spare.name, unit: spare.unit, qty }],
+      };
+      let next = setE(state, 'outboundsById', outboundId, record);
+      next = setE(next, 'stockByKey', stockKey, { ...stockRow, onHand: stockRow.onHand - qty, outboundDone: (stockRow.outboundDone || 0) + qty });
+      const flowId = `SF-${outboundId}`;
+      next = setE(next, 'stockFlowsById', flowId, { flowId, time: at, warehouseId, spareCode, type: '领用出库', qty: -qty, balanceAfter: stockRow.onHand - qty, ref: outboundId, note: reason || '车间日常领用' });
+      next = addHistory(next, at, 'spare', outboundId, `领用出库 ${spare.name} ×${qty}（${warehouseId}）`, { spareCode });
+      return finish(next, action, true, `领用出库单 ${outboundId}：${spare.name} ×${qty}，${warehouseId} 现存 −${qty}`, { outboundId }, false, at);
+    }
     // ================= 停机 =================
     case 'downtime/save': {
       const fact = payload.fact;

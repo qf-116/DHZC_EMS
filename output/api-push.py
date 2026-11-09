@@ -20,6 +20,7 @@ import sys
 import time
 
 REPO = 'qf-116/DHZC_EMS'
+BRANCH = sys.argv[1] if len(sys.argv) > 1 else 'main'
 
 if hasattr(sys.stdout, 'reconfigure'):
     sys.stdout.reconfigure(encoding='utf-8', errors='replace')
@@ -77,8 +78,8 @@ def commit_to_utc(raw: bytes) -> bytes:
 
 
 def main():
-    head = git('rev-parse', 'HEAD').strip()
-    ref = curl('GET', '/git/ref/heads/main')
+    head = git('rev-parse', BRANCH).strip()
+    ref = curl('GET', '/git/ref/heads/%s' % BRANCH)
     remote_head = ref['object']['sha']
     print('local head :', head)
     print('remote head:', remote_head)
@@ -158,7 +159,7 @@ def main():
         parent = commit['sha']
 
     force = not is_local(remote_head)  # 覆盖远端分叉链需 force（内容等价、以本地树重建）
-    r = curl('PATCH', '/git/refs/heads/main', json.dumps({'sha': parent, 'force': bool(force)}))
+    r = curl('PATCH', '/git/refs/heads/%s' % BRANCH, json.dumps({'sha': parent, 'force': bool(force)}))
     print('ref updated:', r['object']['sha'])
 
 

@@ -132,9 +132,10 @@ test('validateRuleDraft：阈值超量程被阻断', () => {
 });
 test('validateRuleDraft：停用绑定设备被阻断', () => {
   const r = validForm();
-  r.target = { deviceId: 'DEV-007', sourceId: 'iot-main-007', metricCode: 'M.spindle_speed' };
-  r.triggerConfig = { ...r.triggerConfig, threshold: 5000, unit: 'rpm' };
-  const res = validateRuleDraft(r, ctx(baseState));
+  // DEV-007 已从种子移除（2026-11-05）；改用 DEV-001 绑定置为已停用模拟同一前置
+  const b = baseState.entities.bindingsByDeviceId['DEV-001'];
+  const stoppedState = { ...baseState, entities: { ...baseState.entities, bindingsByDeviceId: { ...baseState.entities.bindingsByDeviceId, 'DEV-001': { ...b, configStatus: '已停用' } } } };
+  const res = validateRuleDraft(r, ctx(stoppedState));
   assert.ok(res.errors.some((e) => e.includes('已启用')));
 });
 test('validateRuleDraft：上限恢复阈值高于触发阈值被阻断', () => {

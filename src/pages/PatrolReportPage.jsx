@@ -18,6 +18,7 @@ const { RangePicker } = DatePicker;
 export default function PatrolReportPage() {
   const { message } = App.useApp();
   const state = useDemoState();
+  const demoDay = state.meta.demoDay || '2026-09-16';
 
   // 统计日期范围筛选：未选范围时不过滤；选了范围后缺日期的行排除
   const [range, setRange] = useState(null);
@@ -106,8 +107,8 @@ export default function PatrolReportPage() {
               style={{ width: 250 }} allowClear
               value={range} onChange={setRange}
               presets={[
-                { label: '最近7天', value: [dayjs().subtract(6, 'day'), dayjs()] },
-                { label: '最近30天', value: [dayjs().subtract(29, 'day'), dayjs()] },
+                { label: '最近7天', value: [dayjs(demoDay).subtract(6, 'day'), dayjs(demoDay)] },
+                { label: '最近30天', value: [dayjs(demoDay).subtract(29, 'day'), dayjs(demoDay)] },
               ]}
               placeholder={['开始日期', '结束日期']}
             />

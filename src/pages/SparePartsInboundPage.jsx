@@ -7,6 +7,7 @@ import DegradedBanner from '../components/DegradedBanner.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
+import dayjs from 'dayjs';
 import UserPickerModal from '../components/UserPickerModal.jsx';
 import { suppliers } from '../data/demo/masterData.js';
 

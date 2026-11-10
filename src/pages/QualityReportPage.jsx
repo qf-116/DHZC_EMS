@@ -123,8 +123,8 @@ export default function QualityReportPage() {
             style={{ width: 250 }} allowClear
             value={range} onChange={setRange}
             presets={[
-              { label: '最近7天', value: [dayjs().subtract(6, 'day'), dayjs()] },
-              { label: '最近30天', value: [dayjs().subtract(29, 'day'), dayjs()] },
+              { label: '最近7天', value: [dayjs(meta.demoDay || '2026-09-16').subtract(6, 'day'), dayjs(meta.demoDay || '2026-09-16')] },
+              { label: '最近30天', value: [dayjs(meta.demoDay || '2026-09-16').subtract(29, 'day'), dayjs(meta.demoDay || '2026-09-16')] },
             ]}
             placeholder={['开始日期', '结束日期']}
           />

@@ -112,8 +112,8 @@ export default function InspectionReportPage() {
             style={{ width: 250 }} allowClear
             value={range} onChange={setRange}
             presets={[
-              { label: '最近7天', value: [dayjs().subtract(6, 'day'), dayjs()] },
-              { label: '最近30天', value: [dayjs().subtract(29, 'day'), dayjs()] },
+              { label: '最近7天', value: [dayjs(demoDay).subtract(6, 'day'), dayjs(demoDay)] },
+              { label: '最近30天', value: [dayjs(demoDay).subtract(29, 'day'), dayjs(demoDay)] },
             ]}
             placeholder={['开始日期', '结束日期']}
           />

@@ -14,9 +14,9 @@ export const bindingsByDeviceId = {
     oee: { enabled: true, stateMetricCode: 'S.machine_state', reportMetricCode: 'E.production_report', templateId: 'OT-GW200-GEN-V1', templateName: 'GW200 通用 OEE 模板', templateVersion: 1, configSource: 'template' },
     mesPrimarySourceId: 'iot-main-001',
     items: [
-      { iotDeviceId: 'iot-main-001', iotDeviceCode: 'IOT-D-10001', role: 'main', sensorType: '--', enabled: true, metrics: [sel('M.spindle_temp', 'v1.2'), sel('M.coolant_temp', 'v1.2'), sel('M.spindle_speed', 'v1.1'), sel('M.feed_rate', 'v1.1'), sel('S.machine_state', 'v1.3'), sel('S.alarm_code', 'v1.3'), sel('E.production_report', 'v1.0')] },
-      { iotDeviceId: 'iot-s-20011', iotDeviceCode: 'IOT-S-20011', role: 'sensor', sensorType: '振动传感器', enabled: true, metrics: [sel('M.vib_amplitude', 'v2.0'), sel('M.bearing_temp', 'v1.0', false)] },
-      { iotDeviceId: 'iot-s-20012', iotDeviceCode: 'IOT-S-20012', role: 'sensor', sensorType: '温度传感器', enabled: true, metrics: [sel('M.bearing_temp', 'v1.0')] },
+      { iotDeviceId: 'iot-main-001', iotDeviceCode: 'IOT-D-10001', role: 'main', sensorType: '--', propertyGroup: '默认属性组', enabled: true, metrics: [sel('M.spindle_temp', 'v1.2'), sel('M.coolant_temp', 'v1.2'), sel('M.spindle_speed', 'v1.1'), sel('M.feed_rate', 'v1.1'), sel('S.machine_state', 'v1.3'), sel('S.alarm_code', 'v1.3'), sel('E.production_report', 'v1.0')] },
+      { iotDeviceId: 'iot-s-20011', iotDeviceCode: 'IOT-S-20011', role: 'sensor', sensorType: '振动传感器', propertyGroup: '默认属性组', enabled: true, metrics: [sel('M.vib_amplitude', 'v2.0'), sel('M.bearing_temp', 'v1.0', false)] },
+      { iotDeviceId: 'iot-s-20012', iotDeviceCode: 'IOT-S-20012', role: 'sensor', sensorType: '温度传感器', propertyGroup: '默认属性组', enabled: true, metrics: [sel('M.bearing_temp', 'v1.0')] },
     ],
   },
   'DEV-002': {
@@ -25,7 +25,7 @@ export const bindingsByDeviceId = {
     oee: { enabled: true, stateMetricCode: 'S.machine_state', reportMetricCode: 'E.production_report', configSource: 'manual' },
     mesPrimarySourceId: 'iot-main-002',
     items: [
-      { iotDeviceId: 'iot-main-002', iotDeviceCode: 'IOT-D-10002', role: 'main', sensorType: '--', enabled: true, metrics: [sel('M.spindle_temp', 'v1.2'), sel('M.coolant_temp', 'v1.2'), sel('M.spindle_speed', 'v1.1'), sel('S.machine_state', 'v1.3'), sel('E.production_report', 'v1.0')] },
+      { iotDeviceId: 'iot-main-002', iotDeviceCode: 'IOT-D-10002', role: 'main', sensorType: '--', propertyGroup: '默认属性组', enabled: true, metrics: [sel('M.spindle_temp', 'v1.2'), sel('M.coolant_temp', 'v1.2'), sel('M.spindle_speed', 'v1.1'), sel('S.machine_state', 'v1.3'), sel('E.production_report', 'v1.0')] },
     ],
   },
   'DEV-003': {
@@ -34,9 +34,9 @@ export const bindingsByDeviceId = {
     oee: { enabled: true, stateMetricCode: 'S.machine_state', reportMetricCode: 'E.production_report', templateId: 'OT-GW200-LASER-V1', templateName: 'GW200 激光设备 OEE 模板', templateVersion: 1, configSource: 'template' },
     mesPrimarySourceId: 'iot-main-003',
     items: [
-      { iotDeviceId: 'iot-main-003', iotDeviceCode: 'IOT-D-10003', role: 'main', sensorType: '--', enabled: true, metrics: [sel('M.spindle_temp', 'v1.2'), sel('M.spindle_speed', 'v1.1'), sel('S.machine_state', 'v1.3'), sel('E.production_report', 'v1.0')] },
-      { iotDeviceId: 'iot-s-20031', iotDeviceCode: 'IOT-S-20031', role: 'sensor', sensorType: '振动传感器', enabled: true, metrics: [sel('M.vib_amplitude', 'v2.0')] },
-      { iotDeviceId: 'iot-s-20032', iotDeviceCode: 'IOT-S-20032', role: 'sensor', sensorType: '温度传感器', enabled: false, metrics: [sel('M.bearing_temp', 'v1.0')] },
+      { iotDeviceId: 'iot-main-003', iotDeviceCode: 'IOT-D-10003', role: 'main', sensorType: '--', propertyGroup: '默认属性组', enabled: true, metrics: [sel('M.spindle_temp', 'v1.2'), sel('M.spindle_speed', 'v1.1'), sel('S.machine_state', 'v1.3'), sel('E.production_report', 'v1.0')] },
+      { iotDeviceId: 'iot-s-20031', iotDeviceCode: 'IOT-S-20031', role: 'sensor', sensorType: '振动传感器', propertyGroup: '默认属性组', enabled: true, metrics: [sel('M.vib_amplitude', 'v2.0')] },
+      { iotDeviceId: 'iot-s-20032', iotDeviceCode: 'IOT-S-20032', role: 'sensor', sensorType: '温度传感器', propertyGroup: '默认属性组', enabled: false, metrics: [sel('M.bearing_temp', 'v1.0')] },
     ],
   },
   'DEV-004': {
@@ -45,8 +45,8 @@ export const bindingsByDeviceId = {
     oee: { enabled: true, stateMetricCode: 'S.machine_state', reportMetricCode: 'E.production_report', templateId: 'OT-GW200-GEN-V1', templateName: 'GW200 通用 OEE 模板', templateVersion: 1, configSource: 'template' },
     mesPrimarySourceId: 'iot-main-004',
     items: [
-      { iotDeviceId: 'iot-main-004', iotDeviceCode: 'IOT-D-10004', role: 'main', sensorType: '--', enabled: true, metrics: [sel('M.spindle_temp', 'v1.2'), sel('M.oil_pressure', 'v1.0'), sel('M.axis_load', 'v1.0'), sel('S.machine_state', 'v1.3'), sel('E.production_report', 'v1.0')] },
-      { iotDeviceId: 'iot-s-20041', iotDeviceCode: 'IOT-S-20041', role: 'sensor', sensorType: '温度传感器', enabled: true, metrics: [sel('M.bearing_temp', 'v1.0')] },
+      { iotDeviceId: 'iot-main-004', iotDeviceCode: 'IOT-D-10004', role: 'main', sensorType: '--', propertyGroup: '默认属性组', enabled: true, metrics: [sel('M.spindle_temp', 'v1.2'), sel('M.oil_pressure', 'v1.0'), sel('M.axis_load', 'v1.0'), sel('S.machine_state', 'v1.3'), sel('E.production_report', 'v1.0')] },
+      { iotDeviceId: 'iot-s-20041', iotDeviceCode: 'IOT-S-20041', role: 'sensor', sensorType: '温度传感器', propertyGroup: '默认属性组', enabled: true, metrics: [sel('M.bearing_temp', 'v1.0')] },
     ],
   },
   'DEV-005': {
@@ -54,7 +54,7 @@ export const bindingsByDeviceId = {
     effectiveFrom: '2026-05-20 10:00', effectiveTo: null, pullCycleSec: 60, lastPullTime: '2026-09-16 15:22:30', pullFailCount: 3, pendingCompensation: 5,
     mesPrimarySourceId: 'iot-main-005',
     items: [
-      { iotDeviceId: 'iot-main-005', iotDeviceCode: 'IOT-D-10005', role: 'main', sensorType: '--', enabled: true, metrics: [sel('M.weld_current', 'v1.0'), sel('S.machine_state', 'v1.3')] },
+      { iotDeviceId: 'iot-main-005', iotDeviceCode: 'IOT-D-10005', role: 'main', sensorType: '--', propertyGroup: '默认属性组', enabled: true, metrics: [sel('M.weld_current', 'v1.0'), sel('S.machine_state', 'v1.3')] },
     ],
   },
   'DEV-006': {
@@ -64,7 +64,7 @@ export const bindingsByDeviceId = {
     oee: { enabled: false, stateMetricCode: null, reportMetricCode: null },
     mesPrimarySourceId: 'iot-main-006',
     items: [
-      { iotDeviceId: 'iot-main-006', iotDeviceCode: 'IOT-D-10006', role: 'main', sensorType: '--', enabled: true, metrics: [sel('M.air_pressure', 'v1.0'), sel('M.motor_current', 'v1.1'), sel('S.machine_state', 'v1.3')] },
+      { iotDeviceId: 'iot-main-006', iotDeviceCode: 'IOT-D-10006', role: 'main', sensorType: '--', propertyGroup: '默认属性组', enabled: true, metrics: [sel('M.air_pressure', 'v1.0'), sel('M.motor_current', 'v1.1'), sel('S.machine_state', 'v1.3')] },
     ],
   },
 
@@ -86,17 +86,20 @@ export const bindingVersions = [
 
 // IoT 来源设备（只读；主设备 + 子传感器）
 // 物联网平台产品目录（2026-10-29）：产品关联物模型指标，监控指标模板按「产品 + 指标」定义
+// propertyGroups（2026-11-11）：产品物模型属性分组，随设备只读同步；一个分组对应一台台账设备的数据——
+// 同一设备标识码在平台侧创建多个属性分组时，其数据可分别接入多台台账设备（绑定条目 propertyGroup 引用）
 export const iotProducts = [
   {
     product: '工业智能网关 GW200',
+    propertyGroups: ['默认属性组', '主控数据组', '工艺数据组'],
     metrics: [
       sel('M.spindle_temp', 'v1.2'), sel('M.coolant_temp', 'v1.2'), sel('M.spindle_speed', 'v1.1'), sel('M.feed_rate', 'v1.1'),
       sel('S.machine_state', 'v1.3'), sel('S.alarm_code', 'v1.3'), sel('M.air_pressure', 'v1.0'), sel('M.motor_current', 'v1.1'),
       sel('M.oil_pressure', 'v1.0'), sel('M.weld_current', 'v1.0'), sel('M.axis_load', 'v1.0'), sel('E.production_report', 'v1.0'),
     ],
   },
-  { product: '振动传感器 VB12', metrics: [sel('M.vib_amplitude', 'v2.0'), sel('M.bearing_temp', 'v1.0')] },
-  { product: '温度传感器 TP08', metrics: [sel('M.bearing_temp', 'v1.0')] },
+  { product: '振动传感器 VB12', propertyGroups: ['默认属性组'], metrics: [sel('M.vib_amplitude', 'v2.0'), sel('M.bearing_temp', 'v1.0')] },
+  { product: '温度传感器 TP08', propertyGroups: ['默认属性组'], metrics: [sel('M.bearing_temp', 'v1.0')] },
 ];
 
 export const sourceDevices = [

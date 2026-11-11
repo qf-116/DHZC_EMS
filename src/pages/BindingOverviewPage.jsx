@@ -27,6 +27,14 @@ import { normalizeMetricMeta } from '../domain/alarmRule.js';
 import {
   matchOeeTemplates, bestOeeTemplate, templateOeeConfig, oeeConfigOfBinding, oeeConfigSourceLabel,
 } from '../domain/oeeTemplate.js';
+import { iotProducts } from '../data/demo/bindings.js';
+
+// 产品物模型属性分组（只读同步自物联网平台）：一个分组对应一台台账设备的数据；
+// 同一设备标识码在平台侧创建多个分组时，其数据可分别接入多台台账设备
+const PRODUCT_PROPERTY_GROUPS = Object.fromEntries(
+  iotProducts.map((p) => [p.product, p.propertyGroups || ['默认属性组']]),
+);
+const DEFAULT_PROPERTY_GROUP = '默认属性组';
 
 // OEE 报工事件候选：只有生产报工事件可作为产量 / 质量来源（报警代码等事件类指标不可映射）
 const OEE_REPORT_METRICS = new Set(['E.production_report']);
@@ -121,6 +129,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
                 iotDeviceCode: i.iotDeviceCode,
                 name: i.name,
                 sensorType: i.sensorType || i.name,
+                propertyGroup: i.propertyGroup || DEFAULT_PROPERTY_GROUP,
                 metrics: [],
               });
             });
@@ -508,6 +517,28 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
               { title: '物联网平台设备名称', dataIndex: 'name', width: 170 },
               { title: '产品名称', dataIndex: 'product', width: 150, render: (v) => v || '--' },
               {
+                title: '产品属性分组', width: 150,
+                render: (_, s) => {
+                  const item = draftItems.find((i) => i.iotDeviceId === s.iotDeviceId);
+                  if (!item) return <span style={{ color: '#b6c2cc' }}>--</span>;
+                  const groups = PRODUCT_PROPERTY_GROUPS[s.product] || [DEFAULT_PROPERTY_GROUP];
+                  return (
+                    // stopPropagation：行点击会切换勾选，选分组时不能误触
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <Select
+                        size="small" style={{ width: '100%' }}
+                        value={item.propertyGroup || DEFAULT_PROPERTY_GROUP}
+                        options={groups.map((g) => ({ value: g, label: g }))}
+                        onChange={(v) => {
+                          const r = actions.setDraftSourcePropertyGroup(deviceId, s.iotDeviceId, v);
+                          if (r?.ok === false) message.error(r.message);
+                        }}
+                      />
+                    </div>
+                  );
+                },
+              },
+              {
                 title: '接入指标', width: 110,
                 render: (_, s) => {
                   const item = draftItems.find((i) => i.iotDeviceId === s.iotDeviceId);
@@ -557,7 +588,7 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
                 style={{ marginBottom: 8 }}
                 title={(
                   <Space size={6} wrap>
-                    <span>{item.iotDeviceCode} · {item.sensorType && item.sensorType !== '--' ? item.sensorType : '来源设备'}</span>
+                    <span>{item.iotDeviceCode} · {item.sensorType && item.sensorType !== '--' ? item.sensorType : '来源设备'} · {item.propertyGroup || '默认属性组'}</span>
                   </Space>
                 )}
                 extra={(
@@ -905,7 +936,7 @@ function MonitorConfigModal({ deviceId, deviceName, open, onClose }) {
               style={{ marginBottom: 8 }}
               title={(
                 <Space size={6} wrap>
-                  <span>{item.iotDeviceCode} · {item.sensorType && item.sensorType !== '--' ? item.sensorType : '来源设备'}</span>
+                  <span>{item.iotDeviceCode} · {item.sensorType && item.sensorType !== '--' ? item.sensorType : '来源设备'} · {item.propertyGroup || '默认属性组'}</span>
                 </Space>
               )}
               extra={(
@@ -951,6 +982,7 @@ function BindingDetailModal({ deviceId, deviceName, open, onClose }) {
   const metricRows = items.flatMap((i) => (i.metrics || []).map((m) => ({
     key: `${i.iotDeviceId}:${m.metricCode}`,
     source: `${i.iotDeviceCode} · ${sourceNameOf(i)}`,
+    propertyGroup: i.propertyGroup || DEFAULT_PROPERTY_GROUP,
     metricCode: m.metricCode,
     monitored: m.monitored,
   })));
@@ -987,6 +1019,7 @@ function BindingDetailModal({ deviceId, deviceName, open, onClose }) {
         pagination={metricRows.length > 10 ? { pageSize: 10, size: 'small' } : false}
         columns={[
           { title: '物联网平台设备（标识码 · 名称）', dataIndex: 'source', width: 270 },
+          { title: '产品属性分组', dataIndex: 'propertyGroup', width: 120 },
           { title: '指标名称', width: 150, render: (_, m) => state.entities.metricsByKey[m.metricCode]?.name || m.metricCode },
           { title: '指标编码', dataIndex: 'metricCode', width: 150 },
           { title: '监控状态', width: 90, render: (_, m) => (m.monitored ? <Tag color="blue">监控中</Tag> : <Tag>仅存储</Tag>) },

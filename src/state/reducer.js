@@ -384,7 +384,7 @@ export function reducer(state, action) {
           const prevMetric = (prevItem?.metrics || []).find(m => m.metricCode === def.metricCode);
           return { metricCode: def.metricCode, metricVersion: def.metricVersion, monitored: !!prevMetric?.monitored };
         });
-      const item = { ...payload.source, enabled: true, metrics: autoMetrics };
+      const item = { ...payload.source, propertyGroup: payload.source.propertyGroup || '默认属性组', enabled: true, metrics: autoMetrics };
       const mesPrimarySourceId = draft.mesPrimarySourceId || (!draft.items.length ? item.iotDeviceId : null);
       const next = { ...state, ui: { ...state.ui, bindingDraftsByDeviceId: setIn(drafts, key, { ...draft, mesPrimarySourceId, items: [...draft.items, item] }) } };
       return finish(next, action, true, `已将 ${item.iotDeviceCode} 加入绑定草稿（自动发现 ${autoMetrics.length} 项指标，保存后全量接入存储）`, { deviceId: payload.deviceId }, false, at);
@@ -433,6 +433,21 @@ export function reducer(state, action) {
       }
       const next = { ...state, ui: { ...state.ui, bindingDraftsByDeviceId: setIn(drafts, key, { ...draft, mesPrimarySourceId: payload.iotDeviceId }) } };
       return finish(next, action, true, 'MES 主设备已设置，程序文件将下发至该物联网设备', { deviceId: payload.deviceId, iotDeviceId: payload.iotDeviceId }, false, at);
+    }
+    case 'binding/setDraftPropertyGroup': {
+      // 产品属性分组（2026-11-11）：绑定条目选择该物联网设备所在产品的物模型属性分组；
+      // 一个分组对应一台台账设备的数据——同一设备标识码在平台侧建多个分组时可分别接入多台台账设备。
+      const key = `draft-${payload.deviceId}`;
+      const drafts = state.ui.bindingDraftsByDeviceId || {};
+      const draft = drafts[key];
+      if (!draft) return reject(state, action, '没有进行中的绑定草稿');
+      const item = (draft.items || []).find(i => i.iotDeviceId === payload.iotDeviceId);
+      if (!item) return reject(state, action, '该物联网设备不在绑定草稿中');
+      const group = String(payload.propertyGroup || '').trim();
+      if (!group) return reject(state, action, '产品属性分组不能为空');
+      const items = draft.items.map(i => (i.iotDeviceId === payload.iotDeviceId ? { ...i, propertyGroup: group } : i));
+      const next = { ...state, ui: { ...state.ui, bindingDraftsByDeviceId: setIn(drafts, key, { ...draft, items }) } };
+      return finish(next, action, true, `已将 ${item.iotDeviceCode} 的产品属性分组设置为「${group}」（保存后随绑定生效）`, { deviceId: payload.deviceId, iotDeviceId: payload.iotDeviceId }, false, at);
     }
     case 'oeeTemplate/save': {
       // OEE 映射模板（2026-11-05）：按「物联网产品 + 设备类型」保存；同范围再次保存时发布新版本。

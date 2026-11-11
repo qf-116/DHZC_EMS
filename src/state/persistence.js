@@ -27,6 +27,14 @@ function migrateParsed(parsed) {
   // 已下线实体不随旧快照迁移，避免旧页面数据重新出现
   delete next.entities.ruleTemplatesById;
   delete next.entities.alarmBatchesById;
+  // 产品属性分组（V23）：旧快照绑定条目 / 草稿条目缺 propertyGroup 时补默认值
+  const groupOf = (item) => ({ ...item, propertyGroup: item.propertyGroup || '默认属性组' });
+  for (const b of Object.values(next.entities.bindingsByDeviceId || {})) {
+    if (b?.items) b.items = b.items.map(groupOf);
+  }
+  for (const d of Object.values(next.ui?.bindingDraftsByDeviceId || {})) {
+    if (d?.items) d.items = d.items.map(groupOf);
+  }
   // 绑定模板管理下线（V14）：模板数据与向导模板预填一并移除
   if (next.ui && next.ui.bindingTemplates) delete next.ui.bindingTemplates;
   // 主数据目录合并（2026-11-05）：设备 / 来源设备 / 指标 / 映射 / 速度配置等种子目录按 key 合并——

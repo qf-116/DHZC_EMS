@@ -413,6 +413,7 @@ export function DeviceLedgerDetailContent({ state, deviceId: suppliedDeviceId, e
               locale={{ emptyText: emptyText('来源设备') }}
               columns={[
                 { title: '物联网平台设备标识码', dataIndex: 'iotDeviceCode', width: 170 },
+                { title: '产品属性分组', width: 120, render: (_, r) => (r.propertyGroup || '默认属性组') },
                 { title: '类型', width: 110, render: (_, r) => (r.sensorType && r.sensorType !== '--' ? <Tag color="cyan">{r.sensorType}</Tag> : '--') },
                 { title: '启用', dataIndex: 'enabled', width: 90, render: v => <StatusTag value={v ? '已启用' : '已停用'} /> },
                 {

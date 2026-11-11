@@ -213,6 +213,10 @@ export function createDemoActions(state, dispatch) {
     setDraftMesPrimarySource(deviceId, iotDeviceId) {
       return act('binding/setDraftMesPrimary', { deviceId, iotDeviceId });
     },
+    setDraftSourcePropertyGroup(deviceId, iotDeviceId, propertyGroup) {
+      // 绑定向导第 2 步：为已勾选来源选择所在产品的物模型属性分组（单选）
+      return act('binding/setDraftPropertyGroup', { deviceId, iotDeviceId, propertyGroup });
+    },
     saveOeeTemplate(payload) {
       // OEE 映射模板：按「物联网产品 + 设备类型」保存；同范围已存在时发布新版本
       return act('oeeTemplate/save', payload);

@@ -19,7 +19,7 @@ import { oeeTemplates } from './oeeTemplates.js';
 import { programCompare, programBaselines, programHandles } from './programCompare.js';
 import { lifecycleTasks, assetChangeRecords, idleApplications, scrapApplications } from './lifecycle.js';
 
-export const STORE_VERSION = 22; // 快照结构版本：维修执行录入字段（处理方式等）+ 维修经验库入 store
+export const STORE_VERSION = 23; // 快照结构版本：绑定条目新增产品属性分组（propertyGroup，V23）
 
 export const DEMO_META = {
   mode: 'demo',

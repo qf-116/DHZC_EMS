@@ -33,7 +33,7 @@ export function validateBindingDraft(draft, ctx = {}) {
   const enabled = items.filter(i => i.enabled);
   if (enabled.length === 0) errors.push('至少保留一个启用的 IoT 来源设备');
   const codes = enabled.map(i => i.iotDeviceCode);
-  if (new Set(codes).size !== codes.length) errors.push('同一绑定内 IoT 来源编码重复');
+  if (new Set(codes).size !== codes.length) errors.push('同一绑定内物联网平台设备标识码重复');
   if (draft.mesPrimarySourceId && !enabled.some(i => i.iotDeviceId === draft.mesPrimarySourceId)) {
     errors.push('MES 主设备必须是已选且启用的物联网来源设备');
   }

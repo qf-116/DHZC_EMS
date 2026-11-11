@@ -133,16 +133,6 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, presetDeviceId]);
 
-  // 仅提示用：其它设备已启用绑定占用的 IoT 来源编码（不作为校验限制，允许重复绑定）
-  const occupiedCodes = useMemo(() => {
-    const set = new Set();
-    Object.values(state.entities.bindingsByDeviceId).forEach((b) => {
-      if (b.deviceId !== deviceId && b.configStatus === '已启用') {
-        (b.items || []).forEach((i) => { if (i.enabled) set.add(i.iotDeviceCode); });
-      }
-    });
-    return set;
-  }, [state, deviceId]);
 
   const draftItems = draft?.items || [];
   const selectedMesPrimaryId = draft?.mesPrimarySourceId || draftItems.find((i) => i.enabled)?.iotDeviceId || null;
@@ -514,10 +504,9 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
               style: { cursor: 'pointer' },
             })}
             columns={[
-              { title: '来源编码', dataIndex: 'iotDeviceCode', width: 120 },
-              { title: '来源名称', dataIndex: 'name', width: 170 },
+              { title: '物联网平台设备标识码', dataIndex: 'iotDeviceCode', width: 170 },
+              { title: '物联网平台设备名称', dataIndex: 'name', width: 170 },
               { title: '产品名称', dataIndex: 'product', width: 150, render: (v) => v || '--' },
-              { title: '类型', dataIndex: 'kind', width: 90 },
               {
                 title: '接入指标', width: 110,
                 render: (_, s) => {
@@ -527,16 +516,6 @@ function BindingDraftModal({ deviceId: presetDeviceId, deviceName, open, onClose
                     <Tag color="cyan">将接入 {(item.metrics || []).length} 项</Tag>
                   );
                 },
-              },
-              {
-                title: '占用状态', width: 140,
-                render: (_, s) => (occupiedCodes.has(s.iotDeviceCode)
-                  ? (
-                    <Tooltip title="该编码已被其它设备绑定，不影响本次绑定">
-                      <Tag color="warning" style={{ cursor: 'help' }}>已被其它设备占用</Tag>
-                    </Tooltip>
-                  )
-                  : <span style={{ color: '#b6c2cc' }}>--</span>),
               },
             ]}
           />
@@ -1007,7 +986,7 @@ function BindingDetailModal({ deviceId, deviceName, open, onClose }) {
         dataSource={metricRows}
         pagination={metricRows.length > 10 ? { pageSize: 10, size: 'small' } : false}
         columns={[
-          { title: '物联网平台设备', dataIndex: 'source', width: 250 },
+          { title: '物联网平台设备（标识码 · 名称）', dataIndex: 'source', width: 270 },
           { title: '指标名称', width: 150, render: (_, m) => state.entities.metricsByKey[m.metricCode]?.name || m.metricCode },
           { title: '指标编码', dataIndex: 'metricCode', width: 150 },
           { title: '监控状态', width: 90, render: (_, m) => (m.monitored ? <Tag color="blue">监控中</Tag> : <Tag>仅存储</Tag>) },

@@ -33,7 +33,7 @@ export default function ProductionReportTable({ state, reports = [], pageSize = 
         },
         { title: '报工工单', dataIndex: 'workOrderNo', width: 150, render: (v) => v || '--' },
         { title: '批次', dataIndex: 'batchNo', width: 120, render: (v) => v || '--' },
-        { title: '来源设备', dataIndex: 'iotDeviceCode', width: 120 },
+        { title: '物联网平台设备标识码', dataIndex: 'iotDeviceCode', width: 170 },
         { title: '接收时间', dataIndex: 'receivedAt', width: 170, render: (v) => v || '--' },
       ]}
     />

@@ -173,7 +173,7 @@ export function DeviceLedgerDetailContent({ state, deviceId: suppliedDeviceId, e
   const metricColumns = [
     { title: '指标编码', dataIndex: 'metricCode', width: 160 },
     { title: '指标名称', dataIndex: 'name', width: 120 },
-    { title: '来源设备', dataIndex: 'iotDeviceCode', width: 130, render: v => v || '--' },
+    { title: '物联网平台设备标识码', dataIndex: 'iotDeviceCode', width: 170, render: v => v || '--' },
     { title: '值', dataIndex: 'value', width: 100, render: v => (v ?? '--') },
     { title: '单位', dataIndex: 'unit', width: 80, render: v => v || '--' },
     {
@@ -412,7 +412,7 @@ export function DeviceLedgerDetailContent({ state, deviceId: suppliedDeviceId, e
               dataSource={binding.items || []}
               locale={{ emptyText: emptyText('来源设备') }}
               columns={[
-                { title: '编码', dataIndex: 'iotDeviceCode', width: 140 },
+                { title: '物联网平台设备标识码', dataIndex: 'iotDeviceCode', width: 170 },
                 { title: '类型', width: 110, render: (_, r) => (r.sensorType && r.sensorType !== '--' ? <Tag color="cyan">{r.sensorType}</Tag> : '--') },
                 { title: '启用', dataIndex: 'enabled', width: 90, render: v => <StatusTag value={v ? '已启用' : '已停用'} /> },
                 {

@@ -404,8 +404,8 @@ export default function RuleNewWizard({ open, onClose, state, actions, onDone })
                     getCheckboxProps: (r) => ({ disabled: !r.enabled }),
                   }}
                   columns={[
-                    { title: '物联网设备编码', dataIndex: 'sourceCode', width: 150 },
-                    { title: '物联网设备名称', dataIndex: 'sourceName', width: 180 },
+                    { title: '物联网平台设备标识码', dataIndex: 'sourceCode', width: 170 },
+                    { title: '物联网平台设备名称', dataIndex: 'sourceName', width: 180 },
                     { title: '绑定台账设备', width: 200, render: (_, r) => (r.deviceId ? `${r.deviceId} ${r.deviceName}` : <span style={{ color: '#8a97a3' }}>未绑定</span>) },
                     { title: '绑定状态', dataIndex: 'bindingStatus', width: 90, render: (v, r) => <Tag color={r.enabled ? 'success' : 'default'}>{v}</Tag> },
                     { title: '已接入指标数', width: 100, render: (_, r) => r.metrics.length },

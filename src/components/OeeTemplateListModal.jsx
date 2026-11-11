@@ -50,7 +50,7 @@ export default function OeeTemplateListModal({ open, onClose }) {
           { title: '版本', dataIndex: 'version', width: 70, render: (v) => `v${v}` },
           { title: '状态', dataIndex: 'status', width: 80, render: (v) => <Tag color={v === '启用' ? 'success' : 'default'}>{v}</Tag> },
           {
-            title: '来源设备', width: 150,
+            title: '物联网平台设备名称', width: 170,
             render: (_, t) => (t.sourceDeviceName ? `${t.sourceDeviceName}` : '--'),
           },
           { title: '更新时间', dataIndex: 'updatedAt', width: 170, render: (v, t) => `${v || '--'}${t.updatedBy ? ` · ${t.updatedBy}` : ''}` },

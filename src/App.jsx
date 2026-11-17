@@ -355,7 +355,8 @@ export default function App() {
                   <Route path="/patrol-tasks" element={<PatrolTasksPage />} />
                   <Route path="/patrol-tasks/detail" element={<PatrolTaskDetailPage />} />
                   <Route path="/patrol-tasks/execute" element={<PatrolExecutePage />} />
-                  {/* 维修管理 */}
+                  {/* 维修管理（待维修已下线：菜单不显示、页面不可达，旧路由重定向到维修任务；页面文件保留备用） */}
+                  <Route path="/repair-pending" element={<Navigate to="/repair-orders" replace />} />
                   <Route path="/repair-reports" element={<RepairReportsPage />} />
                   <Route path="/repair-orders" element={<RepairOrdersPage />} />
                   <Route path="/repair-orders/:repairOrderId" element={<RepairDetailPage />} />

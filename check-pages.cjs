@@ -22,7 +22,8 @@ const routes = [
   '/system/users', '/system/roles', '/system/org', '/system/dict', '/system/logs',
   // 旧权限/审计入口：已重定向到基础配置模块
   '/permissions', '/audit',
-  '/repair-reports', '/repair-orders',
+  // 待维修已下线（隐藏）：旧路由重定向到维修任务，仍纳入烟测确认不空白
+  '/repair-pending', '/repair-reports', '/repair-orders',
   '/repair-orders/RO-20260916-001', '/repair-orders/RO-20260916-001/execute', '/repair-orders/RO-20260915-002/accept',
   '/repair-orders/execute', '/repair-orders/detail', '/repair-knowledge',
   '/spare-parts-archive', '/spare-parts-stock', '/spare-parts-inbound', '/spare-parts-inbound/detail',

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { Card, Table, Tag, Button, Space, Input, Select, App, Modal, Form, Alert, Upload, Row, Col, Checkbox, DatePicker } from 'antd';
 import { Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -8,14 +8,13 @@ import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
-import { selectRepairReportRows, selectAllRepairOrders, selectAllDevices } from '../state/selectors.js';
+import { selectRepairReportRows, selectAllDevices } from '../state/selectors.js';
 import { REPAIR_LEVELS, FAULT_TYPES, REPORT_STATUSES } from '../domain/repair.js';
-import { users } from '../data/demo/masterData.js';
+import { repairStaffNames, repairGroupNames } from '../data/demo/masterData.js';
 
 const levelColor = { 紧急: 'red', 严重: 'orange', 一般: 'blue' };
-// 维修人员下拉统一取自三方主数据（在职的维修工程师/设备负责人/点检员/巡检员/备件管理员）
-const repairStaff = users.filter(u => u.status === '在职' && (u.role === '维修工程师' || u.role === '设备负责人' || u.role === '点检员' || u.role === '巡检员' || u.role === '备件管理员')).map(u => u.name);
-const repairPersons = repairStaff.map(v => ({ value: v, label: v }));
+// 维修人员下拉统一取自三方主数据（与报警中心转维修、维修任务派工同一口径）
+const repairPersons = repairStaffNames.map(v => ({ value: v, label: v }));
 
 // Upload 文件列表 → 图片名数组（演示口径：仅记录文件名）
 function fileNames(fileList = []) {
@@ -23,7 +22,8 @@ function fileNames(fileList = []) {
 }
 
 // 故障报修列表（store 驱动）：报修单全量 + 派生状态（未处理 / 进行中 / 已完成 / 已取消）。
-// 新增为弹窗（createRepairReport 生成待派工报修与主工单）；指派任务为弹窗（生成工单后派工）；
+// 报警中心「转维修」未指定维修人时也提交到这里（来源「报警转维修」）等待指派；
+// 新增为弹窗（createRepairReport 生成待派工报修与主工单）；指派任务为弹窗（无工单时先补建主工单再派工）；
 // 取消 / 删除按原型规则：已派工的报修单不可删除、不可编辑，只能取消。
 export default function RepairReportsPage() {
   const { message, modal } = App.useApp();
@@ -31,6 +31,9 @@ export default function RepairReportsPage() {
   const state = useDemoState();
   const actions = useDemoActions();
   const meta = state.meta;
+  // 动作层基于状态快照做入参预校验：连续两个动作（补建工单 → 派工）取最新 actions
+  const actionsRef = useRef(actions);
+  actionsRef.current = actions;
 
   const [kw, setKw] = useState('');
   const [status, setStatus] = useState(null);
@@ -47,12 +50,10 @@ export default function RepairReportsPage() {
   const [requestId, setRequestId] = useState('');
 
   const reports = selectRepairReportRows(state);
-  const orders = selectAllRepairOrders(state);
   const devices = selectAllDevices(state);
-  const activeOrderByReport = useMemo(
-    () => (reportId) => orders.find(o => o.reportId === reportId && !['已完成', '已取消'].includes(o.status)),
-    [orders],
-  );
+  // 报修单的关联工单以 report.linkedRepairOrderId 为准（报警转维修的报修单在指派前没有工单）
+  const linkedOrderOf = (record) => (record?.orderId ? state.entities.repairOrdersById[record.orderId] : null);
+  const hasActiveOrder = (record) => Boolean(linkedOrderOf(record) && !['已完成', '已取消'].includes(linkedOrderOf(record).status));
 
   const statusOptions = REPORT_STATUSES.map(v => ({ value: v, label: v }));
 
@@ -70,7 +71,7 @@ export default function RepairReportsPage() {
 
   // 编辑报修单（已派工的不可编辑）
   const openEdit = (record) => {
-    if (activeOrderByReport(record.reportId)) { message.warning('该报修已派工，不能编辑；请改用「取消」'); return; }
+    if (hasActiveOrder(record)) { message.warning('该报修已派工，不能编辑；请改用「取消」'); return; }
     setEditing(record);
     form.resetFields();
     form.setFieldsValue({
@@ -115,29 +116,28 @@ export default function RepairReportsPage() {
     setAssignOpen(true);
   };
 
-  // 指派任务：已有关联工单 → 直接派工；尚未生成工单 → 生成主工单后派工
+  // 指派任务：已有关联工单 → 直接派工；尚未生成工单（含报警转维修未派工的报修单）→ 补建主工单后派工
   const submitAssign = async () => {
     const values = await assignForm.validateFields();
     if (!assignTarget) { message.warning('请先选择要指派的报修单'); return; }
+    // 取最新一条报修单事实（弹窗打开后状态可能已被其他动作推进）
+    const target = reports.find(r => r.reportId === assignTarget.reportId) || assignTarget;
     const assignee = values.assignee;
     const assigneeGroup = values.assigneeGroup || null;
-    const linked = activeOrderByReport(assignTarget.reportId);
-    if (linked) {
+    const linked = linkedOrderOf(target);
+    if (linked && !['已完成', '已取消'].includes(linked.status)) {
       const res = actions.assignRepair(linked.repairOrderId, { assignee, assigneeGroup });
       message[res.ok ? 'success' : 'error'](res.message);
       if (res.ok) setAssignOpen(false);
       return;
     }
-    const created = actions.createRepairReport({
-      deviceId: assignTarget.deviceId, title: assignTarget.title,
-      faultDesc: assignTarget.desc, level: assignTarget.level, faultType: assignTarget.faultType,
-      downtimeFlag: assignTarget.downtimeFlag,
-    }, `assign-${assignTarget.reportId}`);
+    const created = actionsRef.current.createOrderForReport(target.reportId);
     if (!created.ok) { message.error(created.message); return; }
-    const orderId = created.refs.repairOrderId;
+    const orderId = created.refs?.repairOrderId;
+    if (!orderId) { message.error(created.message); return; }
     // 动作层基于最新状态快照预校验，等本批次更新提交后再派工
     setTimeout(() => {
-      const res = actions.assignRepair(orderId, { assignee, assigneeGroup });
+      const res = actionsRef.current.assignRepair(orderId, { assignee, assigneeGroup });
       message[res.ok ? 'success' : 'error'](res.ok ? `${created.message}；${res.message}` : res.message);
     }, 0);
     setAssignOpen(false);
@@ -162,7 +162,7 @@ export default function RepairReportsPage() {
   const confirmDelete = (record) => {
     const target = record || reports.find(r => r.reportId === selectedKeys[0]);
     if (!target) { message.warning('请先勾选要删除的报修单'); return; }
-    if (activeOrderByReport(target.reportId)) { message.warning('该报修已派工，不能删除；请改用「取消」'); return; }
+    if (hasActiveOrder(target)) { message.warning('该报修已派工，不能删除；请改用「取消」'); return; }
     modal.confirm({
       title: '删除报修记录',
       content: `确定删除报修单「${target.code}」吗？删除后不可恢复。`,
@@ -174,11 +174,12 @@ export default function RepairReportsPage() {
     });
   };
 
-  // 故障处理：跳转到待维修看板 / 维修执行页
+  // 故障处理：已生成工单 → 进入维修执行页；尚未生成工单（如报警转维修未派工）→ 打开「指派任务」派工
   const goHandle = (record) => {
-    const linked = activeOrderByReport(record.reportId);
-    if (linked) navigate(`/repair-orders/${linked.repairOrderId}/execute`);
-    else navigate('/repair-pending');
+    const fresh = reports.find(r => r.reportId === record.reportId) || record;
+    const linked = linkedOrderOf(fresh);
+    if (linked && !['已完成', '已取消'].includes(linked.status)) navigate(`/repair-orders/${linked.repairOrderId}/execute`);
+    else openAssign(fresh);
   };
 
   return (
@@ -235,7 +236,9 @@ export default function RepairReportsPage() {
                   <Button type="link" size="small" onClick={() => openAssign(r)}>指派任务</Button>
                   <Button type="link" size="small" onClick={() => openEdit(r)}>编辑</Button>
                   <Button type="link" size="small" onClick={() => goHandle(r)}>故障处理</Button>
-                  <Button type="link" size="small" onClick={() => (r.orderId ? navigate(`/repair-orders/${r.orderId}`) : navigate('/repair-pending'))}>查看详情</Button>
+                  <Button type="link" size="small" onClick={() => (linkedOrderOf(r)
+                    ? navigate(`/repair-orders/${r.orderId}`)
+                    : message.warning('该报修尚未生成维修工单；请先用「指派任务」派工，再查看维修单详情'))}>查看详情</Button>
                 </Space>
               )
             },
@@ -319,9 +322,9 @@ export default function RepairReportsPage() {
             <div>故障名称：{assignTarget.title || '--'}　<Tag color={levelColor[assignTarget.level] || 'default'}>{assignTarget.level || '--'}</Tag></div>
             <div>设备名称：{assignTarget.deviceName || '--'}　故障类型：{assignTarget.faultType || '--'}</div>
             <div>故障时间：{assignTarget.faultTime || '--'}</div>
-            {activeOrderByReport(assignTarget.reportId)
-              ? <div>关联工单：{activeOrderByReport(assignTarget.reportId).repairOrderId}</div>
-              : <div style={{ color: '#8a6d3b' }}>该报修单尚未生成工单，确认后自动创建主工单并派工</div>}
+            {linkedOrderOf(assignTarget)
+              ? <div>关联工单：{assignTarget.orderId}{['已完成', '已取消'].includes(linkedOrderOf(assignTarget).status) ? '（已终止，确认后重新建单）' : ''}</div>
+              : <div style={{ color: '#8a6d3b' }}>该报修单尚未生成维修工单，确认后自动创建主工单并派工</div>}
           </div>
         )}
         {!assignTarget && <Alert type="info" showIcon style={{ marginBottom: 14 }} message="未选择报修单：请先在列表勾选一条报修单再指派。" />}
@@ -330,7 +333,7 @@ export default function RepairReportsPage() {
             <Select placeholder="请选择维修人员" options={repairPersons} />
           </Form.Item>
           <Form.Item label="维修班组" name="assigneeGroup">
-            <Select placeholder="请选择" options={['机修班', '电气班', '工艺班'].map(v => ({ value: v, label: v }))} allowClear />
+            <Select placeholder="请选择" options={repairGroupNames.map(v => ({ value: v, label: v }))} allowClear />
           </Form.Item>
           <Form.Item label="指派说明" help="SLA 按故障等级自动计算">
             <Input.TextArea rows={2} placeholder="故障处理建议、备件领用、安全注意事项等" />

@@ -280,23 +280,30 @@ export function createDemoActions(state, dispatch) {
       // 透传 reducer 真实结果（refs.closed 标记本次是否关闭），页面据此提示
       return act('alarm/handle', { alarmId, measure, expectedAt, recoveryNote }, key);
     },
+    // 转维修：指定维修人 → 直接生成「已派工」维修任务（进维修任务）；
+    // 未指定 → 不生成工单，改为提交一条报修单到「故障报修」等待指派维修人
     createRepairFromAlarm(alarmId, extra = {}) {
       const alarm = E.alarmEventsById[alarmId];
       if (!alarm) return fail('报警事件不存在');
+      const assigned = (extra?.dispatch?.assignee || '').trim();
       const existing = Object.values(E.repairOrdersById).find(o => o.alarmId === alarmId && !['已完成', '已取消'].includes(o.status));
       if (existing) {
         return { ok: true, idempotent: true, message: `该报警已存在活动工单 ${existing.repairOrderId}，不重复建单`, refs: { repairOrderId: existing.repairOrderId } };
       }
+      const existingReport = Object.values(E.repairReportsById).find(r => r.alarmId === alarmId && r.status !== '已取消');
+      if (existingReport) {
+        return { ok: true, idempotent: true, message: `该报警已提交报修单 ${existingReport.reportId}（待指派），不重复建单`, refs: { reportId: existingReport.reportId } };
+      }
       if (alarm.status === '已关闭') return fail('已关闭报警不能转维修；如需维修请人工报修');
       if (alarm.status === '已触发') return fail('请先确认报警（确认后进入处理中，才能转维修）');
-      act('alarm/createRepairFromAlarm', { alarmId, ...extra }, `repair-from-alarm:${alarmId}`);
-      return {
-        ok: true,
-        message: extra?.dispatch?.assignee
-          ? `已生成唯一主工单并直接派工至 ${extra.dispatch.assignee}；可在「维修任务」中开工执行`
-          : '已生成唯一主工单并回写至报警；请到「维修任务」派工',
-        refs: { alarmId },
-      };
+      // 幂等键带历史单据数：活动单据取消后允许重新转维修（业务幂等由 reducer 按「活动单据」判定），
+      // 同一次提交的重复点击在同一状态快照下命中同一幂等键
+      const orderCount = Object.values(E.repairOrdersById).filter(o => o.alarmId === alarmId).length;
+      const reportCount = Object.values(E.repairReportsById).filter(r => r.alarmId === alarmId).length;
+      if (!assigned) {
+        return act('alarm/createReportFromAlarm', { alarmId, faultType: extra.faultType }, `report-from-alarm:${alarmId}:${reportCount}`);
+      }
+      return act('alarm/createRepairFromAlarm', { alarmId, ...extra }, `repair-from-alarm:${alarmId}:${orderCount}`);
     },
 
     // 规则动作（M0 Action 结果契约）：act 返回 dispatch 的真实结果（meta.lastAction），
@@ -373,6 +380,18 @@ export function createDemoActions(state, dispatch) {
         images: payload.images || [],
       }, key);
       return res.ok ? { ...res, message: res.message || '报修已提交，生成待派工主工单' } : res;
+    },
+    // 报修单派工前置：为尚未生成工单的报修单（如报警转维修未派工）补建待派工主工单
+    createOrderForReport(reportId) {
+      const report = E.repairReportsById[reportId];
+      if (!report) return fail('报修单不存在');
+      if (report.status === '已取消') return fail('已取消的报修单不能派工');
+      const linked = report.linkedRepairOrderId ? E.repairOrdersById[report.linkedRepairOrderId] : null;
+      if (linked && linked.status !== '已取消') {
+        return { ok: true, idempotent: true, message: `该报修单已存在活动工单 ${linked.repairOrderId}`, refs: { repairOrderId: linked.repairOrderId } };
+      }
+      // 幂等键随已关联工单变化：同一报修单第二次补建（上一张已取消）不被当成重复请求
+      return act('repair/createOrderFromReport', { reportId }, `create-order-from-report:${reportId}:${report.linkedRepairOrderId || 'v1'}`);
     },
     // 报修单编辑（已派工的报修单不可编辑）
     updateRepairReport(reportId, payload = {}) {

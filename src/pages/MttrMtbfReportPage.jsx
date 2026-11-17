@@ -252,7 +252,7 @@ export default function MttrMtbfReportPage() {
           showIcon
           style={{ marginBottom: 12 }}
           message="样本量不足"
-          description="当前快照中没有已完成（开工且验收通过）的维修单，全部设备汇总 MTTR 暂不可计算；待维修工单走完「开工 → 提交 → 验收通过」后自动派生。"
+          description="当前快照中没有已完成（开工且验收通过）的维修单，全部设备汇总 MTTR 暂不可计算；待派工、维修中的工单走完「开工 → 提交 → 验收通过」后自动派生。"
         />
       )}
       {filteredRows.length === 0 ? (

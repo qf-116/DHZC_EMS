@@ -1,3 +1,5 @@
+// 注：2026-11-17「待维修」页面按需求下线（菜单 / 路由 / 需求细则已移除，转维修未派工改为提交「故障报修」）。
+// 本文件保留备用，恢复时需同步还原 App.jsx 菜单路由、systemConfig 菜单种子与 pageSpecs 细则。
 import React, { useRef, useState } from 'react';
 import { Card, Tag, Button, Space, Input, Modal, Form, Select, App } from 'antd';
 import { Wrench } from 'lucide-react';

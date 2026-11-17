@@ -9,7 +9,7 @@
 // ============================================================
 
 import React, { useMemo, useState } from 'react';
-import { App, Button, Card, DatePicker, Input, Modal, Select, Space, Statistic, Switch, Table, Tag, Timeline, Tooltip } from 'antd';
+import { App, Button, Card, DatePicker, Input, Modal, Select, Space, Statistic, Table, Tag, Timeline, Tooltip } from 'antd';
 import dayjs from 'dayjs';
 import { CheckCircle2, FilePlus2, MoreHorizontal } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -21,11 +21,10 @@ import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import { selectActiveAlarms, selectDevice, selectNotificationDeliveries } from '../state/selectors.js';
 import { FAULT_TYPES } from '../domain/repair.js';
 import FilterBar, { FilterField } from '../components/FilterBar.jsx';
-import { users } from '../data/demo/masterData.js';
+import { repairStaffNames, repairGroupNames } from '../data/demo/masterData.js';
 
-// 转维修「立即派工」候选：与待维修看板派工弹窗同一份维修人员 / 班组口径
-const REPAIR_STAFF = users.filter(u => u.status === '在职' && (u.role === '维修工程师' || u.role === '设备负责人' || u.role === '点检员' || u.role === '巡检员' || u.role === '备件管理员')).map(u => u.name);
-const DISPATCH_GROUPS = ['机修班', '电气班', '工艺班'].map(v => ({ value: v, label: v }));
+// 转维修候选：与故障报修「指派任务」、维修任务「派工」共用同一份维修人员 / 班组口径
+const REPAIR_STAFF = repairStaffNames;
 
 const SEVERITY_COLOR = { 紧急: 'error', 重要: 'warning', 一般: 'gold', 提示: 'default' };
 const TIMELINE_COLOR = { 触发: 'red', 重复触发: 'red', 通知: 'blue', 确认: 'green', 处置: 'blue', 更新处置: 'cyan', 转维修: 'purple', 恢复: 'green', 关闭: 'gray', 重开关联: 'orange' };
@@ -45,10 +44,9 @@ export default function AlarmCenterPage() {
   const [selectedKeys, setSelectedKeys] = useState([]);
   const [ackRows, setAckRows] = useState([]);      // 确认目标（支持批量）
   const [handleRow, setHandleRow] = useState(null); // 处置目标（登记 / 更新二合一，弹窗预填）
-  // 转维修弹窗：故障类型 + 可选「立即派工」（方案 A：明确派谁时一步到位，跳过待派工队列）
+  // 转维修弹窗：故障类型 + 可选维修人 / 班组（指定维修人 → 直接生成已派工维修任务；不指定 → 提交到故障报修）
   const [toRepairRow, setToRepairRow] = useState(null);
   const [toRepairFaultType, setToRepairFaultType] = useState('其他');
-  const [toRepairDispatch, setToRepairDispatch] = useState(false);
   const [toRepairAssignee, setToRepairAssignee] = useState(null);
   const [toRepairGroup, setToRepairGroup] = useState(null);
   const [ackNote, setAckNote] = useState('');
@@ -110,12 +108,11 @@ export default function AlarmCenterPage() {
     setHandleRow(null); setHandleMeasure(''); setHandleExpectedAt(null); setRecoverNote('');
   };
 
-  // 转维修提交：直接派工时必选维修人；不派工则生成待派工工单进入待维修看板统一排程
+  // 转维修提交：指定了维修人 → 直接生成「已派工」维修任务；未指定 → 提交一条报修单到「故障报修」
   const submitToRepair = () => {
-    if (toRepairDispatch && !toRepairAssignee) { message.warning('已开启立即派工，请选择维修人（或关闭直接派工，工单进入待维修看板统一派工）'); return; }
     const res = actions.createRepairFromAlarm(toRepairRow.id, {
       faultType: toRepairFaultType,
-      dispatch: toRepairDispatch ? { assignee: toRepairAssignee, assigneeGroup: toRepairGroup } : undefined,
+      dispatch: toRepairAssignee ? { assignee: toRepairAssignee, assigneeGroup: toRepairGroup } : undefined,
     });
     if (!res.ok) { message.error(res.message); return; }
     message.success(res.message);
@@ -139,6 +136,16 @@ export default function AlarmCenterPage() {
     自动恢复: <Tag color="success">自动恢复</Tag>,
     业务闭环: <Tag color="processing">业务闭环</Tag>,
     人工处置关闭: <Tag color="warning">人工处置关闭</Tag>,
+  };
+
+  // 转维修可用性：报警下不存在「活动」维修单 / 报修单时才允许再转（已取消、已删除视为可重新转维修）
+  const activeRepairLink = (alarm) => {
+    const order = alarm.relatedRepairOrderId ? state.entities.repairOrdersById[alarm.relatedRepairOrderId] : null;
+    const report = alarm.relatedRepairReportId ? state.entities.repairReportsById[alarm.relatedRepairReportId] : null;
+    return {
+      order: order && !['已完成', '已取消'].includes(order.status) ? order : null,
+      report: report && report.status !== '已取消' ? report : null,
+    };
   };
 
   const columns = [
@@ -171,19 +178,23 @@ export default function AlarmCenterPage() {
     { title: '恢复情况', dataIndex: 'recovered', width: 140, render: (v, r) => v || (r.status !== '已关闭' ? '待恢复' : '--') },
     { title: '通知', dataIndex: 'notify', width: 80, render: (v, r) => <Tooltip title={`通知策略 ${r.policy || '--'}`}><Tag color={v === '成功' ? 'success' : 'default'}>{v || '--'}</Tag></Tooltip> },
     { title: '处理人', dataIndex: 'handler', width: 80, render: v => v || '--' },
-    { title: '关联维修单', dataIndex: 'relatedRepairOrderId', width: 150, render: v => (v
-      ? <Tooltip title="派工 / 改派在「维修任务」页面进行"><a onClick={() => navigate('/repair-orders')}>{v}</a></Tooltip>
-      : '--') },
+    { title: '关联维修单', dataIndex: 'relatedRepairOrderId', width: 170, render: (_, r) => {
+      const link = activeRepairLink(r);
+      if (link.order) return <Tooltip title="派工 / 指派在「故障报修」「维修任务」页面进行"><a onClick={() => navigate('/repair-orders')}>{link.order.repairOrderId}</a></Tooltip>;
+      if (link.report) return <Tooltip title="转维修时未指定维修人，已提交至「故障报修」，指派维修人后生成维修工单"><a onClick={() => navigate('/repair-reports')}>{link.report.reportId}</a></Tooltip>;
+      return '--';
+    } },
     { title: '操作', fixed: 'right', width: 220, render: (_, r) => {
       const buttons = [];
       if (r.status === '已触发') {
         buttons.push(<Button key="ack" size="small" icon={<CheckCircle2 size={12} />} onClick={() => { setAckNote(''); setAckRows([r]); }}>确认</Button>);
       } else if (r.status === '处理中') {
         buttons.push(<Button key="handle" size="small" icon={<MoreHorizontal size={12} />} onClick={() => openHandle(r)}>处置</Button>);
-        if (!r.relatedRepairOrderId) {
-          buttons.push(<Tooltip key="repair" title="生成唯一维修主工单，可立即派工">
+        const link = activeRepairLink(r);
+        if (!link.order && !link.report) {
+          buttons.push(<Tooltip key="repair" title="指定维修人 → 直接生成已派工维修任务；不指定 → 提交至「故障报修」等待指派">
             <Button size="small" icon={<FilePlus2 size={12} />} onClick={() => {
-              setToRepairFaultType('其他'); setToRepairDispatch(false); setToRepairAssignee(null); setToRepairGroup(null);
+              setToRepairFaultType('其他'); setToRepairAssignee(null); setToRepairGroup(null);
               setToRepairRow(r);
             }}>转维修</Button>
           </Tooltip>);
@@ -288,14 +299,14 @@ export default function AlarmCenterPage() {
         </Space>
       </Modal>
 
-      {/* 转维修弹窗：生成唯一主工单 + 可选「立即派工」（明确派谁时一步到位，跳过待派工队列） */}
+      {/* 转维修弹窗：指定维修人 → 直接生成「已派工」维修任务；不指定 → 提交到「故障报修」等待指派 */}
       <Modal
         title={`转维修（${toRepairRow?.id || ''}）`}
         width={560}
         open={!!toRepairRow}
         onOk={submitToRepair}
         onCancel={() => setToRepairRow(null)}
-        okText="生成维修工单" cancelText="取消"
+        okText="提交" cancelText="取消"
       >
         {toRepairRow && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: 8, marginBottom: 12 }}>
@@ -305,33 +316,21 @@ export default function AlarmCenterPage() {
         )}
         <Space direction="vertical" style={{ width: '100%' }} size={10}>
           <div style={{ fontSize: 12, color: '#8a97a3' }}>
-            将生成唯一维修主工单并回写本报警
+            指定维修人 → 直接生成「已派工」维修任务；不指定 → 提交至「故障报修」，由报修页指派维修人后生成工单
           </div>
           <Space wrap size={4}>
             <span style={{ fontSize: 12, color: '#5d6b78' }}>故障类型</span>
             <Select value={toRepairFaultType} onChange={setToRepairFaultType} style={{ width: 160 }}
               options={FAULT_TYPES.map(v => ({ value: v, label: v }))} />
           </Space>
-          <div>
-            <Space size={8}>
-              <Switch size="small" checked={toRepairDispatch} onChange={setToRepairDispatch} />
-              <span style={{ fontSize: 13 }}>转维修时直接派工（跳过待维修队列）</span>
-            </Space>
-            <div style={{ fontSize: 12, color: '#8a97a3', marginTop: 4, marginLeft: 36 }}>
-              勾选后生成「已派工」工单；不勾选进入待派工。
-            </div>
-          </div>
-          {toRepairDispatch && (
-            <Space wrap size={4}>
-              <span style={{ color: '#dc2626' }}>*</span>
-              <span style={{ fontSize: 12, color: '#5d6b78' }}>维修人</span>
-              <Select showSearch value={toRepairAssignee} onChange={setToRepairAssignee} style={{ width: 180 }}
-                placeholder="请选择维修人" options={REPAIR_STAFF.map(v => ({ value: v, label: v }))} />
-              <span style={{ fontSize: 12, color: '#5d6b78' }}>班组（选填）</span>
-              <Select allowClear value={toRepairGroup} onChange={setToRepairGroup} style={{ width: 140 }}
-                placeholder="请选择班组" options={DISPATCH_GROUPS} />
-            </Space>
-          )}
+          <Space wrap size={4}>
+            <span style={{ fontSize: 12, color: '#5d6b78' }}>维修人（选填）</span>
+            <Select showSearch allowClear value={toRepairAssignee} onChange={setToRepairAssignee} style={{ width: 180 }}
+              placeholder="不选则提交到故障报修" options={REPAIR_STAFF.map(v => ({ value: v, label: v }))} />
+            <span style={{ fontSize: 12, color: '#5d6b78' }}>班组（选填）</span>
+            <Select allowClear disabled={!toRepairAssignee} value={toRepairGroup} onChange={setToRepairGroup} style={{ width: 140 }}
+              placeholder="请选择班组" options={repairGroupNames.map(v => ({ value: v, label: v }))} />
+          </Space>
         </Space>
       </Modal>
 
@@ -369,7 +368,10 @@ export default function AlarmCenterPage() {
                   ['处理人', detailAlarm.handler || '--'],
                   ['关联维修单', detailAlarm.relatedRepairOrderId
                     ? <a onClick={() => navigate('/repair-orders')}>{detailAlarm.relatedRepairOrderId}</a>
-                    : '无（使用「转维修」生成唯一主工单）'],
+                    : '无（转维修时指定维修人即生成维修任务）'],
+                  ['关联报修单', detailAlarm.relatedRepairReportId
+                    ? <a onClick={() => navigate('/repair-reports')}>{detailAlarm.relatedRepairReportId}</a>
+                    : '无（转维修时未指定维修人则提交至「故障报修」）'],
                 ].map(([k, v]) => (
                   <tr key={k}>
                     <td style={{ padding: '6px 8px', color: '#5d6b78', width: 120, verticalAlign: 'top', borderBottom: '1px solid #eef1f4' }}>{k}</td>

@@ -774,6 +774,41 @@ export function reducer(state, action) {
         ? `已生成主工单 ${id} 并直接派工至 ${d.assignee.trim()}，可在「维修任务」中开工执行`
         : `已生成主工单 ${id}（待派工），并回写至报警 ${alarm.id}`, { repairOrderId: id, alarmId: alarm.id }, false, at);
     }
+    // 转维修但未派工：不建工单，改为提交一条报修单到「故障报修」，由报修页指派维修人后再生成工单
+    case 'alarm/createReportFromAlarm': {
+      const alarm = E.alarmEventsById[payload.alarmId];
+      if (!alarm) return reject(state, action, '报警事件不存在');
+      const existingOrder = Object.values(E.repairOrdersById).find(o => o.alarmId === alarm.id && !['已完成', '已取消'].includes(o.status));
+      if (existingOrder) {
+        return finish(state, action, true, `该报警已存在活动工单 ${existingOrder.repairOrderId}，不重复建单（幂等）`, { repairOrderId: existingOrder.repairOrderId, alarmId: alarm.id }, false, at);
+      }
+      const existingReport = Object.values(E.repairReportsById).find(r => r.alarmId === alarm.id && r.status !== '已取消');
+      if (existingReport) {
+        return finish(state, action, true, `该报警已提交报修单 ${existingReport.reportId}（待指派），不重复提交（幂等）`, { reportId: existingReport.reportId, alarmId: alarm.id }, false, at);
+      }
+      if (alarm.status === '已关闭') return reject(state, action, '已关闭报警不能转维修；如需维修请人工报修');
+      if (alarm.status === '已触发') return reject(state, action, '请先确认报警（确认后进入处理中，才能转维修）');
+      const device = E.devicesById[alarm.deviceId];
+      const reportId = `BX-${dateOnly(at).replaceAll('-', '')}-${seq()}`;
+      const level = alarm.severity === '提示' ? '一般' : alarm.severity === '紧急' ? '紧急' : '严重';
+      const report = {
+        reportId, code: reportId, title: alarm.name, deviceId: alarm.deviceId, deviceName: alarm.deviceName,
+        deviceCode: E.crosswalkById[alarm.deviceId]?.assetCode || '--', deviceType: device?.type || '--',
+        faultType: payload.faultType || '其他', level,
+        faultTime: at, desc: payload.faultDesc || `${alarm.name}（触发值 ${alarm.trigger}，阈值 ${alarm.threshold}）`,
+        // 报修单展示状态由关联工单派生；未派工前为「未处理」
+        status: null, creator: actor.userName, createTime: at, reportTime: at,
+        reporter: actor.userName, reporterDept: device?.workshopName || '--',
+        downtimeFlag: false, images: [], linkedRepairOrderId: null, source: '报警转维修', alarmId: alarm.id,
+      };
+      let next = setE(state, 'repairReportsById', reportId, report);
+      next = setE(next, 'alarmEventsById', alarm.id, {
+        ...alarm, relatedRepairReportId: reportId,
+        timeline: [...alarm.timeline, { type: '转维修', time: timeOnly(at), actor: actor.userName, detail: `未派工，提交故障报修单 ${reportId}（待指派维修人）` }],
+      });
+      next = addHistory(next, at, 'repair', reportId, `由报警 ${alarm.id} 转维修生成报修单（待派工）`, { deviceId: alarm.deviceId, alarmId: alarm.id });
+      return finish(next, action, true, `已生成报修单 ${reportId} 并提交至「故障报修」（待指派维修人）`, { reportId, alarmId: alarm.id }, false, at);
+    }
     // 报警恢复（验收联动内部动作，也可由页面在指标恢复后调用）
     case 'alarm/recover': {
       const alarm = E.alarmEventsById[payload.alarmId];
@@ -1026,6 +1061,48 @@ export function reducer(state, action) {
       let next = setE(setE(state, 'repairOrdersById', orderId, order), 'repairReportsById', reportId, report);
       next = addHistory(next, at, 'repair', orderId, '人工报修并生成主工单', { deviceId: payload.deviceId });
       return finish(next, action, true, `报修已提交，主工单 ${orderId}（待派工）`, { repairOrderId: orderId, reportId }, false, at);
+    }
+    // 报修单派工前置：尚未生成工单的报修单（如报警转维修未派工）按报修内容补建一张待派工主工单
+    case 'repair/createOrderFromReport': {
+      const report = E.repairReportsById[payload.reportId];
+      if (!report) return reject(state, action, '报修单不存在');
+      if (report.status === '已取消') return reject(state, action, '已取消的报修单不能派工');
+      const linked = report.linkedRepairOrderId ? E.repairOrdersById[report.linkedRepairOrderId] : null;
+      if (linked && linked.status !== '已取消') {
+        return finish(state, action, true, `该报修单已存在活动工单 ${linked.repairOrderId}，不重复建单（幂等）`, { repairOrderId: linked.repairOrderId, reportId: report.reportId }, false, at);
+      }
+      const srcAlarm = report.alarmId ? E.alarmEventsById[report.alarmId] : null;
+      const orderId = `RO-${dateOnly(at).replaceAll('-', '')}-${seq()}`;
+      const level = report.level || '一般';
+      const slaHours = SLA_HOURS[level] || SLA_HOURS['一般'];
+      const order = {
+        repairOrderId: orderId, code: orderId, deviceId: report.deviceId, deviceName: report.deviceName,
+        deviceCode: report.deviceCode || '--', title: report.title,
+        source: srcAlarm ? 'alarm+report' : 'report', alarmId: report.alarmId || null, reportId: report.reportId,
+        faultType: report.faultType || '其他', level, faultDesc: report.desc,
+        status: '待派工', assignee: null, assigneeGroup: null, reporter: actor.userName,
+        createdAt: at, assignedAt: null, startedAt: null, submittedAt: null, acceptedAt: null,
+        slaHours, slaDueAt: slaDueAtFrom(at, slaHours),
+        // 报警转维修的报修单沿用报警侧停机事实；人工报修维持既有口径（开工不另建停机事实）
+        downtimeFactId: srcAlarm?.relatedDowntimeId || null, downtimeDuringRepair: Boolean(srcAlarm),
+        measures: '', verification: '', laborHours: null,
+        handlingMethod: null, faultCause: '', repairDesc: '', repairType: null, repairPart: null,
+        repairLevel: null, repairStartTime: null, repairEndTime: null, repairPersonIds: [],
+        repairTime: null, images: [], remark: '', parts: [],
+        timeline: [{ type: '创建', time: at, actor: actor.userName, detail: srcAlarm ? `由报警 ${report.alarmId} 转维修的报修单 ${report.reportId} 生成` : `由报修单 ${report.reportId} 生成` }],
+        acceptance: null, reworkCount: 0,
+      };
+      let next = setE(state, 'repairOrdersById', orderId, order);
+      next = setE(next, 'repairReportsById', report.reportId, { ...report, linkedRepairOrderId: orderId });
+      // 来源为报警转维修：同时回写报警的关联维修单号，报警侧「关联维修单」可直接跳转、验收后联动关闭
+      if (srcAlarm) {
+        next = setE(next, 'alarmEventsById', srcAlarm.id, {
+          ...srcAlarm, relatedRepairOrderId: orderId,
+          timeline: [...srcAlarm.timeline, { type: '转维修', time: timeOnly(at), actor: actor.userName, detail: `报修单指派后生成维修工单 ${orderId}` }],
+        });
+      }
+      next = addHistory(next, at, 'repair', orderId, `按报修单 ${report.code} 生成主工单`, { deviceId: report.deviceId });
+      return finish(next, action, true, `已生成主工单 ${orderId}（待派工）`, { repairOrderId: orderId, reportId: report.reportId }, false, at);
     }
     // 报修单编辑（原型：报修单行操作「编辑」；已派工后不可编辑，只能取消）
     case 'repair/updateReport': {

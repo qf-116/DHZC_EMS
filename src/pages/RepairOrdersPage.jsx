@@ -9,14 +9,18 @@ import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import { useNavigate } from 'react-router-dom';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import { selectAllRepairOrders, selectAllDevices } from '../state/selectors.js';
-import { REPAIR_LEVELS, FAULT_TYPES, REPAIR_TYPES, REPAIR_PARTS, repairDurationHours } from '../domain/repair.js';
+import { REPAIR_LEVELS, FAULT_TYPES, REPAIR_TYPES, REPAIR_PARTS, SLA_HOURS, repairDurationHours } from '../domain/repair.js';
+import { repairStaffNames, repairGroupNames } from '../data/demo/masterData.js';
 
 const levelColor = { 紧急: 'red', 严重: 'orange', 一般: 'blue' };
 // 任务来源口径按原型：报修任务 / 监测异常 / 快速维修
 const sourceLabel = { alarm: '监测异常', report: '报修任务', 'alarm+report': '监测异常', quick: '快速维修' };
+// 派工候选：与报警中心转维修、故障报修指派任务共用同一份口径
+const repairPersons = repairStaffNames.map(v => ({ value: v, label: v }));
+const groupOptions = repairGroupNames.map(v => ({ value: v, label: v }));
 
 // 维修工单列表（store 驱动）：repairOrdersById 全量（报修与维修统一对象）。
-// 行操作：执行维修 / 验收 / 详情 / 取消（取消需填原因）；工具栏：新增（快速维修）/ 编辑 / 删除。
+// 行操作：派工（待派工）/ 执行维修 / 验收 / 详情 / 取消（取消需填原因）；工具栏：新增（快速维修）/ 编辑 / 删除。
 export default function RepairOrdersPage() {
   const navigate = useNavigate();
   const { message, modal } = App.useApp();
@@ -38,6 +42,9 @@ export default function RepairOrdersPage() {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelForm] = Form.useForm();
+  const [dispatchOpen, setDispatchOpen] = useState(false);
+  const [dispatchTarget, setDispatchTarget] = useState(null);
+  const [dispatchForm] = Form.useForm();
 
   const orders = selectAllRepairOrders(state);
   const devices = selectAllDevices(state);
@@ -105,6 +112,20 @@ export default function RepairOrdersPage() {
         message[res.ok ? 'success' : 'error'](res.message);
       },
     });
+  };
+
+  // 派工：待派工工单指定维修人 / 班组后转为「已派工」（待维修页面下线后，派工统一在本页与故障报修页完成）
+  const openDispatch = (record) => {
+    setDispatchTarget(record);
+    dispatchForm.resetFields();
+    dispatchForm.setFieldsValue({ assigneeGroup: '机修班' });
+    setDispatchOpen(true);
+  };
+  const submitDispatch = async () => {
+    const values = await dispatchForm.validateFields();
+    const res = actions.assignRepair(dispatchTarget.repairOrderId, { assignee: values.assignee, assigneeGroup: values.assigneeGroup || null });
+    message[res.ok ? 'success' : 'error'](res.message);
+    if (res.ok) setDispatchOpen(false);
   };
 
   // 取消任务（需填原因）
@@ -201,6 +222,7 @@ export default function RepairOrdersPage() {
               title: '操作', width: 180, fixed: 'right',
               render: (_, r) => (
                 <Space size={0} onClick={(e) => e.stopPropagation()}>
+                  {r.status === '待派工' && <Button type="link" size="small" onClick={() => openDispatch(r)}>派工</Button>}
                   {canExecute(r) && <Button type="link" size="small" onClick={() => navigate(`/repair-orders/${r.repairOrderId}/execute`)}>执行维修</Button>}
                   {canAccept(r) && <Button type="link" size="small" onClick={() => navigate(`/repair-orders/${r.repairOrderId}/accept`)}>验收</Button>}
                   <Button type="link" size="small" onClick={() => navigate(`/repair-orders/${r.repairOrderId}`)}>详情</Button>
@@ -314,6 +336,31 @@ export default function RepairOrdersPage() {
             </Col>
           </Row>
         </Form>
+      </Modal>
+
+      {/* 派工（弹窗）：待派工工单指定维修人 / 班组后转「已派工」，SLA 按故障等级自动带出 */}
+      <Modal title={`派工（${dispatchTarget?.code || '--'}）`} width={560} open={dispatchOpen} destroyOnHidden
+        onCancel={() => setDispatchOpen(false)} onOk={submitDispatch} okText="确认派工" cancelText="取消">
+        {dispatchTarget && (
+          <>
+            <Descriptions column={2} size="small" bordered style={{ marginBottom: 12 }}>
+              <Descriptions.Item label="故障名称">{dispatchTarget.title || '--'}</Descriptions.Item>
+              <Descriptions.Item label="设备">{dispatchTarget.deviceName || '--'}</Descriptions.Item>
+              <Descriptions.Item label="故障等级"><Tag color={levelColor[dispatchTarget.level] || 'default'}>{dispatchTarget.level || '--'}</Tag></Descriptions.Item>
+              <Descriptions.Item label="故障类型">{dispatchTarget.faultType || '--'}</Descriptions.Item>
+              <Descriptions.Item label="SLA 响应时限">{`${SLA_HOURS[dispatchTarget.level] ?? '--'} 小时（承诺完成 ${dispatchTarget.slaDueAt || '--'} 前）`}</Descriptions.Item>
+              <Descriptions.Item label="任务来源">{sourceLabel[dispatchTarget.source] || '--'}</Descriptions.Item>
+            </Descriptions>
+            <Form form={dispatchForm} layout="vertical" initialValues={{ assigneeGroup: '机修班' }}>
+              <Form.Item label="维修人员" name="assignee" required rules={[{ required: true, message: '派工必须指定维修人' }]}>
+                <Select placeholder="请选择维修人员" options={repairPersons} showSearch />
+              </Form.Item>
+              <Form.Item label="维修班组" name="assigneeGroup" style={{ marginBottom: 0 }}>
+                <Select placeholder="请选择" options={groupOptions} allowClear />
+              </Form.Item>
+            </Form>
+          </>
+        )}
       </Modal>
 
       {/* 取消任务（必须填写取消原因） */}

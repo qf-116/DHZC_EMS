@@ -205,7 +205,7 @@ export const repairReports = [
   { code: 'GZBX2508220005', name: '数控车床主轴异响报修', device: '数控车床 MT2024A1201', faultType: '机械', level: '紧急', faultTime: '2026-09-02 09:40', status: '进行中', creator: '张伟', createTime: '2026-09-02 09:45' },
 ];
 
-// 待维修看板
+// 待维修看板（2026-11-17 页面与菜单下线，种子保留备用；无页面引用）
 export const pendingRepairs = [
   { code: 'BX20260902001', name: '设备一报修', device: '设备一', deviceCode: '1234', deviceType: '类型一', stop: '是', level: '紧急', faultTime: '2026-09-02 16:34:23', desc: '设备运转异常，安灯报警，影响生产，请尽快处理。' },
   { code: 'BX20260902002', name: '数控车床主轴异响报修', device: '豪迈电子锯180L', deviceCode: 'HM1932-G180L', deviceType: '豪迈电子锯180L', stop: '是', level: '严重', faultTime: '2026-09-02 16:34:23', desc: '设备运转异常，安灯报警，影响生产，请尽快处理。' },
@@ -396,7 +396,7 @@ export function getNetStatus(code) {
 }
 
 export const workbenchTodos = [
-  { id: 1, type: '维修任务', title: '数控车床主轴异响维修（紧急报修）', urgent: true, owner: '周强', due: '今日 16:00', route: '/repair-pending' },
+  { id: 1, type: '维修任务', title: '数控车床主轴异响维修（紧急报修）', urgent: true, owner: '周强', due: '今日 16:00', route: '/repair-orders' },
   { id: 2, type: '点检任务', title: '数控车床日常点检（今日）', urgent: false, owner: '李四', due: '今日 18:00', route: '/inspection-tasks' },
   { id: 3, type: '保养任务', title: '激光焊接机二级保养（厂家到场）', urgent: false, owner: '厂家工程师', due: '明日全天', route: '/maintenance-tasks' },
   { id: 4, type: '巡检任务', title: '一号车间日常巡检', urgent: false, owner: '李四', due: '今日 17:00', route: '/patrol-tasks' },

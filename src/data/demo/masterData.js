@@ -42,6 +42,14 @@ export const users = [
   { userId: 'U-1011', name: '赵强', dept: '机修班', role: '维修工程师', status: '在职' },
 ];
 
+// 派工候选口径（报警中心转维修 / 故障报修指派任务 / 维修任务派工共用同一份口径）：
+// 维修人员 = 在职的维修工程师、设备负责人、点检员、巡检员、备件管理员姓名
+export const repairStaffNames = users
+  .filter(u => u.status === '在职' && ['维修工程师', '设备负责人', '点检员', '巡检员', '备件管理员'].includes(u.role))
+  .map(u => u.name);
+// 维修班组（演示口径固定三值）
+export const repairGroupNames = ['机修班', '电气班', '工艺班'];
+
 // 供应商主数据（与 demo/standardData.js 的入库记录口径一致）
 export const suppliers = [
   { supplierId: 'SUP-001', name: '供应商一' },

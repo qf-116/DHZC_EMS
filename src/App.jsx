@@ -58,7 +58,6 @@ import PlatformModuleNotice from './components/PlatformModuleNotice.jsx';
 import { DemoStoreProvider } from './state/DemoStore.jsx';
 // 需求细则（开发说明面板）：每页点击「需求细则」查看本页详细规则，内容维护在 src/specs/pageSpecs.jsx
 import { specForPath } from './specs/pageSpecs.jsx';
-import RepairPendingPage from './pages/RepairPendingPage.jsx';
 import RepairReportsPage from './pages/RepairReportsPage.jsx';
 import RepairOrdersPage from './pages/RepairOrdersPage.jsx';
 import RepairExecutePage from './pages/RepairExecutePage.jsx';
@@ -140,7 +139,6 @@ const menus = [
     { key: '/patrol-tasks', icon: <Activity size={14} />, label: '巡检任务' },
   ] },
   { key: 'repair', icon: <Wrench size={15} />, label: '维修管理', children: [
-    { key: '/repair-pending', icon: <Wrench size={14} />, label: '待维修' },
     { key: '/repair-reports', icon: <Wrench size={14} />, label: '故障报修' },
     { key: '/repair-orders', icon: <Wrench size={14} />, label: '维修任务' },
     { key: '/repair-knowledge', icon: <BookOpen size={14} />, label: '维修经验库' },
@@ -358,7 +356,6 @@ export default function App() {
                   <Route path="/patrol-tasks/detail" element={<PatrolTaskDetailPage />} />
                   <Route path="/patrol-tasks/execute" element={<PatrolExecutePage />} />
                   {/* 维修管理 */}
-                  <Route path="/repair-pending" element={<RepairPendingPage />} />
                   <Route path="/repair-reports" element={<RepairReportsPage />} />
                   <Route path="/repair-orders" element={<RepairOrdersPage />} />
                   <Route path="/repair-orders/:repairOrderId" element={<RepairDetailPage />} />

@@ -26,7 +26,7 @@ export const sysUsers = [
 // menuKeys：分配权限弹窗中勾中的功能点 key（与 sysPermissionTree 一致）
 export const sysRoles = [
   { roleId: 'R001', code: 'SYS_ADMIN', name: '系统管理员', dataScope: '全部数据权限', status: '已启用', userCount: 2, remark: '基础配置模块全部权限，负责账号/角色/字典/日志治理', menuKeys: ['perm:system:all'], createTime: '2026-01-06 09:00:00' },
-  { roleId: 'R002', code: 'DEVICE_ADMIN', name: '设备管理员', dataScope: '本部门及以下', status: '已启用', userCount: 1, remark: '台账/报警规则/维修派工/备件管理', menuKeys: ['menu:workbench', 'menu:device-ledger', 'menu:doc-library', 'menu:base-type-config', 'menu:alarm-center', 'menu:alarm-rules', 'menu:repair-pending', 'menu:repair-reports', 'menu:repair-orders', 'menu:spare-parts-stock', 'menu:report-runtime', 'menu:report:repair'], createTime: '2026-01-06 09:30:00' },
+  { roleId: 'R002', code: 'DEVICE_ADMIN', name: '设备管理员', dataScope: '本部门及以下', status: '已启用', userCount: 1, remark: '台账/报警规则/维修派工/备件管理', menuKeys: ['menu:workbench', 'menu:device-ledger', 'menu:doc-library', 'menu:base-type-config', 'menu:alarm-center', 'menu:alarm-rules', 'menu:repair-reports', 'menu:repair-orders', 'menu:spare-parts-stock', 'menu:report-runtime', 'menu:report:repair'], createTime: '2026-01-06 09:30:00' },
   { roleId: 'R003', code: 'REPAIR_ENG', name: '维修工程师', dataScope: '本部门', status: '已启用', userCount: 2, remark: '接单/执行/验收，只读台账', menuKeys: ['menu:workbench', 'menu:repair-orders', 'menu:repair-knowledge', 'menu:spare-parts-outbound'], createTime: '2026-01-08 10:30:00' },
   { roleId: 'R004', code: 'INSPECTOR', name: '点检保养专员', dataScope: '本部门及以下', status: '已启用', userCount: 3, remark: '点检/保养/巡检执行与记录', menuKeys: ['menu:workbench', 'menu:inspection-tasks', 'menu:maintenance-tasks', 'menu:patrol-tasks', 'menu:repair-reports'], createTime: '2026-01-10 14:20:00' },
   { roleId: 'R005', code: 'ANALYST', name: '报表分析员', dataScope: '全部数据权限', status: '已启用', userCount: 2, remark: '报表中心全部报表只读 + 导出', menuKeys: ['menu:workbench', 'menu:report-runtime', 'menu:report:production', 'menu:report:mttr', 'menu:report:comprehensive', 'menu:report:alarm', 'menu:report:sparepart'], createTime: '2026-02-01 11:00:00' },
@@ -157,7 +157,6 @@ export const sysPermissionTree = [
     { title: '巡检计划 / 任务', key: 'menu:patrol-tasks' },
   ] },
   { title: '维修管理', key: 'group:repair', children: [
-    { title: '待维修', key: 'menu:repair-pending' },
     { title: '故障报修', key: 'menu:repair-reports' },
     { title: '维修任务', key: 'menu:repair-orders' },
     { title: '维修经验库', key: 'menu:repair-knowledge' },

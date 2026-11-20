@@ -9,12 +9,13 @@ import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import { useNavigate } from 'react-router-dom';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import { selectAllRepairOrders, selectAllDevices } from '../state/selectors.js';
-import { REPAIR_LEVELS, FAULT_TYPES, REPAIR_TYPES, REPAIR_PARTS, SLA_HOURS, repairDurationHours } from '../domain/repair.js';
+import { REPAIR_LEVELS, FAULT_TYPES, REPAIR_TYPES, REPAIR_PARTS, SLA_HOURS, repairDurationHours, orderSourceInfo, SOURCE_LABEL } from '../domain/repair.js';
+import SourceTag from '../components/SourceTag.jsx';
 import { repairStaffNames, repairGroupNames } from '../data/demo/masterData.js';
 
 const levelColor = { 紧急: 'red', 严重: 'orange', 一般: 'blue' };
-// 任务来源口径按原型：报修任务 / 监测异常 / 快速维修
-const sourceLabel = { alarm: '监测异常', report: '报修任务', 'alarm+report': '监测异常', quick: '快速维修' };
+// 任务来源细分口径按原型三值（报修任务 / 监测异常 / 快速维修）；人工/报警类别判定统一走 orderSourceInfo
+const sourceLabel = SOURCE_LABEL;
 // 派工候选：与报警中心转维修、故障报修指派任务共用同一份口径
 const repairPersons = repairStaffNames.map(v => ({ value: v, label: v }));
 const groupOptions = repairGroupNames.map(v => ({ value: v, label: v }));
@@ -188,7 +189,7 @@ export default function RepairOrdersPage() {
           columns={[
             { title: '工单号', dataIndex: 'code', width: 150, fixed: 'left' },
             { title: '故障名称', dataIndex: 'title', width: 170, render: v => v || '--' },
-            { title: '任务来源', dataIndex: 'source', width: 100, render: v => sourceLabel[v] || v || '--' },
+            { title: '任务来源', width: 150, render: (_, r) => <SourceTag info={orderSourceInfo(r)} /> },
             { title: '维修负责人', dataIndex: 'assignee', width: 100, render: (v, r) => (v ? `${r.assigneeGroup ? r.assigneeGroup + ' ' : ''}${v}` : '--') },
             { title: '设备', dataIndex: 'deviceName', width: 140, render: v => v || '--' },
             { title: '设备编号', dataIndex: 'deviceCode', width: 120, render: v => v || '--' },
@@ -201,7 +202,12 @@ export default function RepairOrdersPage() {
             { title: '维修部位', dataIndex: 'repairPart', width: 100, render: v => v || '--' },
             { title: '维修类型', dataIndex: 'repairType', width: 100, render: v => v || '--' },
             { title: '维修级别', dataIndex: 'repairLevel', width: 90, render: v => v || '--' },
-            { title: '报修单号/报警流水号', width: 170, render: (_, r) => r.reportId || r.alarmId || '--' },
+            { title: '报修单号/报警流水号', width: 170, render: (_, r) => {
+              const info = orderSourceInfo(r);
+              if (info?.alarmId) return <Tooltip title="来源报警，点击跳转报警中心"><a onClick={() => navigate('/alarm-center')}>{info.alarmId}</a></Tooltip>;
+              if (info?.reportId) return <Tooltip title="来源报修单，点击跳转故障报修"><a onClick={() => navigate('/repair-reports')}>{info.reportId}</a></Tooltip>;
+              return '--';
+            } },
             { title: '维修开始时间', dataIndex: 'repairStartTime', width: 150, render: v => v || '--' },
             { title: '维修结束时间', dataIndex: 'repairEndTime', width: 150, render: v => v || '--' },
             {
@@ -292,7 +298,7 @@ export default function RepairOrdersPage() {
         {editTarget && (
           <Descriptions column={2} size="small" bordered style={{ marginBottom: 12 }}>
             <Descriptions.Item label="工单号">{editTarget.code}</Descriptions.Item>
-            <Descriptions.Item label="任务来源">{sourceLabel[editTarget.source] || '--'}</Descriptions.Item>
+            <Descriptions.Item label="任务来源"><SourceTag info={orderSourceInfo(editTarget)} /></Descriptions.Item>
             <Descriptions.Item label="维修设备">{editTarget.deviceName || '--'}</Descriptions.Item>
             <Descriptions.Item label="当前状态"><StatusTag value={editTarget.status} /></Descriptions.Item>
           </Descriptions>
@@ -349,7 +355,7 @@ export default function RepairOrdersPage() {
               <Descriptions.Item label="故障等级"><Tag color={levelColor[dispatchTarget.level] || 'default'}>{dispatchTarget.level || '--'}</Tag></Descriptions.Item>
               <Descriptions.Item label="故障类型">{dispatchTarget.faultType || '--'}</Descriptions.Item>
               <Descriptions.Item label="SLA 响应时限">{`${SLA_HOURS[dispatchTarget.level] ?? '--'} 小时（承诺完成 ${dispatchTarget.slaDueAt || '--'} 前）`}</Descriptions.Item>
-              <Descriptions.Item label="任务来源">{sourceLabel[dispatchTarget.source] || '--'}</Descriptions.Item>
+              <Descriptions.Item label="任务来源"><SourceTag info={orderSourceInfo(dispatchTarget)} /></Descriptions.Item>
             </Descriptions>
             <Form form={dispatchForm} layout="vertical" initialValues={{ assigneeGroup: '机修班' }}>
               <Form.Item label="维修人员" name="assignee" required rules={[{ required: true, message: '派工必须指定维修人' }]}>

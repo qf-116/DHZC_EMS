@@ -1,5 +1,5 @@
 import React, { useRef, useState } from 'react';
-import { Card, Table, Tag, Button, Space, Input, Select, App, Modal, Form, Alert, Upload, Row, Col, Checkbox, DatePicker } from 'antd';
+import { Card, Table, Tag, Button, Space, Input, Select, App, Modal, Form, Alert, Upload, Row, Col, Checkbox, DatePicker, Descriptions } from 'antd';
 import { Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import PageHeader from '../components/PageHeader.jsx';
@@ -9,7 +9,8 @@ import EmptyState from '../components/EmptyState.jsx';
 import FilterBar, { FilterField } from '../components/FilterBar.jsx';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import { selectRepairReportRows, selectAllDevices } from '../state/selectors.js';
-import { REPAIR_LEVELS, FAULT_TYPES, REPORT_STATUSES } from '../domain/repair.js';
+import { REPAIR_LEVELS, FAULT_TYPES, REPORT_STATUSES, reportSourceInfo } from '../domain/repair.js';
+import SourceTag from '../components/SourceTag.jsx';
 import { repairStaffNames, repairGroupNames } from '../data/demo/masterData.js';
 
 const levelColor = { 紧急: 'red', 严重: 'orange', 一般: 'blue' };
@@ -47,6 +48,7 @@ export default function RepairReportsPage() {
   const [cancelOpen, setCancelOpen] = useState(false);
   const [cancelTarget, setCancelTarget] = useState(null);
   const [cancelForm] = Form.useForm();
+  const [detailTarget, setDetailTarget] = useState(null); // 报修单详情弹窗（只读，含来源与关联工单）
   const [requestId, setRequestId] = useState('');
 
   const reports = selectRepairReportRows(state);
@@ -182,6 +184,14 @@ export default function RepairReportsPage() {
     else openAssign(fresh);
   };
 
+  // 报修单详情（只读弹窗）：按 reportId 取最新事实，含来源与关联工单入口
+  const openDetail = (record) => {
+    setDetailTarget(reports.find(r => r.reportId === record.reportId) || record);
+  };
+  const detailReport = detailTarget ? (reports.find(r => r.reportId === detailTarget.reportId) || detailTarget) : null;
+  const detailInfo = detailReport ? reportSourceInfo(detailReport) : null;
+  const detailOrder = detailReport ? linkedOrderOf(detailReport) : null;
+
   return (
     <>
       <PageHeader
@@ -227,7 +237,15 @@ export default function RepairReportsPage() {
             { title: '关联维修工单', dataIndex: 'orderCode', width: 150, render: (v, r) => (v
               ? <a onClick={() => navigate(`/repair-orders/${r.orderId}`)}>{v}</a>
               : '--') },
-            { title: '来源', dataIndex: 'source', width: 90, render: v => v || '--' },
+            { title: '来源', width: 190, render: (_, r) => {
+              const info = reportSourceInfo(r);
+              return (
+                <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' }}>
+                  <SourceTag info={info} />
+                  {info?.alarmId && <a style={{ fontSize: 12 }} onClick={() => navigate('/alarm-center')}>{info.alarmId}</a>}
+                </span>
+              );
+            } },
             { title: '创建人', dataIndex: 'creator', width: 90, render: v => v || '--' },
             { title: '报修创建时间', dataIndex: 'createTime', width: 150, render: v => v || '--' },
             {
@@ -236,9 +254,7 @@ export default function RepairReportsPage() {
                   <Button type="link" size="small" onClick={() => openAssign(r)}>指派任务</Button>
                   <Button type="link" size="small" onClick={() => openEdit(r)}>编辑</Button>
                   <Button type="link" size="small" onClick={() => goHandle(r)}>故障处理</Button>
-                  <Button type="link" size="small" onClick={() => (linkedOrderOf(r)
-                    ? navigate(`/repair-orders/${r.orderId}`)
-                    : message.warning('该报修尚未生成维修工单；请先用「指派任务」派工，再查看维修单详情'))}>查看详情</Button>
+                  <Button type="link" size="small" onClick={() => openDetail(r)}>查看详情</Button>
                 </Space>
               )
             },
@@ -259,6 +275,12 @@ export default function RepairReportsPage() {
         okText="确认" cancelText="取消"
       >
         <Form form={form} layout="vertical">
+          {editing && (
+            <div style={{ fontSize: 13, marginBottom: 12 }}>
+              来源：<SourceTag info={reportSourceInfo(editing)} />
+              {reportSourceInfo(editing)?.alarmId && <span style={{ fontSize: 12, marginLeft: 6, color: '#8a97a3' }}>报警 {reportSourceInfo(editing).alarmId}</span>}
+            </div>
+          )}
           <Row gutter={16}>
             <Col span={12}>
               <Form.Item label="故障名称" name="title" required rules={[{ required: true, message: '请输入故障名称' }]}>
@@ -320,6 +342,10 @@ export default function RepairReportsPage() {
         {assignTarget && (
           <div style={{ lineHeight: 1.9, fontSize: 13, background: '#f6f9fb', border: '1px solid #e8eef2', borderRadius: 8, padding: '8px 12px', marginBottom: 14 }}>
             <div>故障名称：{assignTarget.title || '--'}　<Tag color={levelColor[assignTarget.level] || 'default'}>{assignTarget.level || '--'}</Tag></div>
+            <div>
+              来源：<SourceTag info={reportSourceInfo(assignTarget)} />
+              {reportSourceInfo(assignTarget)?.alarmId && <span style={{ fontSize: 12, marginLeft: 6, color: '#8a97a3' }}>报警 {reportSourceInfo(assignTarget).alarmId}</span>}
+            </div>
             <div>设备名称：{assignTarget.deviceName || '--'}　故障类型：{assignTarget.faultType || '--'}</div>
             <div>故障时间：{assignTarget.faultTime || '--'}</div>
             {linkedOrderOf(assignTarget)
@@ -359,6 +385,50 @@ export default function RepairReportsPage() {
             <Input.TextArea rows={3} placeholder="请填写取消原因" maxLength={200} showCount />
           </Form.Item>
         </Form>
+      </Modal>
+
+      {/* 报修单详情（只读）：首行明确来源（人工创建 / 设备报警），附来源报警与关联工单入口 */}
+      <Modal
+        title={`报修详情（${detailReport?.code || '--'}）`}
+        width={720}
+        open={!!detailReport}
+        footer={
+          <Space>
+            {detailOrder && <Button type="primary" onClick={() => { setDetailTarget(null); navigate(`/repair-orders/${detailOrder.repairOrderId}`); }}>查看维修工单</Button>}
+            <Button onClick={() => setDetailTarget(null)}>关闭</Button>
+          </Space>
+        }
+        onCancel={() => setDetailTarget(null)}
+      >
+        {detailReport && (
+          <>
+            <Descriptions column={2} size="small" bordered style={{ marginBottom: 12 }}>
+              <Descriptions.Item label="来源">
+                <SourceTag info={detailInfo} />
+                {detailInfo?.alarmId && (
+                  <a style={{ fontSize: 12, marginLeft: 6 }} onClick={() => { setDetailTarget(null); navigate('/alarm-center'); }}>{detailInfo.alarmId}</a>
+                )}
+              </Descriptions.Item>
+              <Descriptions.Item label="报修单号">{detailReport.code || '--'}</Descriptions.Item>
+              <Descriptions.Item label="故障名称">{detailReport.title || '--'}</Descriptions.Item>
+              <Descriptions.Item label="状态"><StatusTag value={detailReport.displayStatus} /></Descriptions.Item>
+              <Descriptions.Item label="维修设备">{detailReport.deviceName || '--'}（{detailReport.deviceCode || '--'}）</Descriptions.Item>
+              <Descriptions.Item label="设备类型">{detailReport.deviceType || '--'}</Descriptions.Item>
+              <Descriptions.Item label="故障类型">{detailReport.faultType || '--'}</Descriptions.Item>
+              <Descriptions.Item label="故障等级"><Tag color={levelColor[detailReport.level] || 'default'}>{detailReport.level || '--'}</Tag></Descriptions.Item>
+              <Descriptions.Item label="故障时间">{detailReport.faultTime || '--'}</Descriptions.Item>
+              <Descriptions.Item label="是否停机">{detailReport.downtimeFlag === true ? '是' : '否'}</Descriptions.Item>
+              <Descriptions.Item label="报修人 / 部门">{detailReport.reporter || '--'} / {detailReport.reporterDept || '--'}</Descriptions.Item>
+              <Descriptions.Item label="报修时间">{detailReport.reportTime || '--'}</Descriptions.Item>
+              <Descriptions.Item label="创建人 / 创建时间">{detailReport.creator || '--'} / {detailReport.createTime || '--'}</Descriptions.Item>
+              <Descriptions.Item label="故障图片">{(detailReport.images || []).join('、') || '--'}</Descriptions.Item>
+              <Descriptions.Item label="关联维修工单">{detailOrder
+                ? <a onClick={() => { setDetailTarget(null); navigate(`/repair-orders/${detailOrder.repairOrderId}`); }}>{detailOrder.repairOrderId}（{detailOrder.status}）</a>
+                : '--（尚未生成工单；报警转维修的报修单由「指派任务」补建）'}</Descriptions.Item>
+              <Descriptions.Item label="故障描述" span={2}>{detailReport.desc || '--'}</Descriptions.Item>
+            </Descriptions>
+          </>
+        )}
       </Modal>
     </>
   );

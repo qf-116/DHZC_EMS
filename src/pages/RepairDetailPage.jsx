@@ -8,6 +8,8 @@ import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import { selectRepairById, selectOutboundForRepair } from '../state/selectors.js';
+import { orderSourceInfo } from '../domain/repair.js';
+import SourceTag from '../components/SourceTag.jsx';
 import { users } from '../data/demo/masterData.js';
 
 const levelColor = { 紧急: 'red', 严重: 'orange', 一般: 'blue' };
@@ -134,19 +136,22 @@ export default function RepairDetailPage() {
       <Card size="small" style={{ marginBottom: 12 }}>
         <div style={{ fontWeight: 600, marginBottom: 12 }}>故障信息</div>
         <Descriptions column={2} size="small" bordered>
+          <Descriptions.Item label="来源"><SourceTag info={orderSourceInfo(order)} /></Descriptions.Item>
           <Descriptions.Item label="故障名称">{order.title || '--'}</Descriptions.Item>
           <Descriptions.Item label="维修设备">{order.deviceName || '--'}（{order.deviceCode || '--'}）</Descriptions.Item>
           <Descriptions.Item label="故障等级"><Tag color={levelColor[order.level] || 'default'}>{order.level || '--'}</Tag></Descriptions.Item>
           <Descriptions.Item label="故障类型">{order.faultType || '--'}</Descriptions.Item>
           <Descriptions.Item label="工单状态"><StatusTag value={order.status} /></Descriptions.Item>
           <Descriptions.Item label="返修次数">{order.reworkCount ?? 0}</Descriptions.Item>
+          <Descriptions.Item label="创建时间">{order.createdAt || '--'}</Descriptions.Item>
+          <Descriptions.Item label="报修人">{order.reporter || '--'}</Descriptions.Item>
+          <Descriptions.Item label="SLA">{slaHours ? `${slaHours} 小时（${order.slaDueAt || '--'} 前）` : '--'}</Descriptions.Item>
           <Descriptions.Item label="来源报警">{order.alarmId
             ? <a onClick={() => navigate('/alarm-center')}>{order.alarmId}</a>
             : '--'}</Descriptions.Item>
-          <Descriptions.Item label="来源报修单">{order.reportId || '--'}</Descriptions.Item>
-          <Descriptions.Item label="报修人">{order.reporter || '--'}</Descriptions.Item>
-          <Descriptions.Item label="创建时间">{order.createdAt || '--'}</Descriptions.Item>
-          <Descriptions.Item label="SLA">{slaHours ? `${slaHours} 小时（${order.slaDueAt || '--'} 前）` : '--'}</Descriptions.Item>
+          <Descriptions.Item label="来源报修单">{order.reportId
+            ? <a onClick={() => navigate('/repair-reports')}>{order.reportId}</a>
+            : '--'}</Descriptions.Item>
           <Descriptions.Item label="关联停机事实">{order.downtimeFactId || '--'}</Descriptions.Item>
           <Descriptions.Item label="故障描述" span={2}>{order.faultDesc || '--'}</Descriptions.Item>
         </Descriptions>

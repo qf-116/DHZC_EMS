@@ -62,6 +62,18 @@ const path = require('path');
   if (!toast2.includes('已派工至 周强')) fail('指派后应提示已派工至 周强');
   else step('③ 指派任务 → 补建主工单并派工 ✓');
 
+  // 2b) 报修单详情弹窗：首行来源标签（设备报警）
+  const rptRow2 = page.locator('tr', { hasText: '冷却液温度持续超限' }).first();
+  await rptRow2.getByText('查看详情').click();
+  await page.waitForTimeout(500);
+  const detailModal = page.locator('.ant-modal:visible', { hasText: '报修详情' }).last();
+  if (!(await detailModal.count())) { fail('报修详情弹窗未打开'); await browser.close(); return; }
+  const detailText = await detailModal.innerText();
+  if (!detailText.includes('来源') || !detailText.includes('设备报警')) fail('报修详情应展示来源=设备报警');
+  else step('②b 报修详情弹窗展示来源「设备报警」 ✓');
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+
   // 3) 维修任务：新工单已派工、来源监测异常、维修负责人周强
   await go('/repair-orders');
   const orderRow = page.locator('tr', { hasText: '冷却液温度持续超限' }).first();
@@ -69,6 +81,15 @@ const path = require('path');
   console.log(`    工单行: ${orderText.split('\n').slice(0, 8).join(' | ')}`);
   if (!orderText.includes('已派工') || !orderText.includes('周强')) fail('工单应为已派工且维修负责人为周强');
   else step('④ 维修任务生成「已派工」工单 ✓');
+
+  if (!orderText.includes('设备报警')) fail('报警来源工单的来源列应显示「设备报警」标签');
+  else step('④b 来源列显示「设备报警」标签 ✓');
+  const manualRow = page.locator('tr', { hasText: '冷却管路渗漏处理' }).first();
+  if (await manualRow.count()) {
+    const t = await manualRow.innerText();
+    if (!t.includes('人工创建')) fail('人工报修工单的来源列应显示「人工创建」标签');
+    else step('④c 来源列显示「人工创建」标签（人工报修工单） ✓');
+  }
 
   // 4) 报警中心回写关联维修单；已有活动工单时不再出现「转维修」
   await go('/alarm-center');
@@ -92,7 +113,7 @@ const path = require('path');
   const specChecks = [
     ['/alarm-center', ['转维修规则 ①（已指定维修人 → 直接转维修任务）', '转维修规则 ②（未指定维修人 → 提交到故障报修）', '转维修幂等', '关闭前置校验只针对已生成的维修工单']],
     ['/repair-reports', ['报修来源与关联规则', '须由「指派任务」补建主工单后再派工', '未派工的报修单（无活动关联工单）可编辑、可删除、可取消']],
-    ['/repair-orders', ['行内「派工」', '不支持改派', '待派工工单来源']],
+    ['/repair-orders', ['行内「派工」', '不支持改派', '待派工工单来源', '来源规则（人工创建 / 设备报警）']],
   ];
   for (const [route, needles] of specChecks) {
     await go(route);

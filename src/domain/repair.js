@@ -82,5 +82,38 @@ export function acceptanceResultRepairStatus(result) {
 // SLA 等级对应的响应时限（演示口径，小时）
 export const SLA_HOURS = { '紧急': 2, '严重': 8, '一般': 24 };
 
+// ============================================================
+// 来源口径（2026-11-20）：报修记录 / 维修任务统一区分「人工创建」与「设备报警」。
+// 判定单一事实在领域层，列表 / 详情 / 弹窗共用本函数，不得各自实现。
+// - 工单：有 alarmId（或 source 为 alarm / alarm+report）→ 设备报警；quick → 人工创建（快速维修）；其余 → 人工创建（报修任务）
+// - 报修单：source 为「报警转维修」或带 alarmId → 设备报警；否则人工创建（人工报修）
+// category/color 供标签渲染；detail 为原型三值细分（报修任务 / 监测异常 / 快速维修 / 人工报修 / 报警转维修）
+// ============================================================
+export const SOURCE_CATEGORY_COLOR = { '人工创建': 'blue', '设备报警': 'volcano' };
+export const SOURCE_LABEL = { alarm: '监测异常', report: '报修任务', 'alarm+report': '监测异常', quick: '快速维修' };
+
+export function orderSourceInfo(order) {
+  if (!order) return null;
+  const fromAlarm = Boolean(order.alarmId) || order.source === 'alarm' || order.source === 'alarm+report';
+  return {
+    category: fromAlarm ? '设备报警' : '人工创建',
+    color: SOURCE_CATEGORY_COLOR[fromAlarm ? '设备报警' : '人工创建'],
+    detail: order.source === 'quick' ? '快速维修' : (SOURCE_LABEL[order.source] || '--'),
+    alarmId: order.alarmId || null,
+    reportId: order.reportId || null,
+  };
+}
+
+export function reportSourceInfo(report) {
+  if (!report) return null;
+  const fromAlarm = report.source === '报警转维修' || Boolean(report.alarmId);
+  return {
+    category: fromAlarm ? '设备报警' : '人工创建',
+    color: SOURCE_CATEGORY_COLOR[fromAlarm ? '设备报警' : '人工创建'],
+    detail: fromAlarm ? '报警转维修' : '人工报修',
+    alarmId: report.alarmId || null,
+  };
+}
+
 // 维修时间线事件类型
 export const REPAIR_TIMELINE_TYPES = ['创建', '派工', '接单', '开工', '挂起', '恢复', '维修录入', '领料', '退库', '提交', '验收通过', '退回返修', '取消'];

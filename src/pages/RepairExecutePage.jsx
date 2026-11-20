@@ -9,7 +9,7 @@ import StatusTag from '../components/StatusTag.jsx';
 import EmptyState from '../components/EmptyState.jsx';
 import { useDemoState, useDemoActions } from '../state/DemoStore.jsx';
 import { selectRepairById, selectOutboundForRepair, selectSpareTotals, selectAllRepairKnowledge } from '../state/selectors.js';
-import { SLA_HOURS, HANDLING_METHODS, HANDLING_METHOD_REPLACE, REPAIR_TYPES, REPAIR_PARTS, REPAIR_LEVELS } from '../domain/repair.js';
+import { SLA_HOURS, HANDLING_METHODS, HANDLING_METHOD_REPLACE, REPAIR_TYPES, REPAIR_PARTS, REPAIR_LEVELS, orderSourceInfo } from '../domain/repair.js';
 import { users } from '../data/demo/masterData.js';
 
 const levelColor = { 紧急: 'red', 严重: 'orange', 一般: 'blue' };
@@ -224,7 +224,7 @@ export default function RepairExecutePage() {
 
   const slaHours = order.slaHours || SLA_HOURS[order.level] || null;
   const executable = ['已派工', '维修中', '挂起'].includes(order.status);
-  const sourceLabel = { alarm: '监测异常', report: '报修任务', 'alarm+report': '监测异常', quick: '快速维修' }[order.source] || '--';
+  const srcInfo = orderSourceInfo(order);
 
   const execInitial = {
     handlingMethod: order.handlingMethod || undefined,
@@ -248,7 +248,7 @@ export default function RepairExecutePage() {
     <>
       <PageHeader
         title="执行故障维修"
-        subtitle={`维修工单：${order.code} · 来源：${sourceLabel} · 当前状态：${order.status}`}
+        subtitle={`维修工单：${order.code} · 来源：${srcInfo ? `${srcInfo.category}（${srcInfo.detail}）` : '--'} · 当前状态：${order.status}`}
         actions={<Button icon={<ArrowLeft size={14} />} onClick={() => navigate('/repair-orders')}>返回列表</Button>}
       />
       <DegradedBanner meta={meta} />
